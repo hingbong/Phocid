@@ -17,35 +17,48 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import org.sunsetware.phocid.Dialog
 import org.sunsetware.phocid.MainViewModel
 import org.sunsetware.phocid.R
-import org.sunsetware.phocid.data.PlaybackStatisticsBackup
 import org.sunsetware.phocid.globals.Strings
+import org.sunsetware.phocid.stats.backup.StatsBackup
 import org.sunsetware.phocid.ui.components.DialogBase
 import org.sunsetware.phocid.utils.icuFormat
 
 @Stable
-class PlaybackStatisticsImportDialog(private val backup: PlaybackStatisticsBackup) : Dialog() {
+class PlaybackStatisticsImportDialog(private val backup: StatsBackup) : Dialog() {
     @Composable
     override fun Compose(viewModel: MainViewModel) {
         var replace by rememberSaveable { mutableStateOf(false) }
-        val trackCount = backup.entries.size
-        val playCount = backup.entries.values.sumOf { it.playCount.toLong() }
+        val trackCount = backup.totals.size
+        val playCount = backup.totals.sumOf { it.totalCount.toLong() }
 
         DialogBase(
             title = Strings[R.string.playback_statistics_import_title],
             onConfirm = {
-                val statistics = backup.toStatistics()
-                if (replace) {
-                    viewModel.playbackStatisticsManager.replace(statistics)
-                } else {
-                    viewModel.playbackStatisticsManager.merge(statistics)
+                viewModel.viewModelScope.launch {
+                    val result =
+                        runCatching {
+                            viewModel.statsManager.backupManager.restore(backup, replace)
+                            viewModel.statsManager.invalidateResolver()
+                        }
+                    viewModel.uiManager.closeDialog()
+                    result
+                        .onSuccess {
+                            viewModel.uiManager.toast(
+                                Strings[R.string.playback_statistics_import_success]
+                            )
+                        }
+                        .onFailure { ex ->
+                            viewModel.uiManager.toast(
+                                Strings[R.string.playback_statistics_import_failed].icuFormat(
+                                    ex.toString()
+                                )
+                            )
+                        }
                 }
-                viewModel.uiManager.closeDialog()
-                viewModel.uiManager.toast(
-                    Strings[R.string.playback_statistics_import_success]
-                )
             },
             onDismiss = { viewModel.uiManager.closeDialog() },
             confirmText = Strings[R.string.commons_import],
@@ -83,11 +96,23 @@ class PlaybackStatisticsClearDialog : Dialog() {
         DialogBase(
             title = Strings[R.string.playback_statistics_clear_title],
             onConfirm = {
-                viewModel.playbackStatisticsManager.clear()
-                viewModel.uiManager.closeDialog()
-                viewModel.uiManager.toast(
-                    Strings[R.string.playback_statistics_clear_success]
-                )
+                viewModel.viewModelScope.launch {
+                    val result = runCatching { viewModel.statsManager.clear() }
+                    viewModel.uiManager.closeDialog()
+                    result
+                        .onSuccess {
+                            viewModel.uiManager.toast(
+                                Strings[R.string.playback_statistics_clear_success]
+                            )
+                        }
+                        .onFailure { ex ->
+                            viewModel.uiManager.toast(
+                                Strings[R.string.playback_statistics_clear_failed].icuFormat(
+                                    ex.toString()
+                                )
+                            )
+                        }
+                }
             },
             onDismiss = { viewModel.uiManager.closeDialog() },
             confirmText = Strings[R.string.commons_clear],

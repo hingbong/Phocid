@@ -48,11 +48,8 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
     val playlistManager
         get() = GlobalData.playlistManager
 
-    val playbackStatistics
-        get() = GlobalData.playbackStatisticsManager.statistics
-
-    val playbackStatisticsManager
-        get() = GlobalData.playbackStatisticsManager
+    val statsManager
+        get() = GlobalData.statsManager
 
     val lyricsCache = AtomicReference(null as Pair<Long, Lyrics>?)
     val carouselArtworkCache = ArtworkCache(viewModelScope, 4)

@@ -1,16 +1,20 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalSerializationApi::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package org.sunsetware.phocid.ui.views.statistics
 
 import android.util.Log
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -19,6 +23,7 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,7 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -49,25 +54,18 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
-import kotlinx.serialization.json.encodeToStream
 import org.sunsetware.phocid.MainViewModel
 import org.sunsetware.phocid.R
 import org.sunsetware.phocid.TopLevelScreen
 import org.sunsetware.phocid.UNKNOWN
-import org.sunsetware.phocid.data.LibraryIndex
-import org.sunsetware.phocid.data.PLAYBACK_STATISTICS_FORMAT_VERSION
-import org.sunsetware.phocid.data.PlaybackStatistics
-import org.sunsetware.phocid.data.PlaybackStatisticsBackup
 import org.sunsetware.phocid.data.Preferences
 import org.sunsetware.phocid.data.Track
-import org.sunsetware.phocid.data.TrackStatistics
-import org.sunsetware.phocid.data.statisticsKey
-import org.sunsetware.phocid.data.toBackup
 import org.sunsetware.phocid.globals.Strings
 import org.sunsetware.phocid.globals.format
+import org.sunsetware.phocid.stats.db.RangeSummary
+import org.sunsetware.phocid.stats.db.TrackAggregate
+import org.sunsetware.phocid.stats.domain.StatsRange
+import org.sunsetware.phocid.stats.domain.StatsSort
 import org.sunsetware.phocid.ui.components.Artwork
 import org.sunsetware.phocid.ui.components.ArtworkImage
 import org.sunsetware.phocid.ui.components.LibraryListItemHorizontal
@@ -75,86 +73,65 @@ import org.sunsetware.phocid.ui.components.OverflowMenu
 import org.sunsetware.phocid.ui.views.MenuItem
 import org.sunsetware.phocid.utils.icuFormat
 
-private enum class PlaybackStatisticsSort {
-    MOST_PLAYED,
-    RECENTLY_PLAYED,
-}
-
-private data class RealizedPlaybackStatistics(
-    val key: String,
-    val statistics: TrackStatistics,
-    val track: Track?,
-)
-
-@Composable
-private fun PlaybackStatistics.realize(libraryIndex: LibraryIndex): List<RealizedPlaybackStatistics> {
-    val tracksByKey =
-        remember(libraryIndex) {
-            libraryIndex.tracks.values.associateBy { it.statisticsKey() }
-        }
-    return remember(this, tracksByKey) {
-        entries.mapNotNull { (key, statistics) ->
-            if (statistics.playCount <= 0) null
-            else RealizedPlaybackStatistics(key, statistics, tracksByKey[key])
-        }
+private fun StatsRange.labelRes(): Int =
+    when (this) {
+        StatsRange.DAYS_7 -> R.string.playback_statistics_range_7d
+        StatsRange.DAYS_30 -> R.string.playback_statistics_range_30d
+        StatsRange.DAYS_90 -> R.string.playback_statistics_range_90d
+        StatsRange.DAYS_365 -> R.string.playback_statistics_range_365d
+        StatsRange.YEARS_3 -> R.string.playback_statistics_range_3y
+        StatsRange.ALL -> R.string.playback_statistics_range_all
     }
-}
+
+private fun StatsSort.labelRes(): Int =
+    when (this) {
+        StatsSort.PLAYS -> R.string.playback_statistics_sort_most_played
+        StatsSort.TIME -> R.string.playback_statistics_sort_most_time
+    }
 
 object PlaybackStatisticsScreen : TopLevelScreen() {
     @Composable
     override fun Compose(viewModel: MainViewModel) {
         val context = LocalContext.current
         val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-        val statistics by viewModel.playbackStatistics.collectAsStateWithLifecycle()
         val libraryIndex by viewModel.libraryIndex.collectAsStateWithLifecycle()
         val uiManager = viewModel.uiManager
-        val entries = statistics.realize(libraryIndex)
-        var sortIndex by rememberSaveable { mutableStateOf(0) }
-        val sort = PlaybackStatisticsSort.entries[sortIndex]
-        val sortedEntries =
-            remember(entries, sort) {
-                when (sort) {
-                    PlaybackStatisticsSort.MOST_PLAYED ->
-                        entries.sortedWith(
-                            compareByDescending<RealizedPlaybackStatistics> {
-                                it.statistics.playCount
-                            }.thenByDescending { it.statistics.lastPlayedAt }
-                        )
-                    PlaybackStatisticsSort.RECENTLY_PLAYED ->
-                        entries.sortedByDescending { it.statistics.lastPlayedAt }
+        val statsManager = viewModel.statsManager
+        var rangeIndex by rememberSaveable { mutableIntStateOf(0) }
+        var sortIndex by rememberSaveable { mutableIntStateOf(0) }
+        val range = StatsRange.entries[rangeIndex]
+        val sort = StatsSort.entries[sortIndex]
+
+        val entries by
+            remember(statsManager, range, sort) {
+                    statsManager.repository.topTracks(range, sort)
                 }
-            }
-        val totalPlays = remember(entries) { entries.sumOf { it.statistics.playCount.toLong() } }
-        val totalPlayedMillis =
-            remember(entries) { entries.sumOf { it.statistics.totalPlayedMillis } }
+                .collectAsStateWithLifecycle(emptyList<TrackAggregate>())
+        val summary by
+            remember(statsManager, range) { statsManager.repository.summary(range) }
+                .collectAsStateWithLifecycle(RangeSummary(0, 0, 0, 0))
+        val tracksByPath =
+            remember(libraryIndex) { libraryIndex.tracks.values.associateBy { it.path } }
         val dateFormatter = remember { DateFormat.getInstance() }
 
         fun exportStatistics() {
             val date = LocalDate.now().toString()
-            uiManager.intentLauncher.get()?.createJsonDocument("phocid-playback-statistics-" + date + ".json") { uri ->
-                if (uri == null) return@createJsonDocument
-                val backup =
-                    viewModel.playbackStatisticsManager.statistics.value.toBackup(
-                        System.currentTimeMillis()
-                    )
+            uiManager.intentLauncher.get()?.createBinaryDocument(
+                "phocid-playback-statistics-$date.mstats"
+            ) { uri ->
+                if (uri == null) return@createBinaryDocument
                 viewModel.viewModelScope.launch {
                     val result =
                         withContext(Dispatchers.IO) {
                             runCatching {
                                 context.contentResolver.openOutputStream(uri)?.use { stream ->
-                                    Json {
-                                            prettyPrint = true
-                                            encodeDefaults = true
-                                        }
-                                        .encodeToStream(backup, stream)
+                                    statsManager.backupManager.export(stream)
                                 } ?: error("Unable to open output stream")
                             }
                         }
                     result
                         .onSuccess {
-                            uiManager.toast(
-                                Strings[R.string.playback_statistics_export_success]
-                            )
+                            uiManager.toast(Strings[R.string.playback_statistics_export_success])
                         }
                         .onFailure { ex ->
                             Log.e("Phocid", "Error exporting playback statistics", ex)
@@ -169,32 +146,23 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
         }
 
         fun importStatistics() {
-            uiManager.intentLauncher.get()?.openJsonDocument { uri ->
-                if (uri == null) return@openJsonDocument
+            uiManager.intentLauncher.get()?.openBinaryDocument { uri ->
+                if (uri == null) return@openBinaryDocument
                 viewModel.viewModelScope.launch {
                     val result =
                         withContext(Dispatchers.IO) {
                             runCatching {
                                 context.contentResolver.openInputStream(uri)?.use { stream ->
-                                    Json { ignoreUnknownKeys = true }
-                                        .decodeFromStream<PlaybackStatisticsBackup>(stream)
+                                    statsManager.backupManager.read(stream)
                                 } ?: error("Unable to open input stream")
                             }
                         }
                     result
                         .onSuccess { backup ->
-                            if (backup.formatVersion > PLAYBACK_STATISTICS_FORMAT_VERSION) {
-                                uiManager.toast(
-                                    Strings[R.string.playback_statistics_import_incompatible]
-                                )
-                            } else {
-                                uiManager.openDialog(
-                                    PlaybackStatisticsImportDialog(backup)
-                                )
-                            }
+                            uiManager.openDialog(PlaybackStatisticsImportDialog(backup))
                         }
                         .onFailure { ex ->
-                            Log.e("Phocid", "Error importing playback statistics", ex)
+                            Log.e("Phocid", "Error reading playback statistics", ex)
                             uiManager.toast(
                                 Strings[R.string.playback_statistics_import_failed].icuFormat(
                                     ex.toString()
@@ -232,7 +200,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                                     Strings[R.string.playback_statistics_import],
                             )
                         }
-                        if (statistics.entries.isNotEmpty()) {
+                        if (summary.plays > 0) {
                             OverflowMenu(
                                 listOf(
                                     MenuItem.Button(
@@ -253,50 +221,69 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                 modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
                 color = MaterialTheme.colorScheme.background,
             ) {
-                if (entries.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize().padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            Strings[R.string.playback_statistics_empty],
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    item {
+                        PlaybackStatisticsSummary(
+                            totalPlays = summary.plays.toLong(),
+                            trackCount = summary.uniqueTracks,
+                            totalPlayedMillis = summary.millis,
                         )
                     }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        item {
-                            PlaybackStatisticsSummary(
-                                totalPlays = totalPlays,
-                                trackCount = entries.size,
-                                totalPlayedMillis = totalPlayedMillis,
-                            )
+                    item {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            itemsIndexed(StatsRange.entries) { index, item ->
+                                FilterChip(
+                                    selected = range == item,
+                                    onClick = { rangeIndex = index },
+                                    label = { Text(Strings[item.labelRes()]) },
+                                )
+                            }
                         }
-                        item {
-                            SingleChoiceSegmentedButtonRow(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                            ) {
+                    }
+                    item {
+                        SingleChoiceSegmentedButtonRow(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp)
+                        ) {
+                            StatsSort.entries.forEachIndexed { index, item ->
                                 SegmentedButton(
-                                    selected = sort == PlaybackStatisticsSort.MOST_PLAYED,
-                                    onClick = { sortIndex = 0 },
+                                    selected = sort == item,
+                                    onClick = { sortIndex = index },
                                     shape =
-                                        SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                        SegmentedButtonDefaults.itemShape(
+                                            index = index,
+                                            count = StatsSort.entries.size,
+                                        ),
                                 ) {
-                                    Text(Strings[R.string.playback_statistics_sort_most_played])
-                                }
-                                SegmentedButton(
-                                    selected = sort == PlaybackStatisticsSort.RECENTLY_PLAYED,
-                                    onClick = { sortIndex = 1 },
-                                    shape =
-                                        SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                ) {
-                                    Text(Strings[R.string.playback_statistics_sort_recent])
+                                    Text(Strings[item.labelRes()])
                                 }
                             }
                         }
-                        items(sortedEntries, key = { it.key }) { entry ->
-                            PlaybackStatisticsListItem(entry, preferences, dateFormatter)
+                    }
+                    if (entries.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    Strings[R.string.playback_statistics_empty],
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    } else {
+                        items(entries, key = { it.trackRowId }) { entry ->
+                            PlaybackStatisticsListItem(
+                                entry = entry,
+                                track = tracksByPath[entry.path],
+                                preferences = preferences,
+                                dateFormatter = dateFormatter,
+                            )
                         }
                     }
                 }
@@ -353,26 +340,24 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
 
     @Composable
     private fun PlaybackStatisticsListItem(
-        entry: RealizedPlaybackStatistics,
+        entry: TrackAggregate,
+        track: Track?,
         preferences: Preferences,
         dateFormatter: DateFormat,
     ) {
-        val statistics = entry.statistics
-        val track = entry.track
         val artistOrAlbum =
             if (track != null) {
                 track.displayArtistWithAlbum
             } else {
                 Strings.separate(
-                    if (statistics.artists.isEmpty()) null
-                    else Strings.conjoin(statistics.artists),
-                    statistics.album,
+                    entry.artist.takeIf { it.isNotBlank() },
+                    entry.album.takeIf { it.isNotBlank() },
                 )
             }
         val lastPlayed =
-            if (statistics.lastPlayedAt > 0)
+            if (entry.lastPlayedAt > 0)
                 Strings[R.string.playback_statistics_last_played].icuFormat(
-                    dateFormatter.format(Date(statistics.lastPlayedAt))
+                    dateFormatter.format(Date(entry.lastPlayedAt))
                 )
             else null
         val unavailable =
@@ -381,7 +366,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
             Strings.separate(artistOrAlbum.takeIf { it.isNotEmpty() }, lastPlayed, unavailable)
 
         LibraryListItemHorizontal(
-            title = track?.displayTitle ?: statistics.title.ifBlank { UNKNOWN },
+            title = track?.displayTitle ?: entry.title.ifBlank { UNKNOWN },
             subtitle = subtitle,
             lead = {
                 ArtworkImage(
@@ -398,14 +383,18 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                 )
             },
             actions = {
-                Text(
-                    Strings[R.string.playback_statistics_play_count].icuFormat(
-                        statistics.playCount
-                    ),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(end = 12.dp),
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        Strings[R.string.playback_statistics_play_count].icuFormat(entry.plays),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        entry.millis.milliseconds.format(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             },
             deemphasized = track == null,
         )

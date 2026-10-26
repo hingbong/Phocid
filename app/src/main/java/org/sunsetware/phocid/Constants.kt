@@ -12,7 +12,6 @@ const val PREFERENCES_FILE_NAME = "preferences"
 const val PLAYLISTS_FILE_NAME = "playlists"
 const val TRACK_INDEX_FILE_NAME = "trackIndex"
 const val PLAYER_STATE_FILE_NAME = "playerState"
-const val PLAYBACK_STATISTICS_FILE_NAME = "playbackStatistics"
 const val UI_STATE_FILE_NAME = "uiState"
 
 const val UNSHUFFLED_INDEX_KEY = "originalIndex"

@@ -273,6 +273,16 @@ class MainActivity : ComponentActivity(), IntentLauncher {
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             openJsonDocumentContinuation.get()?.invoke(uri)
         }
+    private val createBinaryDocumentContinuation = AtomicReference(null as ((Uri?) -> Unit)?)
+    private val createBinaryDocumentIntent =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/gzip")) { uri ->
+            createBinaryDocumentContinuation.get()?.invoke(uri)
+        }
+    private val openBinaryDocumentContinuation = AtomicReference(null as ((Uri?) -> Unit)?)
+    private val openBinaryDocumentIntent =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            openBinaryDocumentContinuation.get()?.invoke(uri)
+        }
 
     override fun openDocumentTree(continuation: (Uri?) -> Unit) {
         openDocumentTreeContinuation.set(continuation)
@@ -287,6 +297,18 @@ class MainActivity : ComponentActivity(), IntentLauncher {
     override fun openJsonDocument(continuation: (Uri?) -> Unit) {
         openJsonDocumentContinuation.set(continuation)
         openJsonDocumentIntent.launch(arrayOf("application/json"))
+    }
+
+    override fun createBinaryDocument(fileName: String, continuation: (Uri?) -> Unit) {
+        createBinaryDocumentContinuation.set(continuation)
+        createBinaryDocumentIntent.launch(fileName)
+    }
+
+    override fun openBinaryDocument(continuation: (Uri?) -> Unit) {
+        openBinaryDocumentContinuation.set(continuation)
+        openBinaryDocumentIntent.launch(
+            arrayOf("application/gzip", "application/x-gzip", "application/octet-stream", "*/*")
+        )
     }
 
     override fun share(tracks: List<Track>) {

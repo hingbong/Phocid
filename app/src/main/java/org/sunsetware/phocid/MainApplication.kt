@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import org.sunsetware.phocid.data.LibraryIndex
-import org.sunsetware.phocid.data.PlaybackStatisticsManager
 import org.sunsetware.phocid.data.PlayerState
 import org.sunsetware.phocid.data.PlaylistManager
 import org.sunsetware.phocid.data.Preferences
@@ -25,6 +24,9 @@ import org.sunsetware.phocid.data.loadCbor
 import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.globals.StringSource
 import org.sunsetware.phocid.globals.Strings
+import org.sunsetware.phocid.stats.StatsManager
+import org.sunsetware.phocid.stats.db.StatsDatabase
+import org.sunsetware.phocid.stats.maintenance.StatsMaintenanceWorker
 import org.sunsetware.phocid.utils.combine
 import org.sunsetware.phocid.utils.icuFormat
 import org.sunsetware.phocid.utils.map
@@ -65,7 +67,9 @@ class MainApplication : Application() {
                         loadCbor<PlayerState>(context, PLAYER_STATE_FILE_NAME, isCache = false)
                             ?: PlayerState()
                     )
-                playbackStatisticsManager = PlaybackStatisticsManager(context, ioScope)
+                StatsDatabase.discardLegacyStats(context)
+                statsManager = StatsManager(context)
+                StatsMaintenanceWorker.schedule(context)
 
                 // LibraryIndex() is expensive, so extracting only the relevant
                 // preferences first would avoid unnecessary computation

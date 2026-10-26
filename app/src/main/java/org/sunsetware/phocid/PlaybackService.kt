@@ -58,7 +58,8 @@ import org.sunsetware.phocid.data.transformOnSetTracks
 import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.service.CustomizedBitmapLoader
 import org.sunsetware.phocid.service.CustomizedPlayer
-import org.sunsetware.phocid.service.PlaybackStatisticsTracker
+import org.sunsetware.phocid.stats.recorder.PlaybackStatsRecorder
+import org.sunsetware.phocid.stats.resolver.toTrackMeta
 import org.sunsetware.phocid.utils.Random
 
 @OptIn(UnstableApi::class)
@@ -75,8 +76,7 @@ class PlaybackService : MediaLibraryService() {
     @Volatile private var reshuffleOnRepeat = false
     @Volatile private var defaultShuffleModeTrack = DefaultShuffleMode.KEEP_CURRENT
     @Volatile private var defaultShuffleModeList = DefaultShuffleMode.KEEP_CURRENT
-    private lateinit var statisticsTracker: PlaybackStatisticsTracker
-    private var statisticsTickerJob = null as Job?
+    private lateinit var statisticsRecorder: PlaybackStatsRecorder
 
     override fun onCreate() {
         super.onCreate()
@@ -85,15 +85,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val player = CustomizedPlayer(this)
-        statisticsTracker =
-            PlaybackStatisticsTracker(
-                onPlayCount = { track, playedMillis ->
-                    GlobalData.playbackStatisticsManager.recordPlay(track, playedMillis)
-                },
-                onPlayedTime = { track, playedMillis ->
-                    GlobalData.playbackStatisticsManager.addPlayedTime(track, playedMillis)
-                },
-            )
+        statisticsRecorder = GlobalData.statsManager.createRecorder()
 
         // Integrate with system equalizer.
         sendBroadcast(
@@ -115,7 +107,11 @@ class PlaybackService : MediaLibraryService() {
             GlobalData.playerState.value,
             GlobalData.unfilteredTrackIndex.value,
         )
-        statisticsTracker.onTrackChanged(trackForMediaItem(player.currentMediaItem))
+        trackForMediaItem(player.currentMediaItem)?.let {
+            statisticsRecorder.onTrackStarted(it.toTrackMeta())
+        }
+        if (player.isPlaying) statisticsRecorder.onResumed()
+        else statisticsRecorder.onPaused()
         mainScope.launch {
             GlobalData.preferences
                 .onEach { preferences ->
@@ -168,8 +164,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onTaskRemoved(rootIntent: Intent?) {}
 
     override fun onDestroy() {
-        statisticsTracker.finish()
-        statisticsTickerJob?.cancel()
+        statisticsRecorder.onShutdown()
         getSystemService(AudioManager::class.java)
             .unregisterAudioDeviceCallback(audioDeviceCallback)
         mediaSession?.run {
@@ -225,8 +220,7 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                statisticsTracker.onPlayingChanged(isPlaying)
-                if (isPlaying) startStatisticsTicker() else stopStatisticsTicker()
+                if (isPlaying) statisticsRecorder.onResumed() else statisticsRecorder.onPaused()
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -244,7 +238,17 @@ class PlaybackService : MediaLibraryService() {
                     player.enableShuffle()
                 }
                 lastIndex = player.currentMediaItemIndex
-                statisticsTracker.onTrackChanged(trackForMediaItem(player.currentMediaItem))
+                val track = trackForMediaItem(player.currentMediaItem)
+                if (track != null) statisticsRecorder.onTrackStarted(track.toTrackMeta())
+                else statisticsRecorder.onTrackFinished()
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) statisticsRecorder.onSeek()
             }
         }
     }
@@ -253,22 +257,6 @@ class PlaybackService : MediaLibraryService() {
         return mediaItem?.mediaId?.toLongOrNull()?.let {
             GlobalData.unfilteredTrackIndex.value.tracks[it]
         }
-    }
-
-    private fun startStatisticsTicker() {
-        if (statisticsTickerJob?.isActive == true) return
-        statisticsTickerJob =
-            mainScope.launch {
-                while (isActive) {
-                    delay(1.seconds)
-                    statisticsTracker.tick()
-                }
-            }
-    }
-
-    private fun stopStatisticsTicker() {
-        statisticsTickerJob?.cancel()
-        statisticsTickerJob = null
     }
 
     private val defaultLibraryParams =

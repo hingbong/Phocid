@@ -4,12 +4,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.sunsetware.phocid.data.LibraryIndex
-import org.sunsetware.phocid.data.PlaybackStatisticsManager
 import org.sunsetware.phocid.data.PlayerState
 import org.sunsetware.phocid.data.PlayerTransientState
 import org.sunsetware.phocid.data.PlaylistManager
 import org.sunsetware.phocid.data.Preferences
 import org.sunsetware.phocid.data.UnfilteredTrackIndex
+import org.sunsetware.phocid.stats.StatsManager
 
 /**
  * These are meant for sharing data between contexts. End consumers should not read these directly!
@@ -29,5 +29,5 @@ object GlobalData {
 
     @Volatile lateinit var playlistManager: PlaylistManager
 
-    @Volatile lateinit var playbackStatisticsManager: PlaybackStatisticsManager
+    @Volatile lateinit var statsManager: StatsManager
 }

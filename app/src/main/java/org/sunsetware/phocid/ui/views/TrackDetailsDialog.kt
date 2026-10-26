@@ -6,14 +6,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ibm.icu.number.LocalizedNumberFormatter
 import com.ibm.icu.number.Notation
 import com.ibm.icu.number.NumberFormatter
@@ -27,8 +29,8 @@ import org.sunsetware.phocid.Dialog
 import org.sunsetware.phocid.MainViewModel
 import org.sunsetware.phocid.R
 import org.sunsetware.phocid.data.Track
-import org.sunsetware.phocid.data.statisticsKey
 import org.sunsetware.phocid.globals.Strings
+import org.sunsetware.phocid.stats.db.TrackTotalsEntity
 import org.sunsetware.phocid.ui.components.DialogBase
 
 @Stable
@@ -36,11 +38,10 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
     @Composable
     override fun Compose(viewModel: MainViewModel) {
         val scrollState = rememberScrollState()
-        val playbackStatistics by viewModel.playbackStatistics.collectAsStateWithLifecycle()
-        val trackStatistics =
-            remember(track, playbackStatistics) {
-                playbackStatistics.entries[track.statisticsKey()]
-            }
+        var trackTotals by remember(track) { mutableStateOf(null as TrackTotalsEntity?) }
+        LaunchedEffect(track.path) {
+            trackTotals = viewModel.statsManager.repository.lifetimeByPath(track.path)
+        }
         val content: List<Pair<String, String>> =
             remember(track) {
                 fun formatterBase(): LocalizedNumberFormatter {
@@ -88,11 +89,11 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
                 )
             }
         val statisticsContent: List<Pair<String, String>> =
-            remember(trackStatistics) {
-                trackStatistics?.let { statistics ->
+            remember(trackTotals) {
+                trackTotals?.let { statistics ->
                     listOfNotNull(
                         Strings[R.string.track_details_play_count] to
-                            statistics.playCount.toString(),
+                            statistics.totalCount.toString(),
                         statistics.lastPlayedAt.takeIf { it > 0 }?.let {
                             Strings[R.string.track_details_last_played] to
                                 DateFormat.getInstance().format(Date(it))

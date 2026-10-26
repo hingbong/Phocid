@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.ksp)
     kotlin("plugin.serialization") version "2.0.0"
     id("com.ncorti.ktfmt.gradle") version "0.23.0"
     id("com.jaredsburrows.license") version "0.9.8"
@@ -97,9 +98,12 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.palette.ktx)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
     // TODO: Maybe requiring a dependency just for `FilenameUtils` is too much
@@ -112,6 +116,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.jaudiotagger)
     implementation(libs.reorderable)
+    ksp(libs.androidx.room.compiler)
     //noinspection UseTomlInstead
     implementation("org.sunsetware.omio:omio")
 

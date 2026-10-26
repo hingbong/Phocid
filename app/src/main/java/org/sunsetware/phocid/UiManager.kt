@@ -68,6 +68,10 @@ interface IntentLauncher {
 
     fun openJsonDocument(continuation: (Uri?) -> Unit)
 
+    fun createBinaryDocument(fileName: String, continuation: (Uri?) -> Unit)
+
+    fun openBinaryDocument(continuation: (Uri?) -> Unit)
+
     fun share(tracks: List<Track>)
 }
 
