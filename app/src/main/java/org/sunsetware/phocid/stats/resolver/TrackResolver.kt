@@ -77,8 +77,11 @@ class TrackResolver(
             if (hits.isEmpty()) {
                 createTrack(meta)
             } else {
-                val selected = AliasKind.PRIORITY.firstNotNullOf { hits[it] }
-                (hits.values.toSet() - selected).forEach { mergeTracks(loser = it, winner = selected) }
+                val selected =
+                    AliasKind.PRIORITY.first { hits.containsKey(it) }.let { hits.getValue(it) }
+                (hits.values.toSet() - selected).forEach {
+                    mergeTracks(loser = it, winner = selected)
+                }
                 tracks.updateMetadata(
                     rowId = selected,
                     title = meta.title.orEmpty(),

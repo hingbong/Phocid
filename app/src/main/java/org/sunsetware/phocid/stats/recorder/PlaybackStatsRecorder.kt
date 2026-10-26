@@ -6,6 +6,7 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -30,11 +31,13 @@ import org.sunsetware.phocid.stats.resolver.TrackResolver
  * Flush points: track transition, pause, seek, every 30 seconds while playing, and service
  * shutdown. Seeking settles the elapsed wall-clock time first so time does not distort.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackStatsRecorder(
     private val db: StatsDatabase,
     private val resolver: TrackResolver,
     private val zoneId: () -> ZoneId = { ZoneId.systemDefault() },
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val scope: CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1)),
 ) {
     companion object {
         private const val FLUSH_INTERVAL_MILLIS = 30_000L
