@@ -68,7 +68,16 @@ jobs:
           PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace :app:assembleRelease
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:assembleRelease
+
+      - name: Verify APK signatures
+        run: |
+          set -euo pipefail
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          for apk in app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk; do
+            echo "=== $apk"
+            "$APKSIGNER" verify --print-certs "$apk"
+          done
 
       - name: Run unit tests
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_unit_tests }}
@@ -78,6 +87,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: phocid-next-${{ github.sha }}
-          path: app/build/outputs/apk/release/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
