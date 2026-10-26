@@ -7,11 +7,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ibm.icu.number.LocalizedNumberFormatter
 import com.ibm.icu.number.Notation
 import com.ibm.icu.number.NumberFormatter
@@ -25,6 +27,7 @@ import org.sunsetware.phocid.Dialog
 import org.sunsetware.phocid.MainViewModel
 import org.sunsetware.phocid.R
 import org.sunsetware.phocid.data.Track
+import org.sunsetware.phocid.data.statisticsKey
 import org.sunsetware.phocid.globals.Strings
 import org.sunsetware.phocid.ui.components.DialogBase
 
@@ -33,7 +36,12 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
     @Composable
     override fun Compose(viewModel: MainViewModel) {
         val scrollState = rememberScrollState()
-        val content =
+        val playbackStatistics by viewModel.playbackStatistics.collectAsStateWithLifecycle()
+        val trackStatistics =
+            remember(track, playbackStatistics) {
+                playbackStatistics.entries[track.statisticsKey()]
+            }
+        val content: List<Pair<String, String>> =
             remember(track) {
                 fun formatterBase(): LocalizedNumberFormatter {
                     return NumberFormatter.withLocale(Locale.getDefault())
@@ -79,6 +87,20 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
                     track.comment?.let { Strings[R.string.track_details_comment] to it },
                 )
             }
+        val statisticsContent: List<Pair<String, String>> =
+            remember(trackStatistics) {
+                trackStatistics?.let { statistics ->
+                    listOfNotNull(
+                        Strings[R.string.track_details_play_count] to
+                            statistics.playCount.toString(),
+                        statistics.lastPlayedAt.takeIf { it > 0 }?.let {
+                            Strings[R.string.track_details_last_played] to
+                                DateFormat.getInstance().format(Date(it))
+                        },
+                    )
+                } ?: emptyList()
+            }
+        val contentWithStatistics = content + statisticsContent
         DialogBase(
             title = Strings[R.string.track_details],
             onConfirmOrDismiss = { viewModel.uiManager.closeDialog() },
@@ -86,7 +108,7 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
             Layout(
                 modifier = Modifier.verticalScroll(scrollState).padding(horizontal = 24.dp),
                 content = {
-                    for ((key, value) in content) {
+                    for ((key, value) in contentWithStatistics) {
                         Text(key, color = MaterialTheme.colorScheme.primary)
                         Text(value)
                     }

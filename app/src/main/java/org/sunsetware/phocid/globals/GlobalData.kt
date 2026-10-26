@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.sunsetware.phocid.data.LibraryIndex
+import org.sunsetware.phocid.data.PlaybackStatisticsManager
 import org.sunsetware.phocid.data.PlayerState
 import org.sunsetware.phocid.data.PlayerTransientState
 import org.sunsetware.phocid.data.PlaylistManager
@@ -27,4 +28,6 @@ object GlobalData {
     @Volatile lateinit var libraryIndex: StateFlow<LibraryIndex>
 
     @Volatile lateinit var playlistManager: PlaylistManager
+
+    @Volatile lateinit var playbackStatisticsManager: PlaybackStatisticsManager
 }

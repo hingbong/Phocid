@@ -48,7 +48,8 @@ class LibraryIndexTest {
     fun indexing_album_SingleTrack() {
         val track1 = track(1, album = "album1", albumArtist = "artist1")
         val index = listOf(track1).libraryIndex()
-        assertThat(index.albums.keys).containsExactlyInAnyOrder(AlbumKey("album1", "artist1"))
+        assertThat(index.albums.keys)
+            .containsExactlyInAnyOrder(AlbumKey("album1", listOf("artist1")))
     }
 
     @Test
@@ -57,8 +58,12 @@ class LibraryIndexTest {
         val track2 = track(2, album = "ALBUM1", albumArtist = "artist1")
         val track3 = track(3, album = "ALBUM1", albumArtist = "ARTIST1")
         val index = listOf(track1, track2, track3).libraryIndex()
-        assertThat(index.albums.keys.map { it.name.toString() to it.albumArtist?.toString() })
-            .containsExactlyInAnyOrder("ALBUM1" to "artist1")
+        assertThat(
+                index.albums.keys.map {
+                    it.name.toString() to it.albumArtists.map { artist -> artist.toString() }
+                }
+            )
+            .containsExactlyInAnyOrder("ALBUM1" to listOf("artist1"))
     }
 
     @Test
@@ -67,7 +72,10 @@ class LibraryIndexTest {
         val track2 = track(2, album = "album2", albumArtist = "artist2")
         val index = listOf(track1, track2).libraryIndex()
         assertThat(index.albums.keys)
-            .containsExactlyInAnyOrder(AlbumKey("album1", "artist1"), AlbumKey("album2", "artist2"))
+            .containsExactlyInAnyOrder(
+                AlbumKey("album1", listOf("artist1")),
+                AlbumKey("album2", listOf("artist2")),
+            )
     }
 
     @Test
@@ -78,7 +86,10 @@ class LibraryIndexTest {
         val track4 = track(4, album = "album1", albumArtist = "artist1")
         val index = listOf(track1, track2, track3, track4).libraryIndex()
         assertThat(index.albums.keys)
-            .containsExactlyInAnyOrder(AlbumKey("album1", null), AlbumKey("album1", "artist1"))
+            .containsExactlyInAnyOrder(
+                AlbumKey("album1", emptyList()),
+                AlbumKey("album1", listOf("artist1")),
+            )
     }
 
     @Test
@@ -89,16 +100,16 @@ class LibraryIndexTest {
         val index = listOf(track1, track2, track3).libraryIndex()
         assertThat(index.albums.keys)
             .containsExactlyInAnyOrder(
-                AlbumKey("album1", null),
-                AlbumKey("album1", "artist1"),
-                AlbumKey("album1", "artist2"),
+                AlbumKey("album1", emptyList()),
+                AlbumKey("album1", listOf("artist1")),
+                AlbumKey("album1", listOf("artist2")),
             )
-        assertThat(index.albums[AlbumKey("album1", null)]?.albumKey)
-            .isEqualTo(AlbumKey("album1", null))
-        assertThat(index.albums[AlbumKey("album1", "artist1")]?.albumKey)
-            .isEqualTo(AlbumKey("album1", "artist1"))
-        assertThat(index.albums[AlbumKey("album1", "artist2")]?.albumKey)
-            .isEqualTo(AlbumKey("album1", "artist2"))
+        assertThat(index.albums[AlbumKey("album1", emptyList())]?.albumKey)
+            .isEqualTo(AlbumKey("album1", emptyList()))
+        assertThat(index.albums[AlbumKey("album1", listOf("artist1"))]?.albumKey)
+            .isEqualTo(AlbumKey("album1", listOf("artist1")))
+        assertThat(index.albums[AlbumKey("album1", listOf("artist2"))]?.albumKey)
+            .isEqualTo(AlbumKey("album1", listOf("artist2")))
     }
 
     @Test
@@ -210,7 +221,7 @@ class LibraryIndexTest {
         title: String? = InvalidTrack.title,
         artists: List<String> = InvalidTrack.artists,
         album: String? = InvalidTrack.album,
-        albumArtist: String? = InvalidTrack.albumArtist,
+        albumArtist: String? = null,
         genres: List<String> = InvalidTrack.genres,
         year: Int? = InvalidTrack.year,
         trackNumber: Int? = InvalidTrack.trackNumber,
@@ -235,7 +246,7 @@ class LibraryIndexTest {
             title = title,
             artists = artists,
             album = album,
-            albumArtist = albumArtist,
+            albumArtists = listOfNotNull(albumArtist),
             genres = genres,
             year = year,
             trackNumber = trackNumber,

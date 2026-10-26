@@ -152,6 +152,7 @@ import org.sunsetware.phocid.ui.views.library.LibraryTrackClickAction
 import org.sunsetware.phocid.ui.views.player.PlayerScreenLayoutType
 import org.sunsetware.phocid.ui.views.playlist.PlaylistIoScreen
 import org.sunsetware.phocid.ui.views.playlist.PlaylistIoSettingsDialog
+import org.sunsetware.phocid.ui.views.statistics.PlaybackStatisticsScreen
 import org.sunsetware.phocid.utils.combine
 import org.sunsetware.phocid.utils.icuFormat
 import org.sunsetware.phocid.utils.roundToIntOrZero
@@ -717,6 +718,12 @@ private val Playback =
         R.string.preferences_playback,
         Icons.AutoMirrored.Filled.VolumeUp,
         listOf(
+            Item.Clickable(
+                title = { Strings[R.string.playback_statistics] },
+                subtitle = { null },
+                icon = Icons.Filled.BarChart,
+                onClick = { uiManager.openTopLevelScreen(PlaybackStatisticsScreen) },
+            ),
             Item.Toggle(
                 title = { Strings[R.string.preferences_play_on_output_device_connection] },
                 subtitle = { null },

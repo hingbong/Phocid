@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - fix/battery-background-ui
+      - feat/playback-statistics
 
 permissions:
   contents: read
@@ -61,13 +62,35 @@ jobs:
             echo "PHOCID_KEYSTORE_BASE64 is not set; AGP will generate a per-run debug keystore."
           fi
 
-      - name: Build release APK
+      - name: Run unit tests
         env:
           PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
           PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
           PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
+          set +e
+          ./gradlew --no-daemon --stacktrace --console=plain :app:customSetup :app:testReleaseUnitTest 2>&1 | tee "$RUNNER_TEMP/unit-test.log"
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Report unit test failures
+        if: failure()
+        run: |
+          if [ -f "$RUNNER_TEMP/unit-test.log" ]; then
+            grep -nE "(^e: | error: |FAILED|> Task .* FAILED|AssertionError|expected:|but was:)" "$RUNNER_TEMP/unit-test.log" | head -20 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            echo "--- test log tail ---"
+            tail -80 "$RUNNER_TEMP/unit-test.log"
+          fi
+
+      - name: Build release APK
+        env:
+          PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
+          PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
+          PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
+        run: |
           ./gradlew --no-daemon --stacktrace :app:assembleRelease
 
       - name: Verify APK signatures
@@ -78,10 +101,6 @@ jobs:
             echo "=== $apk"
             "$APKSIGNER" verify --print-certs "$apk"
           done
-
-      - name: Run unit tests
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_unit_tests }}
-        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4

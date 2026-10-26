@@ -40,6 +40,7 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BorderStyle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FolderOpen
@@ -147,6 +148,7 @@ import org.sunsetware.phocid.ui.views.collectionMenuItemsWithoutPlay
 import org.sunsetware.phocid.ui.views.playlist.NewPlaylistDialog
 import org.sunsetware.phocid.ui.views.playlist.PlaylistIoScreen
 import org.sunsetware.phocid.ui.views.preferences.PreferencesScreen
+import org.sunsetware.phocid.ui.views.statistics.PlaybackStatisticsScreen
 import org.sunsetware.phocid.utils.coerceInOrMin
 import org.sunsetware.phocid.utils.combine
 import org.sunsetware.phocid.utils.flatMapLatest
@@ -295,6 +297,12 @@ fun LibraryScreen(
                     },
                     MenuItem.Button(Strings[R.string.library_rescan], Icons.Filled.Refresh) {
                         viewModel.scanLibrary(true)
+                    },
+                    MenuItem.Button(
+                        Strings[R.string.playback_statistics],
+                        Icons.Filled.BarChart,
+                    ) {
+                        uiManager.openTopLevelScreen(PlaybackStatisticsScreen)
                     },
                     MenuItem.Button(Strings[R.string.preferences], Icons.Filled.Settings) {
                         uiManager.openTopLevelScreen(PreferencesScreen)
