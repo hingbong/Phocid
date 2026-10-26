@@ -10,8 +10,7 @@ on:
         default: false
   push:
     branches:
-      - fix/battery-background-ui
-      - feat/playback-statistics
+      - main
 
 permissions:
   contents: read
