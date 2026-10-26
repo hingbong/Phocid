@@ -295,13 +295,13 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                         items(entries, key = { it.trackRowId }) { entry ->
                             val track =
                                 tracksByPath[entry.path]
-                                    ?: tracksByTagKey[
-                                        TagKey.of(
+                                    ?: TagKey.of(
                                             entry.artist,
                                             entry.album,
                                             entry.title,
                                             entry.durationMillis,
-                                        )]
+                                        )
+                                        ?.let { tracksByTagKey[it] }
                             PlaybackStatisticsListItem(
                                 entry = entry,
                                 track = track,
