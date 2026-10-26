@@ -15,6 +15,7 @@ data class TrackAggregate(
     val artist: String,
     val album: String,
     val path: String,
+    val durationMillis: Long,
     val plays: Int,
     val millis: Long,
     val lastPlayedAt: Long,
@@ -191,6 +192,7 @@ interface TrackDailyDao {
                t.artist AS artist,
                t.album AS album,
                t.path AS path,
+               t.durationMillis AS durationMillis,
                SUM(d.playCount) AS plays,
                SUM(d.playedMillis) AS millis,
                MAX(d.lastPlayedAt) AS lastPlayedAt
@@ -212,6 +214,7 @@ interface TrackDailyDao {
                t.artist AS artist,
                t.album AS album,
                t.path AS path,
+               t.durationMillis AS durationMillis,
                SUM(d.playCount) AS plays,
                SUM(d.playedMillis) AS millis,
                MAX(d.lastPlayedAt) AS lastPlayedAt
@@ -324,6 +327,7 @@ interface TrackTotalsDao {
                t.artist AS artist,
                t.album AS album,
                t.path AS path,
+               t.durationMillis AS durationMillis,
                tt.totalCount AS plays,
                tt.totalMillis AS millis,
                tt.lastPlayedAt AS lastPlayedAt
@@ -343,6 +347,7 @@ interface TrackTotalsDao {
                t.artist AS artist,
                t.album AS album,
                t.path AS path,
+               t.durationMillis AS durationMillis,
                tt.totalCount AS plays,
                tt.totalMillis AS millis,
                tt.lastPlayedAt AS lastPlayedAt

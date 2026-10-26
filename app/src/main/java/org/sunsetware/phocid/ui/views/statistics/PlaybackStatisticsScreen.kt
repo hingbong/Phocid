@@ -65,6 +65,7 @@ import org.sunsetware.phocid.globals.format
 import org.sunsetware.phocid.stats.db.RangeSummary
 import org.sunsetware.phocid.stats.db.TrackAggregate
 import org.sunsetware.phocid.stats.domain.StatsRange
+import org.sunsetware.phocid.stats.fingerprint.TagKey
 import org.sunsetware.phocid.stats.domain.StatsSort
 import org.sunsetware.phocid.ui.components.Artwork
 import org.sunsetware.phocid.ui.components.ArtworkImage
@@ -112,6 +113,20 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                 .collectAsStateWithLifecycle(RangeSummary(0, 0, 0, 0))
         val tracksByPath =
             remember(libraryIndex) { libraryIndex.tracks.values.associateBy { it.path } }
+        val tracksByTagKey =
+            remember(libraryIndex) {
+                buildMap {
+                    libraryIndex.tracks.values.forEach { track ->
+                        TagKey.of(
+                                track.artists.joinToString(", "),
+                                track.album,
+                                track.title ?: track.fileName.substringBeforeLast('.'),
+                                track.duration.inWholeMilliseconds,
+                            )
+                            ?.let { put(it, track) }
+                    }
+                }
+            }
         val dateFormatter = remember { DateFormat.getInstance() }
 
         fun exportStatistics() {
@@ -278,9 +293,18 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                         }
                     } else {
                         items(entries, key = { it.trackRowId }) { entry ->
+                            val track =
+                                tracksByPath[entry.path]
+                                    ?: tracksByTagKey[
+                                        TagKey.of(
+                                            entry.artist,
+                                            entry.album,
+                                            entry.title,
+                                            entry.durationMillis,
+                                        )]
                             PlaybackStatisticsListItem(
                                 entry = entry,
-                                track = tracksByPath[entry.path],
+                                track = track,
                                 preferences = preferences,
                                 dateFormatter = dateFormatter,
                             )
