@@ -34,9 +34,13 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -55,6 +59,8 @@ sealed class PlayerScreenLyricsView {
         autoScroll: () -> Boolean,
         currentPosition: () -> Long,
         preferences: Preferences,
+        isPlaying: Boolean,
+        isVisible: Boolean,
         onDisableAutoScroll: () -> Unit,
     )
 }
@@ -67,6 +73,8 @@ object PlayerScreenLyricsViewDefault : PlayerScreenLyricsView() {
         autoScroll: () -> Boolean,
         currentPosition: () -> Long,
         preferences: Preferences,
+        isPlaying: Boolean,
+        isVisible: Boolean,
         onDisableAutoScroll: () -> Unit,
     ) {
         fun getLineIndex(): Int? {
@@ -83,29 +91,46 @@ object PlayerScreenLyricsViewDefault : PlayerScreenLyricsView() {
         val linePositions = remember { AtomicReference(emptyList<Int>()) }
         var currentLineIndex by remember { mutableStateOf(null as Int?) }
 
-        LaunchedEffect(lyrics) {
+        val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+        val isResumed = lifecycleState == Lifecycle.State.RESUMED
+
+        LaunchedEffect(lyrics, isPlaying, isVisible, isResumed) {
             currentLineIndex = null
-            if (lyrics is PlayerScreenLyrics.Synced) {
-                while (isActive) {
-                    currentLineIndex = getLineIndex()
-                    if (autoScroll()) {
-                        if (!scrollState.isScrollInProgress) {
-                            linePositions
-                                .get()
-                                .getOrNull(currentLineIndex ?: 0)
-                                ?.let { it - scrollState.viewportSize / 2 }
-                                ?.let {
-                                    launch {
-                                        if (firstAutoPlayQueueScroll.getAndSet(false)) {
-                                            scrollState.scrollTo(it)
-                                        } else {
-                                            scrollState.animateScrollTo(it)
-                                        }
+            if (lyrics !is PlayerScreenLyrics.Synced || !isVisible || !isResumed) {
+                return@LaunchedEffect
+            }
+
+            fun update() {
+                currentLineIndex = getLineIndex()
+                if (autoScroll()) {
+                    if (!scrollState.isScrollInProgress) {
+                        linePositions
+                            .get()
+                            .getOrNull(currentLineIndex ?: 0)
+                            ?.let { it - scrollState.viewportSize / 2 }
+                            ?.let {
+                                launch {
+                                    if (firstAutoPlayQueueScroll.getAndSet(false)) {
+                                        scrollState.scrollTo(it)
+                                    } else {
+                                        scrollState.animateScrollTo(it)
                                     }
                                 }
-                        }
+                            }
                     }
+                }
+            }
+
+            update()
+            if (isPlaying) {
+                while (isActive) {
                     delay(42.milliseconds) // 24 fps
+                    update()
+                }
+            } else {
+                while (isActive) {
+                    delay(1.seconds)
+                    update()
                 }
             }
         }

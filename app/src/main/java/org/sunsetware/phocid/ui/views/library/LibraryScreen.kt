@@ -80,6 +80,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -89,17 +90,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.Player
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -740,7 +742,6 @@ private fun BottomBar(
     playerScreenDragLock: DragLock,
     isObscured: Boolean,
 ) {
-    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
 
@@ -766,19 +767,37 @@ private fun BottomBar(
 
     val animatedThemeAccent = animateColorAsState(LocalThemeAccent.current)
 
-    // Update progress
-    LaunchedEffect(currentTrack, isObscured) {
-        if (isObscured) return@LaunchedEffect
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val isResumed = lifecycleState == Lifecycle.State.RESUMED
 
-        val frameTime = (1f / context.display.refreshRate).toDouble().milliseconds
+    // Update progress only while the mini player is visible and the app is resumed.
+    // The frame clock is used while playing so the loop stops with the app's frames;
+    // when paused, a one-second poll is enough to reflect seeks without keeping
+    // the CPU busy at the display refresh rate.
+    LaunchedEffect(currentTrack, isObscured, isResumed, isPlaying) {
+        if (isObscured || !isResumed) return@LaunchedEffect
 
-        while (isActive) {
+        val track = currentTrack
+        if (track == null) {
+            progress = 0f
+            return@LaunchedEffect
+        }
+
+        fun updateProgress() {
             progress =
-                if (currentTrack == null) 0f
-                else
-                    playerManager.currentPosition.toFloat() /
-                        currentTrack!!.duration.inWholeMilliseconds
-            delay(frameTime)
+                playerManager.currentPosition.toFloat() / track.duration.inWholeMilliseconds
+        }
+
+        updateProgress()
+        if (isPlaying) {
+            while (isActive) {
+                withFrameNanos { updateProgress() }
+            }
+        } else {
+            while (isActive) {
+                delay(1.seconds)
+                updateProgress()
+            }
         }
     }
 

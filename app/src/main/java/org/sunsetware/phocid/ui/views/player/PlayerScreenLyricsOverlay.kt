@@ -28,7 +28,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.sunsetware.phocid.data.Lyrics
@@ -49,6 +53,7 @@ sealed class PlayerScreenLyricsOverlay {
         containerColor: Color,
         contentColor: Color,
         overlayVisibility: Float,
+        isPlaying: Boolean,
     )
 }
 
@@ -62,6 +67,7 @@ object PlayerScreenLyricsOverlayDefault : PlayerScreenLyricsOverlay() {
         containerColor: Color,
         contentColor: Color,
         overlayVisibility: Float,
+        isPlaying: Boolean,
     ) {
         fun getLineIndex(): Int? {
             return lyrics?.getLineIndex((currentPosition() + EXIT_DURATION).milliseconds)
@@ -77,27 +83,44 @@ object PlayerScreenLyricsOverlayDefault : PlayerScreenLyricsOverlay() {
         var visibility by remember { mutableStateOf(false) }
         val alpha = animateFloatAsState(if (visibility) 1f else 0f)
 
-        LaunchedEffect(lyrics, preferences) {
-            if (lyrics != null && preferences.lyricsDisplay != LyricsDisplayPreference.DISABLED) {
-                while (isActive) {
-                    currentLineIndex = getLineIndex()
-                    currentLine = getLine(currentLineIndex)
-                    nextLine = getLine(currentLineIndex?.let { it + 1 })
-                    visibility =
-                        when (preferences.lyricsDisplay) {
-                            LyricsDisplayPreference.DISABLED -> throw Error() // impossible
-                            LyricsDisplayPreference.DEFAULT -> currentLine.isNotEmpty()
-                            LyricsDisplayPreference.TWO_LINES ->
-                                currentLine.isNotEmpty() || nextLine.isNotEmpty()
-                        }
+        val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+        val isResumed = lifecycleState == Lifecycle.State.RESUMED
+        val isVisible = overlayVisibility > 0.01f
 
-                    delay(42.milliseconds) // 24 fps
-                }
-            } else {
+        LaunchedEffect(lyrics, preferences, isVisible, isPlaying, isResumed) {
+            if (lyrics == null || preferences.lyricsDisplay == LyricsDisplayPreference.DISABLED) {
                 currentLineIndex = null
                 currentLine = ""
                 nextLine = ""
                 visibility = false
+                return@LaunchedEffect
+            }
+            if (!isVisible || !isResumed) return@LaunchedEffect
+
+            fun update() {
+                currentLineIndex = getLineIndex()
+                currentLine = getLine(currentLineIndex)
+                nextLine = getLine(currentLineIndex?.let { it + 1 })
+                visibility =
+                    when (preferences.lyricsDisplay) {
+                        LyricsDisplayPreference.DISABLED -> false // unreachable
+                        LyricsDisplayPreference.DEFAULT -> currentLine.isNotEmpty()
+                        LyricsDisplayPreference.TWO_LINES ->
+                            currentLine.isNotEmpty() || nextLine.isNotEmpty()
+                    }
+            }
+
+            update()
+            if (isPlaying) {
+                while (isActive) {
+                    delay(42.milliseconds) // 24 fps
+                    update()
+                }
+            } else {
+                while (isActive) {
+                    delay(1.seconds)
+                    update()
+                }
             }
         }
 

@@ -427,6 +427,8 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 autoScroll = { lyricsViewAutoScroll },
                                 currentPosition = { playerManager.currentPosition },
                                 preferences = preferences,
+                                isPlaying = isPlaying,
+                                isVisible = useLyricsView,
                                 onDisableAutoScroll = { lyricsViewAutoScroll = false },
                             )
                         }
@@ -438,6 +440,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 containerColor = containerColor,
                                 contentColor = contentColor,
                                 overlayVisibility = overlayVisibility,
+                                isPlaying = isPlaying,
                             )
                         }
                         Box {

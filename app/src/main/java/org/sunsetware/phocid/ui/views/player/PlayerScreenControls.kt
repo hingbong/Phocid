@@ -31,11 +31,11 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -43,8 +43,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.Player
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -249,7 +251,6 @@ class PlayerScreenControlsDefaultBase(
         onToggleCurrentTrackIsFavorite: () -> Unit,
         onToggleUseCountdown: () -> Unit,
     ) {
-        val context = LocalContext.current
         var progress by remember { mutableFloatStateOf(0f) }
         val progressSeconds by
             remember(currentTrack) {
@@ -259,18 +260,34 @@ class PlayerScreenControlsDefaultBase(
             }
         var isDraggingProgressSlider by remember { mutableStateOf(false) }
 
-        // Update progress
-        LaunchedEffect(currentTrack) {
-            val frameTime = (1f / context.display.refreshRate).toDouble().milliseconds
+        val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+        val isResumed = lifecycleState == Lifecycle.State.RESUMED
 
-            while (isActive) {
-                val currentPosition = currentPosition()
+        // Only poll while the player screen is visible. While playing, follow the
+        // frame clock so the loop stops together with the app's frames; while
+        // paused, a one-second poll keeps the slider correct without 120 Hz wakeups.
+        LaunchedEffect(currentTrack, isPlaying, isResumed) {
+            if (!isResumed) return@LaunchedEffect
+
+            fun updateProgress() {
+                val position = currentPosition()
                 if (!isDraggingProgressSlider) {
                     progress =
-                        (currentPosition.toFloat() / (currentTrack.duration.inWholeMilliseconds))
+                        (position.toFloat() / currentTrack.duration.inWholeMilliseconds)
                             .takeIf { !it.isNaN() } ?: 0f
                 }
-                delay(frameTime)
+            }
+
+            updateProgress()
+            if (isPlaying) {
+                while (isActive) {
+                    withFrameNanos { updateProgress() }
+                }
+            } else {
+                while (isActive) {
+                    delay(1.seconds)
+                    updateProgress()
+                }
             }
         }
 
