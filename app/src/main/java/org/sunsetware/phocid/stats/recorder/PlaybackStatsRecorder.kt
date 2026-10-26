@@ -51,6 +51,7 @@ class PlaybackStatsRecorder(
     private var ticker: Job? = null
 
     @Volatile private var playing = false
+    @Volatile private var stateGeneration = 0L
 
     private class Session(
         val trackRowId: Long,
@@ -64,6 +65,7 @@ class PlaybackStatsRecorder(
     // Player callbacks -------------------------------------------------
 
     fun onTrackStarted(meta: TrackMeta) {
+        stateGeneration++
         scope.launch {
             val rowId =
                 mutex.withLock {
@@ -92,6 +94,7 @@ class PlaybackStatsRecorder(
 
     fun onResumed() {
         playing = true
+        stateGeneration++
         scope.launch {
             mutex.withLock {
                 val current = session ?: return@withLock
@@ -103,16 +106,18 @@ class PlaybackStatsRecorder(
 
     fun onPaused() {
         playing = false
+        val generation = ++stateGeneration
         stopTicker()
         scope.launch {
             mutex.withLock {
                 flushLocked(System.currentTimeMillis())
-                session?.lastResumeAt = 0
+                if (generation == stateGeneration) session?.lastResumeAt = 0
             }
         }
     }
 
     fun onTrackFinished() {
+        stateGeneration++
         stopTicker()
         scope.launch {
             mutex.withLock {
@@ -134,6 +139,7 @@ class PlaybackStatsRecorder(
 
     /** Called from Service.onDestroy; blocking here avoids losing the final seconds. */
     fun onShutdown() {
+        stateGeneration++
         stopTicker()
         runBlocking {
             mutex.withLock {

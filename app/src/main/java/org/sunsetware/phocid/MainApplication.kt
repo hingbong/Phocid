@@ -69,7 +69,8 @@ class MainApplication : Application() {
                     )
                 StatsDatabase.discardLegacyStats(context)
                 statsManager = StatsManager(context)
-                StatsMaintenanceWorker.schedule(context)
+                runCatching { StatsMaintenanceWorker.schedule(context) }
+                    .onFailure { Log.e("Phocid", "Unable to schedule stats maintenance", it) }
 
                 // LibraryIndex() is expensive, so extracting only the relevant
                 // preferences first would avoid unnecessary computation
