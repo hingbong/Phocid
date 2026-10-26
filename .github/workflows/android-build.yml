@@ -13,7 +13,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-build-${{ github.ref }}
@@ -101,10 +101,25 @@ jobs:
             "$APKSIGNER" verify --print-certs "$apk"
           done
 
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
+      - name: Publish release APK (overwrite)
+        uses: ncipollo/release-action@v1
         with:
-          name: phocid-next-release-${{ github.sha }}
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-          retention-days: 14
+          tag: phocid-next-latest
+          name: Phocid Next - Latest
+          body: |
+            **Latest Phocid Next build**
+
+            - Package: `org.sunsetware.phocid.next`
+            - Commit: `${{ github.sha }}`
+            - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Old APKs in this release are replaced on every build.
+          artifacts: app/build/outputs/apk/release/*.apk
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          makeLatest: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
