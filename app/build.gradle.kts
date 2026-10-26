@@ -23,6 +23,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Use one stable signing key for both debug and release builds when CI provides
+    // a keystore. The Android Gradle plugin's debug signing config is reused by the
+    // release build type, so both variants can be installed over each other.
+    val customKeystorePath = System.getenv("PHOCID_KEYSTORE_PATH")
+    if (!customKeystorePath.isNullOrBlank()) {
+        signingConfigs.getByName("debug").apply {
+            storeFile = file(customKeystorePath)
+            storePassword =
+                System.getenv("PHOCID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
+            keyAlias =
+                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+                    ?: "androiddebugkey"
+            keyPassword =
+                System.getenv("PHOCID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
+            storeType = "PKCS12"
+        }
+    }
+
     buildTypes {
         debug { isPseudoLocalesEnabled = true }
         release {

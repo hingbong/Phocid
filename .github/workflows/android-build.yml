@@ -49,19 +49,23 @@ jobs:
         with:
           cache-read-only: false
 
-      - name: Prepare optional fixed debug keystore
+      - name: Prepare signing keystore
         env:
-          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+          PHOCID_KEYSTORE_BASE64: ${{ secrets.PHOCID_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "${DEBUG_KEYSTORE_BASE64:-}" ]; then
-            mkdir -p "$HOME/.android"
-            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
-            echo "Using fixed debug keystore from DEBUG_KEYSTORE_BASE64"
+          if [ -n "${PHOCID_KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$PHOCID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/phocid-signing.p12"
+            echo "PHOCID_KEYSTORE_PATH=$RUNNER_TEMP/phocid-signing.p12" >> "$GITHUB_ENV"
+            echo "Using stable signing keystore from PHOCID_KEYSTORE_BASE64"
           else
-            echo "DEBUG_KEYSTORE_BASE64 is not set; AGP will generate a per-run debug keystore."
+            echo "PHOCID_KEYSTORE_BASE64 is not set; AGP will generate a per-run debug keystore."
           fi
 
       - name: Build release APK
+        env:
+          PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
+          PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
+          PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:assembleRelease
