@@ -14,7 +14,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "org.sunsetware.phocid"
+        applicationId = "org.sunsetware.phocid.next"
         minSdk = 30
         targetSdk = 36
         versionCode = 20260610

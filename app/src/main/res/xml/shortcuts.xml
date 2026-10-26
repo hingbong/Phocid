@@ -9,7 +9,7 @@
         <intent
             android:action="org.sunsetware.phocid.CONTINUE"
             android:targetClass="org.sunsetware.phocid.MainActivity"
-            android:targetPackage="org.sunsetware.phocid" />
+            android:targetPackage="org.sunsetware.phocid.next" />
     </shortcut>
     <shortcut
         android:enabled="true"
@@ -20,6 +20,6 @@
         <intent
             android:action="org.sunsetware.phocid.SHUFFLE"
             android:targetClass="org.sunsetware.phocid.MainActivity"
-            android:targetPackage="org.sunsetware.phocid" />
+            android:targetPackage="org.sunsetware.phocid.next" />
     </shortcut>
 </shortcuts>
