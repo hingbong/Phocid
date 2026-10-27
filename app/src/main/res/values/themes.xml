@@ -3,6 +3,7 @@
 
     <style name="Theme.Phocid" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/splashScreenBackground</item>
+        <item name="android:windowSplashScreenBackground">@color/splashScreenBackground</item>
         <item name="android:colorAccent">@color/androidAutoAccent</item>
     </style>
 </resources>

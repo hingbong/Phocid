@@ -2,7 +2,6 @@ package org.sunsetware.phocid.ui.theme
 
 import android.app.Activity
 import android.content.res.Configuration
-import android.os.Build
 import android.view.WindowInsetsController
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -65,12 +64,8 @@ fun PhocidTheme(
                             if (darkTheme) darkScheme else lightScheme
                         }
                         ThemeColorSource.MATERIAL_YOU -> {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                if (darkTheme) dynamicDarkColorScheme(context)
-                                else dynamicLightColorScheme(context)
-                            } else {
-                                if (darkTheme) darkScheme else lightScheme
-                            }
+                            if (darkTheme) dynamicDarkColorScheme(context)
+                            else dynamicLightColorScheme(context)
                         }
                         ThemeColorSource.CUSTOM -> {
                             customColorScheme(customThemeColor.toColor(0.6f), darkTheme)
@@ -89,11 +84,7 @@ fun PhocidTheme(
                 }
 
                 ThemeColorSource.MATERIAL_YOU -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        colorResource(android.R.color.system_accent1_400)
-                    } else {
-                        primary400
-                    }
+                    colorResource(android.R.color.system_accent1_400)
                 }
 
                 ThemeColorSource.CUSTOM -> {

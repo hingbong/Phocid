@@ -6,8 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.os.Build
 import android.view.View
+import android.view.WindowManager
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -55,6 +55,8 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import java.util.Locale
 import kotlin.coroutines.coroutineContext
+import kotlin.math.min
+import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -90,6 +92,7 @@ class MainAppWidget : GlanceAppWidget() {
             delay(50)
         }
         val coroutineScope = CoroutineScope(coroutineContext + Dispatchers.IO)
+        val widgetArtworkSizeLimit = maxWidgetArtworkSize(context)
         val trackAndArtworkState =
             GlobalData.libraryIndex.combine(
                 coroutineScope,
@@ -107,7 +110,9 @@ class MainAppWidget : GlanceAppWidget() {
                             it.id,
                             it.path,
                             preferences.highResArtworkPreference.player,
-                            preferences.widgetArtworkResolutionLimit,
+                            preferences.widgetArtworkResolutionLimit.coerceAtMost(
+                                widgetArtworkSizeLimit
+                            ),
                             preferences.widgetLayout.standaloneArtwork,
                         )
                     }
@@ -161,15 +166,10 @@ class MainAppWidget : GlanceAppWidget() {
             val contentColorVariant = contentColor.copy(alpha = VARIANT_ALPHA)
 
             val backgroundRadius =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    Dp(
-                        resources.getDimension(
-                            android.R.dimen.system_app_widget_background_radius
-                        ) / resources.displayMetrics.density
-                    )
-                } else {
-                    0.dp
-                }
+                Dp(
+                    resources.getDimension(android.R.dimen.system_app_widget_background_radius) /
+                        resources.displayMetrics.density
+                )
 
             GlanceTheme {
                 Box(
@@ -488,6 +488,17 @@ class MainAppWidget : GlanceAppWidget() {
                 )
             }
         }
+    }
+
+    // Android 17 enforces a 6 * display area byte cap on RemoteViews bitmaps. Keep the
+    // artwork small enough even if an ARGB_8888 bitmap is serialized twice.
+    private fun maxWidgetArtworkSize(context: Context): Int {
+        val metrics = context.resources.displayMetrics
+        val bounds =
+            context.getSystemService(WindowManager::class.java)?.maximumWindowMetrics?.bounds
+        val width = min(metrics.widthPixels, bounds?.width() ?: metrics.widthPixels)
+        val height = min(metrics.heightPixels, bounds?.height() ?: metrics.heightPixels)
+        return sqrt(6.0 * width * height / 8.0).toInt().coerceAtLeast(256)
     }
 
     private inline fun withController(

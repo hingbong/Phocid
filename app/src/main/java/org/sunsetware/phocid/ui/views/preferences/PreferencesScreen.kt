@@ -233,15 +233,9 @@ private class PreferencesSubscreen(private val page: Page) : TopLevelScreen() {
             context.getExternalFilesDir(null)?.let { FilenameUtils.concat(it.path, "logcat.txt") }
         }
         val imagesPermissionState =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
-            } else null
+            rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
         val partialImagesPermissionState =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                rememberPermissionState(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-            } else {
-                null
-            }
+            rememberPermissionState(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
         val preferencesScreenContext =
             PreferencesScreenContext(
                 context,
@@ -941,16 +935,16 @@ private val Miscellaneous =
                 title = { Strings[R.string.preferences_grant_images_permission] },
                 subtitle = { Strings[R.string.preferences_grant_images_permission_subtitle] },
                 icon = Icons.Filled.PermMedia,
-                visibility = { imagesPermissionState?.status?.isGranted == false },
+                visibility = { !imagesPermissionState.status.isGranted },
                 onClick = {
-                    if (partialImagesPermissionState?.status?.isGranted == true) {
+                    if (partialImagesPermissionState.status.isGranted) {
                         context.startActivity(
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 setData(Uri.fromParts("package", context.packageName, null))
                             }
                         )
                     } else {
-                        imagesPermissionState?.launchPermissionRequest()
+                        imagesPermissionState.launchPermissionRequest()
                     }
                 },
             ),
@@ -1106,8 +1100,8 @@ private data class PreferencesScreenContext(
     val updatePreferences: ((Preferences) -> Preferences) -> Unit,
     val filteredTrackCount: Int,
     val logcatDumpPath: String?,
-    val imagesPermissionState: PermissionState?,
-    val partialImagesPermissionState: PermissionState?,
+    val imagesPermissionState: PermissionState,
+    val partialImagesPermissionState: PermissionState,
 )
 
 private data class Page(val stringId: Int, val icon: ImageVector, val items: List<Item>)

@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                 var permissionGranted by remember { mutableStateOf(false) }
                 val permissions =
                     rememberMultiplePermissionsState(
-                        listOfNotNull(READ_PERMISSION),
+                        listOf(READ_PERMISSION),
                         onPermissionsResult = { result ->
                             permissionGranted = result.all { it.value }
                         },

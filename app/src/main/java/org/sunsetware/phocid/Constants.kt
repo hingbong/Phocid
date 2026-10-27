@@ -1,12 +1,8 @@
 package org.sunsetware.phocid
 
-import android.os.Build
 import androidx.compose.ui.unit.dp
 
-val READ_PERMISSION =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        android.Manifest.permission.READ_MEDIA_AUDIO
-    else android.Manifest.permission.READ_EXTERNAL_STORAGE
+val READ_PERMISSION = android.Manifest.permission.READ_MEDIA_AUDIO
 
 const val PREFERENCES_FILE_NAME = "preferences"
 const val PLAYLISTS_FILE_NAME = "playlists"

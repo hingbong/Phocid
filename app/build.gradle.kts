@@ -16,8 +16,8 @@ android {
 
     defaultConfig {
         applicationId = "org.sunsetware.phocid.next"
-        minSdk = 30
-        targetSdk = 36
+        minSdk = 35
+        targetSdk = 37
         versionCode = 20260610
         versionName = "20260610"
 

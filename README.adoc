@@ -16,7 +16,7 @@ image:metadata/en-US/images/phoneScreenshots/02-screenshot-home-folders.png[Scre
 image:metadata/en-US/images/phoneScreenshots/03-screenshot-search.png[Screenshot,15%]
 image:metadata/en-US/images/phoneScreenshots/04-screenshot-player.png[Screenshot,15%]
 
-A modern offline music player with familiar designs for Android 11+.
+A modern offline music player with familiar designs for Android 15+.
 
 This project aims to be a replacement with personal tweaks for the now-defunct https://github.com/kabouzeid/Phonograph[Phonograph] music player, but has no connections with it.
 
