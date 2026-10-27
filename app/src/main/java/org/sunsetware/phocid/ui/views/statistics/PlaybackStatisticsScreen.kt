@@ -78,8 +78,10 @@ private fun StatsRange.labelRes(): Int =
     when (this) {
         StatsRange.DAYS_7 -> R.string.playback_statistics_range_7d
         StatsRange.DAYS_30 -> R.string.playback_statistics_range_30d
+        StatsRange.CALENDAR_MONTH -> R.string.playback_statistics_range_month
         StatsRange.DAYS_90 -> R.string.playback_statistics_range_90d
         StatsRange.DAYS_365 -> R.string.playback_statistics_range_365d
+        StatsRange.CALENDAR_YEAR -> R.string.playback_statistics_range_year
         StatsRange.YEARS_3 -> R.string.playback_statistics_range_3y
         StatsRange.ALL -> R.string.playback_statistics_range_all
     }

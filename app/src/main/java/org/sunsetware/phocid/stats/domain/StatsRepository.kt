@@ -16,13 +16,33 @@ import org.sunsetware.phocid.stats.db.TrackTotalsEntity
 enum class StatsRange(val days: Int?) {
     DAYS_7(7),
     DAYS_30(30),
+    CALENDAR_MONTH(null),
     DAYS_90(90),
     DAYS_365(365),
+    CALENDAR_YEAR(null),
     YEARS_3(1095),
     ALL(null);
 
     val isAll: Boolean
-        get() = days == null
+        get() = this == ALL
+
+    /**
+     * First day included in this range, or null for all time.
+     *
+     * Calendar ranges start on the first day of the current month or year. Day-based ranges include
+     * today and the preceding `days - 1` days.
+     */
+    fun startDate(today: LocalDate): LocalDate? =
+        when (this) {
+            CALENDAR_MONTH -> today.withDayOfMonth(1)
+            CALENDAR_YEAR -> today.withDayOfYear(1)
+            ALL -> null
+            DAYS_7,
+            DAYS_30,
+            DAYS_90,
+            DAYS_365,
+            YEARS_3 -> today.minusDays(requireNotNull(days).toLong() - 1)
+        }
 }
 
 enum class StatsSort {
@@ -34,19 +54,15 @@ class StatsRepository(
     private val db: StatsDatabase,
     private val zoneId: () -> ZoneId = { ZoneId.systemDefault() },
 ) {
-    private fun sinceDay(range: StatsRange): Int {
-        val days = range.days ?: 0
-        return LocalDate.now(zoneId()).minusDays(days.toLong() - 1).toEpochDay().toInt()
-    }
+    private fun sinceDay(range: StatsRange): Int =
+        range.startDate(LocalDate.now(zoneId()))?.toEpochDay()?.toInt() ?: 0
 
-    private fun sinceMillis(range: StatsRange): Long {
-        val days = range.days ?: return 0L
-        return LocalDate.now(zoneId())
-            .minusDays(days.toLong() - 1)
-            .atStartOfDay(zoneId())
-            .toInstant()
-            .toEpochMilli()
-    }
+    private fun sinceMillis(range: StatsRange): Long =
+        range
+            .startDate(LocalDate.now(zoneId()))
+            ?.atStartOfDay(zoneId())
+            ?.toInstant()
+            ?.toEpochMilli() ?: 0L
 
     fun topTracks(
         range: StatsRange,
