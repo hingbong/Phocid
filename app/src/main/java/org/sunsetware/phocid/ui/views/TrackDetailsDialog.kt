@@ -39,8 +39,8 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
     override fun Compose(viewModel: MainViewModel) {
         val scrollState = rememberScrollState()
         var trackTotals by remember(track) { mutableStateOf(null as TrackTotalsEntity?) }
-        LaunchedEffect(track.path) {
-            trackTotals = viewModel.statsManager.repository.lifetimeByPath(track.path)
+        LaunchedEffect(track.path, track.uri, track.size) {
+            trackTotals = viewModel.statsManager.repository.lifetimeForTrack(track)
         }
         val content: List<Pair<String, String>> =
             remember(track) {

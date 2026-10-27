@@ -4,6 +4,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import org.sunsetware.phocid.data.Track
+import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.DayBucket
 import org.sunsetware.phocid.stats.db.HourBucket
 import org.sunsetware.phocid.stats.db.PlayHistoryItem
@@ -11,6 +13,8 @@ import org.sunsetware.phocid.stats.db.RangeSummary
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.TrackAggregate
 import org.sunsetware.phocid.stats.db.TrackTotalsEntity
+import org.sunsetware.phocid.stats.fingerprint.LocalUriKey
+import org.sunsetware.phocid.stats.fingerprint.TagKey
 
 /** Range choices. The longest range matches StatsRetention.DAILY_RETENTION_DAYS. */
 enum class StatsRange(val days: Int?) {
@@ -71,14 +75,17 @@ class StatsRepository(
     ): Flow<List<TrackAggregate>> =
         if (range.isAll) {
             when (sort) {
-                StatsSort.PLAYS -> db.totalsDao().topTracksByPlays(limit)
-                StatsSort.TIME -> db.totalsDao().topTracksByTime(limit)
+                StatsSort.PLAYS ->
+                    db.totalsDao().topTracksByPlays(limit, AliasKind.LOCAL_URI)
+                StatsSort.TIME -> db.totalsDao().topTracksByTime(limit, AliasKind.LOCAL_URI)
             }
         } else {
             val since = sinceDay(range)
             when (sort) {
-                StatsSort.PLAYS -> db.dailyDao().topTracksByPlays(since, limit)
-                StatsSort.TIME -> db.dailyDao().topTracksByTime(since, limit)
+                StatsSort.PLAYS ->
+                    db.dailyDao().topTracksByPlays(since, limit, AliasKind.LOCAL_URI)
+                StatsSort.TIME ->
+                    db.dailyDao().topTracksByTime(since, limit, AliasKind.LOCAL_URI)
             }
         }
 
@@ -115,4 +122,29 @@ class StatsRepository(
         db.totalsDao().byRowId(trackRowId)
 
     suspend fun lifetimeByPath(path: String): TrackTotalsEntity? = db.totalsDao().byPath(path)
+
+    suspend fun lifetimeForTrack(track: Track): TrackTotalsEntity? {
+        db.totalsDao()
+            .byAlias(AliasKind.LOCAL_URI, LocalUriKey.of(track.uri.toString(), track.size))
+            ?.let {
+                return it
+            }
+        if (track.path.isNotBlank()) {
+            db.totalsDao().byPath(track.path)?.let {
+                return it
+            }
+        }
+        for (key in
+            TagKey.candidates(
+                track.artists.joinToString(", "),
+                track.album,
+                track.title ?: track.fileName.substringBeforeLast('.'),
+                track.duration.inWholeMilliseconds,
+            )) {
+            db.totalsDao().byAlias(AliasKind.TAG_KEY, key)?.let {
+                return it
+            }
+        }
+        return null
+    }
 }

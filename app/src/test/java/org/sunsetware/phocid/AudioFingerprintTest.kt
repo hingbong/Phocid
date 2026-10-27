@@ -7,6 +7,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.sunsetware.phocid.stats.fingerprint.AudioFingerprint
+import org.sunsetware.phocid.stats.fingerprint.RandomAccessSource
 
 class AudioFingerprintTest {
     @get:Rule val temporaryFolder = TemporaryFolder()
@@ -21,6 +22,30 @@ class AudioFingerprintTest {
         assertThat(AudioFingerprint.compute(audioOnly)).isNotNull
         assertThat(AudioFingerprint.compute(withTag))
             .isEqualTo(AudioFingerprint.compute(audioOnly))
+    }
+
+    @Test
+    fun contentSourceProducesSameFingerprintAsFile() {
+        val audioOnly = temporaryFolder.newFile("audio.bin")
+        writeTrack(audioOnly, null)
+        val bytes = audioOnly.readBytes()
+        val source =
+            object : RandomAccessSource {
+                override val size: Long = bytes.size.toLong()
+
+                override fun readFully(position: Long, target: ByteArray) {
+                    bytes.copyInto(
+                        destination = target,
+                        destinationOffset = 0,
+                        startIndex = position.toInt(),
+                        endIndex = position.toInt() + target.size,
+                    )
+                }
+
+                override fun close() {}
+            }
+
+        assertThat(AudioFingerprint.compute(source)).isEqualTo(AudioFingerprint.compute(audioOnly))
     }
 
     private fun writeTrack(file: File, tag: ByteArray?) {

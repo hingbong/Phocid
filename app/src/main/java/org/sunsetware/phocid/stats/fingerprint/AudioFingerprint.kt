@@ -1,9 +1,15 @@
 package org.sunsetware.phocid.stats.fingerprint
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.os.ParcelFileDescriptor
+import java.io.Closeable
+import java.io.EOFException
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.channels.FileChannel
 import java.security.MessageDigest
 
 /**
@@ -22,39 +28,47 @@ object AudioFingerprint {
 
     fun compute(file: File): String? = runCatching {
         if (!file.isFile || file.length() < 1024) return null
-        RandomAccessFile(file, "r").use { raf ->
-            val (start, end) = audioRange(raf, file.length())
-            val length = end - start
-            if (length <= 0) return null
+        FileSource(file).use { source -> compute(source) }
+    }.getOrNull()
 
-            val md = MessageDigest.getInstance("SHA-256")
-            md.update(ByteBuffer.allocate(8).putLong(length).array())
-
-            val window = minOf(WINDOW.toLong(), length).toInt()
-            val buffer = ByteArray(window)
-
-            raf.seek(start)
-            raf.readFully(buffer)
-            md.update(buffer)
-
-            if (length > window * 2L) {
-                raf.seek(end - window)
-                raf.readFully(buffer)
-                md.update(buffer)
+    fun compute(resolver: ContentResolver, uri: Uri): String? = runCatching {
+        resolver.openFileDescriptor(uri, "r")?.let { descriptor ->
+            ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { stream ->
+                FileChannelSource(stream.channel).use { source -> compute(source) }
             }
-
-            md.digest().joinToString("") { "%02x".format(it) }.substring(0, HASH_HEX_LEN)
         }
     }.getOrNull()
 
+    fun compute(source: RandomAccessSource): String? = runCatching {
+        if (source.size < 1024) return null
+        val (start, end) = audioRange(source, source.size)
+        val length = end - start
+        if (length <= 0) return null
+
+        val md = MessageDigest.getInstance("SHA-256")
+        md.update(ByteBuffer.allocate(8).putLong(length).array())
+
+        val window = minOf(WINDOW.toLong(), length).toInt()
+        val buffer = ByteArray(window)
+
+        source.readFully(start, buffer)
+        md.update(buffer)
+
+        if (length > window * 2L) {
+            source.readFully(end - window, buffer)
+            md.update(buffer)
+        }
+
+        md.digest().joinToString("") { "%02x".format(it) }.substring(0, HASH_HEX_LEN)
+    }.getOrNull()
+
     /** Returns [audio start, audio end), with container tags removed. */
-    private fun audioRange(raf: RandomAccessFile, size: Long): Pair<Long, Long> {
+    private fun audioRange(source: RandomAccessSource, size: Long): Pair<Long, Long> {
         var start = 0L
         var end = size
 
         val head = ByteArray(16)
-        raf.seek(0)
-        raf.readFully(head)
+        source.readFully(0, head)
 
         when {
             // ID3v2: 10-byte header + syncsafe size (+10-byte footer)
@@ -73,8 +87,7 @@ object AudioFingerprint {
                 var position = 4L
                 val block = ByteArray(4)
                 while (position + 4 <= size) {
-                    raf.seek(position)
-                    raf.readFully(block)
+                    source.readFully(position, block)
                     val blockLength =
                         (block[1].u() shl 16) or (block[2].u() shl 8) or block[3].u()
                     val last = block[0].toInt() and 0x80 != 0
@@ -86,28 +99,26 @@ object AudioFingerprint {
 
             // MP4/M4A: mdat is the audio payload
             head.ascii(4, 4) == "ftyp" -> {
-                findMdat(raf, size)?.let { return it }
+                findMdat(source, size)?.let { return it }
             }
 
             // WAV: data chunk
             head.ascii(0, 4) == "RIFF" && head.ascii(8, 4) == "WAVE" -> {
-                findWavData(raf, size)?.let { return it }
+                findWavData(source, size)?.let { return it }
             }
         }
 
         // Trailing ID3v1 (128 bytes)
         if (end - start > 128) {
             val tail = ByteArray(128)
-            raf.seek(end - 128)
-            raf.readFully(tail)
+            source.readFully(end - 128, tail)
             if (tail.ascii(0, 3) == "TAG") end -= 128
         }
 
         // Trailing APEv2 footer (32 bytes, optional header before the tag)
         if (end - start > 32) {
             val ape = ByteArray(32)
-            raf.seek(end - 32)
-            raf.readFully(ape)
+            source.readFully(end - 32, ape)
             if (ape.ascii(0, 8) == "APETAGEX") {
                 val tagSize = ByteBuffer.wrap(ape, 12, 4).order(ByteOrder.LITTLE_ENDIAN).int
                 val flags = ByteBuffer.wrap(ape, 20, 4).order(ByteOrder.LITTLE_ENDIAN).int
@@ -120,12 +131,11 @@ object AudioFingerprint {
         return start to end
     }
 
-    private fun findMdat(raf: RandomAccessFile, size: Long): Pair<Long, Long>? {
+    private fun findMdat(source: RandomAccessSource, size: Long): Pair<Long, Long>? {
         var position = 0L
         val header = ByteArray(8)
         while (position + 8 <= size) {
-            raf.seek(position)
-            raf.readFully(header)
+            source.readFully(position, header)
             var boxSize = ByteBuffer.wrap(header, 0, 4).int.toLong() and 0xFFFFFFFFL
             val type = header.ascii(4, 4)
             var payloadStart = position + 8
@@ -133,8 +143,7 @@ object AudioFingerprint {
             when (boxSize) {
                 1L -> {
                     val large = ByteArray(8)
-                    raf.seek(position + 8)
-                    raf.readFully(large)
+                    source.readFully(position + 8, large)
                     boxSize = ByteBuffer.wrap(large).long
                     payloadStart = position + 16
                 }
@@ -149,12 +158,11 @@ object AudioFingerprint {
         return null
     }
 
-    private fun findWavData(raf: RandomAccessFile, size: Long): Pair<Long, Long>? {
+    private fun findWavData(source: RandomAccessSource, size: Long): Pair<Long, Long>? {
         var position = 12L
         val header = ByteArray(8)
         while (position + 8 <= size) {
-            raf.seek(position)
-            raf.readFully(header)
+            source.readFully(position, header)
             val type = header.ascii(0, 4)
             val chunkSize =
                 ByteBuffer.wrap(header, 4, 4).order(ByteOrder.LITTLE_ENDIAN).int.toLong() and
@@ -174,4 +182,41 @@ object AudioFingerprint {
     private fun Byte.u(): Int = toInt() and 0xFF
 
     private fun Byte.i7(): Int = toInt() and 0x7F
+}
+
+interface RandomAccessSource : Closeable {
+    val size: Long
+
+    fun readFully(position: Long, target: ByteArray)
+}
+
+private class FileSource(file: File) : RandomAccessSource {
+    private val raf = RandomAccessFile(file, "r")
+    override val size: Long = raf.length()
+
+    override fun readFully(position: Long, target: ByteArray) {
+        raf.seek(position)
+        raf.readFully(target)
+    }
+
+    override fun close() = raf.close()
+}
+
+private class FileChannelSource(private val channel: FileChannel) : RandomAccessSource {
+    override val size: Long = channel.size()
+
+    override fun readFully(position: Long, target: ByteArray) {
+        var offset = 0
+        while (offset < target.size) {
+            val read =
+                channel.read(
+                    ByteBuffer.wrap(target, offset, target.size - offset),
+                    position + offset,
+                )
+            if (read <= 0) throw EOFException()
+            offset += read
+        }
+    }
+
+    override fun close() = channel.close()
 }

@@ -1,9 +1,11 @@
 package org.sunsetware.phocid.stats
 
 import android.content.Context
+import android.net.Uri
 import org.sunsetware.phocid.stats.backup.StatsBackupManager
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.domain.StatsRepository
+import org.sunsetware.phocid.stats.fingerprint.AudioFingerprint
 import org.sunsetware.phocid.stats.recorder.PlaybackStatsRecorder
 import org.sunsetware.phocid.stats.resolver.TrackResolver
 import org.sunsetware.phocid.stats.resolver.defaultMediaRoots
@@ -12,7 +14,15 @@ import org.sunsetware.phocid.stats.resolver.defaultMediaRoots
 class StatsManager(context: Context) {
     private val appContext = context.applicationContext
     val database: StatsDatabase = StatsDatabase.get(appContext)
-    val resolver: TrackResolver = TrackResolver(database) { defaultMediaRoots(appContext) }
+    val resolver: TrackResolver =
+        TrackResolver(
+            database,
+            fingerprint = { meta ->
+                AudioFingerprint.compute(appContext.contentResolver, Uri.parse(meta.uri))
+                    ?: meta.file?.let { AudioFingerprint.compute(it) }
+            },
+            mediaRoots = { defaultMediaRoots(appContext) },
+        )
     val repository: StatsRepository = StatsRepository(database)
     val backupManager: StatsBackupManager = StatsBackupManager(database)
 

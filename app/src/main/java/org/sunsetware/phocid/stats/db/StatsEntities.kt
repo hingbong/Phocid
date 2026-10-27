@@ -62,7 +62,16 @@ object AliasKind {
     /** Lowercase path relative to a media root. Fallback for untagged files. */
     const val REL_PATH = 3
 
-    val PRIORITY = intArrayOf(AUDIO_HASH, TAG_KEY, REL_PATH)
+    /**
+     * Content URI plus size. Local-only fast lookup; never treat it as portable identity and
+     * never include it in backups.
+     */
+    const val LOCAL_URI = 4
+
+    val PRIORITY = intArrayOf(AUDIO_HASH, TAG_KEY, LOCAL_URI, REL_PATH)
+
+    /** Aliases that remain meaningful after moving to another device. */
+    val PORTABLE_ALIAS_KINDS = setOf(AUDIO_HASH, TAG_KEY, REL_PATH)
 }
 
 /**

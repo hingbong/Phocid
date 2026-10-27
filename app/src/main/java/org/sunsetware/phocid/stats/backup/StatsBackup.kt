@@ -14,6 +14,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.cbor.Cbor
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
+import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.StatsRetention
 import org.sunsetware.phocid.stats.db.TrackAliasEntity
@@ -38,6 +39,7 @@ data class StatsBackup(
     val daily: List<BackupDaily>,
 ) {
     companion object {
+        // Local-only aliases are filtered from the payload; the wire format stays version 1.
         const val VERSION = 1
         const val MAGIC = "MSTATS1\u0000"
     }
@@ -116,8 +118,10 @@ class StatsBackupManager(
                     )
             }
             db.aliasDao().all().forEach { alias ->
-                idToUuid[alias.trackRowId]?.let {
-                    aliases += BackupAlias(alias.kind, alias.value, it)
+                if (alias.kind in AliasKind.PORTABLE_ALIAS_KINDS) {
+                    idToUuid[alias.trackRowId]?.let {
+                        aliases += BackupAlias(alias.kind, alias.value, it)
+                    }
                 }
             }
             db.dailyDao().exportSince(cutoffDay).forEach { day ->
@@ -204,6 +208,7 @@ class StatsBackupManager(
             db.aliasDao()
                 .putAll(
                     payload.aliases.mapNotNull { alias ->
+                        if (alias.kind !in AliasKind.PORTABLE_ALIAS_KINDS) return@mapNotNull null
                         uuidToRowId[alias.uuid]?.let {
                             TrackAliasEntity(alias.kind, alias.value, it)
                         }

@@ -32,13 +32,30 @@ Replacing it with RELATIVE_PATH + DISPLAY_NAME is not a safe substitute: MediaSt
 guarantee that the reconstructed path exists, and the result can differ on case-insensitive
 filesystems, symlinks, and multi-volume devices.
 
+## Statistics identity
+
+Statistics already use a portable identity layer:
+
+- UUID is the backup identity.
+- AUDIO_HASH is the primary cross-device lookup key.
+- TAG_KEY is the fallback for re-encoded files.
+- REL_PATH is a legacy path-relative fallback.
+- LOCAL_URI (content URI + size) is local-only; it is never written to backups.
+
+The stats resolver can now compute AUDIO_HASH from a content URI and does not require
+MediaStore.DATA. The library index still needs DATA for Jaudiotagger and ArtworkLoader, so the
+next step is the full Track.path migration, not removing the column outright.
+
+A restored backup contains only portable aliases. On a new device, TagKey/REL_PATH can bind
+immediately; AUDIO_HASH binds on first play and then writes a new LOCAL_URI for that device.
+
 ## Deferred content URI migration
 
 Removing MediaStore.DATA requires changing the Track.path identity across:
 
 - Track, library indexing, folder views, and search
 - PlaylistEntry and M3U import/export
-- Stats resolver relative-path alias and local track path display hint (backup identity is already UUID-based)
+- Stats UI/resolver path display hints (LOCAL_URI is local-only; backup identity is UUID-based)
 - ArtworkLoader and Media3 media IDs
 
 OpusMetadataIo already accepts an InputStream, so opus/ogg metadata can migrate first. The

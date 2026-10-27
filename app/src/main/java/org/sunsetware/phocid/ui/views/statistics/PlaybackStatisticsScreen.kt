@@ -65,6 +65,7 @@ import org.sunsetware.phocid.globals.format
 import org.sunsetware.phocid.stats.db.RangeSummary
 import org.sunsetware.phocid.stats.db.TrackAggregate
 import org.sunsetware.phocid.stats.domain.StatsRange
+import org.sunsetware.phocid.stats.fingerprint.LocalUriKey
 import org.sunsetware.phocid.stats.fingerprint.TagKey
 import org.sunsetware.phocid.stats.domain.StatsSort
 import org.sunsetware.phocid.ui.components.Artwork
@@ -115,6 +116,12 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                 .collectAsStateWithLifecycle(RangeSummary(0, 0, 0, 0))
         val tracksByPath =
             remember(libraryIndex) { libraryIndex.tracks.values.associateBy { it.path } }
+        val tracksByLocalUri =
+            remember(libraryIndex) {
+                libraryIndex.tracks.values.associateBy {
+                    LocalUriKey.of(it.uri.toString(), it.size)
+                }
+            }
         val tracksByTagKey =
             remember(libraryIndex) {
                 buildMap {
@@ -296,7 +303,8 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                     } else {
                         items(entries, key = { it.trackRowId }) { entry ->
                             val track =
-                                tracksByPath[entry.path]
+                                entry.localUriKey?.let { tracksByLocalUri[it] }
+                                    ?: tracksByPath[entry.path]
                                     ?: TagKey.of(
                                             entry.artist,
                                             entry.album,

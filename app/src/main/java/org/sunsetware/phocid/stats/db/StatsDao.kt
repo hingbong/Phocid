@@ -15,6 +15,7 @@ data class TrackAggregate(
     val artist: String,
     val album: String,
     val path: String,
+    val localUriKey: String?,
     val durationMillis: Long,
     val plays: Int,
     val millis: Long,
@@ -84,6 +85,9 @@ interface TrackAliasDao {
 
     @Query("SELECT * FROM track_aliases WHERE trackRowId = :rowId")
     suspend fun aliasesOf(rowId: Long): List<TrackAliasEntity>
+
+    @Query("DELETE FROM track_aliases WHERE trackRowId = :rowId AND kind = :kind")
+    suspend fun deleteKind(rowId: Long, kind: Int)
 
     @Query("SELECT * FROM track_aliases") suspend fun all(): List<TrackAliasEntity>
 
@@ -192,6 +196,9 @@ interface TrackDailyDao {
                t.artist AS artist,
                t.album AS album,
                t.path AS path,
+               (SELECT ta.value FROM track_aliases ta
+                WHERE ta.trackRowId = t.id AND ta.kind = :localUriKind
+                LIMIT 1) AS localUriKey,
                t.durationMillis AS durationMillis,
                SUM(d.playCount) AS plays,
                SUM(d.playedMillis) AS millis,
@@ -204,7 +211,11 @@ interface TrackDailyDao {
         LIMIT :limit
         """
     )
-    fun topTracksByPlays(sinceDay: Int, limit: Int): Flow<List<TrackAggregate>>
+    fun topTracksByPlays(
+        sinceDay: Int,
+        limit: Int,
+        localUriKind: Int,
+    ): Flow<List<TrackAggregate>>
 
     @Query(
         """
@@ -214,6 +225,9 @@ interface TrackDailyDao {
                t.artist AS artist,
                t.album AS album,
                t.path AS path,
+               (SELECT ta.value FROM track_aliases ta
+                WHERE ta.trackRowId = t.id AND ta.kind = :localUriKind
+                LIMIT 1) AS localUriKey,
                t.durationMillis AS durationMillis,
                SUM(d.playCount) AS plays,
                SUM(d.playedMillis) AS millis,
@@ -226,7 +240,11 @@ interface TrackDailyDao {
         LIMIT :limit
         """
     )
-    fun topTracksByTime(sinceDay: Int, limit: Int): Flow<List<TrackAggregate>>
+    fun topTracksByTime(
+        sinceDay: Int,
+        limit: Int,
+        localUriKind: Int,
+    ): Flow<List<TrackAggregate>>
 
     @Query(
         """
@@ -300,6 +318,16 @@ interface TrackTotalsDao {
     )
     suspend fun byPath(path: String): TrackTotalsEntity?
 
+    @Query(
+        """
+        SELECT tt.* FROM track_totals tt
+        JOIN track_aliases ta ON ta.trackRowId = tt.trackRowId
+        WHERE ta.kind = :kind AND ta.value = :value
+        LIMIT 1
+        """
+    )
+    suspend fun byAlias(kind: Int, value: String): TrackTotalsEntity?
+
     @Query("SELECT * FROM track_totals") suspend fun all(): List<TrackTotalsEntity>
 
     @Query(
@@ -327,6 +355,9 @@ interface TrackTotalsDao {
                t.artist AS artist,
                t.album AS album,
                t.path AS path,
+               (SELECT ta.value FROM track_aliases ta
+                WHERE ta.trackRowId = t.id AND ta.kind = :localUriKind
+                LIMIT 1) AS localUriKey,
                t.durationMillis AS durationMillis,
                tt.totalCount AS plays,
                tt.totalMillis AS millis,
@@ -337,7 +368,7 @@ interface TrackTotalsDao {
         LIMIT :limit
         """
     )
-    fun topTracksByPlays(limit: Int): Flow<List<TrackAggregate>>
+    fun topTracksByPlays(limit: Int, localUriKind: Int): Flow<List<TrackAggregate>>
 
     @Query(
         """
@@ -347,6 +378,9 @@ interface TrackTotalsDao {
                t.artist AS artist,
                t.album AS album,
                t.path AS path,
+               (SELECT ta.value FROM track_aliases ta
+                WHERE ta.trackRowId = t.id AND ta.kind = :localUriKind
+                LIMIT 1) AS localUriKey,
                t.durationMillis AS durationMillis,
                tt.totalCount AS plays,
                tt.totalMillis AS millis,
@@ -357,7 +391,7 @@ interface TrackTotalsDao {
         LIMIT :limit
         """
     )
-    fun topTracksByTime(limit: Int): Flow<List<TrackAggregate>>
+    fun topTracksByTime(limit: Int, localUriKind: Int): Flow<List<TrackAggregate>>
 
     @Query(
         """

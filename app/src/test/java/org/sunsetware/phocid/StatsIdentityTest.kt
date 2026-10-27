@@ -2,6 +2,7 @@ package org.sunsetware.phocid
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
+import org.sunsetware.phocid.stats.fingerprint.LocalUriKey
 import org.sunsetware.phocid.stats.fingerprint.RelPathKey
 import org.sunsetware.phocid.stats.fingerprint.TagKey
 
@@ -26,5 +27,12 @@ class StatsIdentityTest {
         val roots = listOf("/storage/emulated/0/Music", "/sdcard/Music")
         assertThat(RelPathKey.of("/storage/emulated/0/Music/Artist/Song.flac", roots))
             .isEqualTo("artist/song.flac")
+    }
+
+    @Test
+    fun localUriKeyIncludesSize() {
+        val uri = "content://media/external/audio/media/42"
+        assertThat(LocalUriKey.of(uri, 1024)).isEqualTo(LocalUriKey.of(uri, 1024))
+        assertThat(LocalUriKey.of(uri, 1024)).isNotEqualTo(LocalUriKey.of(uri, 2048))
     }
 }

@@ -6,7 +6,7 @@ import org.sunsetware.phocid.stats.db.FingerprintCacheEntity
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.TrackAliasEntity
 import org.sunsetware.phocid.stats.db.TrackEntity
-import org.sunsetware.phocid.stats.fingerprint.AudioFingerprint
+import org.sunsetware.phocid.stats.fingerprint.LocalUriKey
 import org.sunsetware.phocid.stats.fingerprint.RelPathKey
 import org.sunsetware.phocid.stats.fingerprint.TagKey
 import org.sunsetware.phocid.utils.externalStorageRoots
@@ -19,7 +19,10 @@ import kotlinx.coroutines.withContext
 
 /** Track metadata passed from the player. */
 data class TrackMeta(
-    val file: File,
+    val uri: String,
+    val file: File?,
+    val size: Long,
+    val modified: Long,
     val title: String?,
     val artist: String?,
     val album: String?,
@@ -27,29 +30,30 @@ data class TrackMeta(
 )
 
 /**
- * File -> trackRowId resolver.
+ * Media item -> trackRowId resolver.
  *
- * Lookup order: audio hash, normalized tags + duration bucket, relative path. A hit writes
+ * Lookup order: audio hash, normalized tags + duration bucket, local content URI, relative path. A hit writes
  * back any missing aliases and refreshes the display metadata. If different layers point at
  * different rows, they are merged in one transaction so the statistics page cannot show the
  * same song twice.
  */
 class TrackResolver(
     private val db: StatsDatabase,
+    private val fingerprint: (TrackMeta) -> String?,
     private val mediaRoots: () -> List<String>,
 ) {
     private val mutex = Mutex()
     private val memo = HashMap<String, Long>()
 
-    suspend fun resolve(meta: TrackMeta): Long =
-        mutex.withLock {
-            memo[meta.file.absolutePath]?.let {
-                return it
-            }
+    suspend fun resolve(meta: TrackMeta): Long {
+        val key = LocalUriKey.of(meta.uri, meta.size)
+        return mutex.withLock {
+            memo[key]?.let { return@withLock it }
             val rowId = withContext(Dispatchers.IO) { doResolve(meta) }
-            memo[meta.file.absolutePath] = rowId
+            memo[key] = rowId
             rowId
         }
+    }
 
     fun invalidate() {
         memo.clear()
@@ -59,10 +63,11 @@ class TrackResolver(
         val tracks = db.trackDao()
         val aliases = db.aliasDao()
 
-        val hash = cachedHash(meta.file)
+        val localUriKey = LocalUriKey.of(meta.uri, meta.size)
+        val hash = cachedHash(meta)
         val tagKeys =
             TagKey.candidates(meta.artist, meta.album, meta.title, meta.durationMillis)
-        val relPath = RelPathKey.of(meta.file.absolutePath, mediaRoots())
+        val relPath = meta.file?.let { RelPathKey.of(it.absolutePath, mediaRoots()) }
 
         val hits = LinkedHashMap<Int, Long>()
         hash?.let { aliases.resolve(AliasKind.AUDIO_HASH, it) }?.let {
@@ -71,7 +76,10 @@ class TrackResolver(
         tagKeys.firstNotNullOfOrNull { aliases.resolve(AliasKind.TAG_KEY, it) }?.let {
             hits[AliasKind.TAG_KEY] = it
         }
-        aliases.resolve(AliasKind.REL_PATH, relPath)?.let { hits[AliasKind.REL_PATH] = it }
+        aliases.resolve(AliasKind.LOCAL_URI, localUriKey)?.let { hits[AliasKind.LOCAL_URI] = it }
+        relPath?.let { aliases.resolve(AliasKind.REL_PATH, it) }?.let {
+            hits[AliasKind.REL_PATH] = it
+        }
 
         val winner =
             if (hits.isEmpty()) {
@@ -88,7 +96,7 @@ class TrackResolver(
                     artist = meta.artist.orEmpty(),
                     album = meta.album.orEmpty(),
                     durationMillis = meta.durationMillis,
-                    path = meta.file.absolutePath,
+                    path = meta.file?.absolutePath.orEmpty(),
                 )
                 selected
             }
@@ -97,7 +105,9 @@ class TrackResolver(
         tagKeys.firstOrNull()?.let {
             aliases.put(TrackAliasEntity(AliasKind.TAG_KEY, it, winner))
         }
-        aliases.put(TrackAliasEntity(AliasKind.REL_PATH, relPath, winner))
+        aliases.deleteKind(winner, AliasKind.LOCAL_URI)
+        aliases.put(TrackAliasEntity(AliasKind.LOCAL_URI, localUriKey, winner))
+        relPath?.let { aliases.put(TrackAliasEntity(AliasKind.REL_PATH, it, winner)) }
         return winner
     }
 
@@ -105,11 +115,14 @@ class TrackResolver(
         db.trackDao().insert(
             TrackEntity(
                 uuid = UUID.randomUUID().toString(),
-                title = meta.title ?: meta.file.nameWithoutExtension,
+                title =
+                    meta.title
+                        ?: meta.file?.nameWithoutExtension
+                        ?: meta.uri.substringAfterLast('/'),
                 artist = meta.artist.orEmpty(),
                 album = meta.album.orEmpty(),
                 durationMillis = meta.durationMillis,
-                path = meta.file.absolutePath,
+                path = meta.file?.absolutePath.orEmpty(),
                 createdAt = System.currentTimeMillis(),
             )
         )
@@ -127,21 +140,24 @@ class TrackResolver(
         memo.entries.removeAll { it.value == loser }
     }
 
-    private suspend fun cachedHash(file: File): String? {
-        if (!file.isFile) return null
+    private suspend fun cachedHash(meta: TrackMeta): String? {
         val dao = db.fingerprintCacheDao()
-        val path = file.absolutePath
-        val size = file.length()
-        val mtime = file.lastModified()
-
-        dao.hit(path, size, mtime)?.let {
+        val localKey = LocalUriKey.of(meta.uri, meta.size)
+        dao.hit(localKey, meta.size, meta.modified)?.let {
             return it
         }
 
-        val hash = AudioFingerprint.compute(file)
-        if (hash != null) {
-            dao.put(FingerprintCacheEntity(path, size, mtime, hash))
+        // Keep reading the legacy path-keyed cache so upgrading does not re-hash the library.
+        meta.file?.let { file ->
+            if (file.isFile) {
+                dao.hit(file.absolutePath, file.length(), file.lastModified())?.let {
+                    return it
+                }
+            }
         }
+
+        val hash = runCatching { fingerprint(meta) }.getOrNull() ?: return null
+        dao.put(FingerprintCacheEntity(localKey, meta.size, meta.modified, hash))
         return hash
     }
 }
@@ -149,7 +165,10 @@ class TrackResolver(
 /** Convert a Phocid track into the small metadata record used by the resolver. */
 fun org.sunsetware.phocid.data.Track.toTrackMeta(): TrackMeta {
     return TrackMeta(
-        file = File(path),
+        uri = uri.toString(),
+        file = path.takeIf { it.isNotBlank() }?.let(::File),
+        size = size,
+        modified = version,
         title = title?.takeIf { it.isNotBlank() } ?: fileName.substringBeforeLast('.'),
         artist = artists.joinToString(", ").takeIf { it.isNotBlank() },
         album = album?.takeIf { it.isNotBlank() },
