@@ -80,6 +80,9 @@ jobs:
             grep -nE "(^e: | error: |FAILED|> Task .* FAILED|AssertionError|expected:|but was:)" "$RUNNER_TEMP/unit-test.log" | head -20 | while IFS= read -r line; do
               echo "::error::$line"
             done
+            grep -n -A16 -B2 -E "What went wrong|Could not resolve|Failed to apply plugin|requires Gradle" "$RUNNER_TEMP/unit-test.log" | head -60 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
             echo "--- test log tail ---"
             tail -80 "$RUNNER_TEMP/unit-test.log"
           fi
