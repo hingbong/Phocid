@@ -18,6 +18,9 @@ The scanner only needs bash, find, and grep. For an API-level audit, run Android
 | Environment.getExternalStoragePublicDirectory | Replaced by StorageManager.primaryStorageVolume | Removed |
 | MediaStore.Audio.Media.EXTERNAL_CONTENT_URI | Track.uri, ArtworkLoader.kt | Not deprecated; left unchanged |
 
+EXTERNAL_CONTENT_URI is the same primary external volume as getContentUri(VOLUME_EXTERNAL), so
+switching it would be cosmetic rather than a deprecation fix.
+
 ## Why MediaStore.DATA is still used
 
 Jaudiotagger reads metadata through AudioFileIO.read(File), and ArtworkLoader uses
@@ -35,7 +38,7 @@ Removing MediaStore.DATA requires changing the Track.path identity across:
 
 - Track, library indexing, folder views, and search
 - PlaylistEntry and M3U import/export
-- Stats resolver (relative path alias), track details, and backup restore matching
+- Stats resolver relative-path alias and local track path display hint (backup identity is already UUID-based)
 - ArtworkLoader and Media3 media IDs
 
 OpusMetadataIo already accepts an InputStream, so opus/ogg metadata can migrate first. The
