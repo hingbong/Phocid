@@ -1,7 +1,7 @@
 [versions]
 accompanistPermissions = "0.37.3"
 activityKtx = "1.13.0"
-agp = "8.13.2"
+agp = "9.4.1"
 assertjCore = "3.27.7"
 commonsIo = "2.22.0"
 coreSplashscreenVersion = "1.2.0"
