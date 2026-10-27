@@ -69,7 +69,7 @@ jobs:
         run: |
           chmod +x gradlew
           set +e
-          ./gradlew --no-daemon --stacktrace --console=plain :app:customSetup :app:testReleaseUnitTest 2>&1 | tee "$RUNNER_TEMP/unit-test.log"
+          ./gradlew --no-daemon --stacktrace --console=plain :app:customSetup :app:testDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           status=${PIPESTATUS[0]}
           exit $status
 
