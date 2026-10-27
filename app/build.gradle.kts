@@ -75,6 +75,11 @@ android {
     }
     @Suppress("UnstableApiUsage")
     androidResources.generateLocaleConfig = true
+
+    lint {
+        // Keep the first runs report-only so the report can be triaged before it gates builds.
+        abortOnError = false
+    }
 }
 
 kotlin {

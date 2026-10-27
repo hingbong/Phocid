@@ -1,6 +1,7 @@
 package org.sunsetware.phocid.ui.views.playlist
 
 import android.os.Environment
+import android.os.storage.StorageManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -56,6 +58,15 @@ sealed class PlaylistIoSettingsDialogBase(
     override fun Compose(viewModel: MainViewModel) {
         val preferences by viewModel.preferences.collectAsStateWithLifecycle()
         val playlistIoSettings = settingsSelector(preferences)
+        val context = LocalContext.current
+        val defaultMusicDirectory =
+            remember(context) {
+                context
+                    .getSystemService(StorageManager::class.java)
+                    .primaryStorageVolume
+                    .directory
+                    ?.resolve(Environment.DIRECTORY_MUSIC)
+            }
         var relativeBaseBuffer by remember { mutableStateOf(playlistIoSettings.relativeBase) }
         LaunchedEffect(relativeBaseBuffer) {
             viewModel.updatePreferences {
@@ -133,11 +144,7 @@ sealed class PlaylistIoSettingsDialogBase(
                             Strings[
                                     R.string
                                         .preferences_playlist_io_settings_export_relative_base_hint]
-                                .icuFormat(
-                                    Environment.getExternalStoragePublicDirectory(
-                                        Environment.DIRECTORY_MUSIC
-                                    )
-                                )
+                                .icuFormat(defaultMusicDirectory ?: Environment.DIRECTORY_MUSIC)
                         )
                     },
                     singleLine = true,

@@ -87,6 +87,25 @@ jobs:
             tail -80 "$RUNNER_TEMP/unit-test.log"
           fi
 
+      - name: Scan deprecated storage APIs
+        run: |
+          chmod +x scripts/scan-deprecated-storage.sh
+          ./scripts/scan-deprecated-storage.sh --check
+
+      - name: Run Android Lint
+        run: |
+          ./gradlew --no-daemon --stacktrace :app:lintDebug
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.xml
+          if-no-files-found: warn
+
       - name: Build release APK
         env:
           PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}

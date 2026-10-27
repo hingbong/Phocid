@@ -1,7 +1,6 @@
 package org.sunsetware.phocid.stats.resolver
 
 import android.content.Context
-import android.os.Environment
 import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.FingerprintCacheEntity
 import org.sunsetware.phocid.stats.db.StatsDatabase
@@ -10,6 +9,7 @@ import org.sunsetware.phocid.stats.db.TrackEntity
 import org.sunsetware.phocid.stats.fingerprint.AudioFingerprint
 import org.sunsetware.phocid.stats.fingerprint.RelPathKey
 import org.sunsetware.phocid.stats.fingerprint.TagKey
+import org.sunsetware.phocid.utils.externalStorageRoots
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -159,11 +159,5 @@ fun org.sunsetware.phocid.data.Track.toTrackMeta(): TrackMeta {
 
 /** Candidate roots for the relative-path fallback. */
 fun defaultMediaRoots(context: Context): List<String> {
-    val roots = mutableListOf(Environment.getExternalStorageDirectory().absolutePath)
-    context.getExternalFilesDirs(null).forEach { directory ->
-        var current = directory
-        repeat(4) { current = current?.parentFile }
-        current?.absolutePath?.let { roots += it }
-    }
-    return roots.distinct()
+    return context.externalStorageRoots().map { it.absolutePath }
 }

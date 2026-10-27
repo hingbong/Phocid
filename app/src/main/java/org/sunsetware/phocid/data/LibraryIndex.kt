@@ -1279,6 +1279,12 @@ private fun getRootFolder(folders: Map<String, Folder>): String {
     return root
 }
 
+// MediaStore.DATA is deprecated, but it is the only column that gives us the real file path
+// required by Jaudiotagger and ArtworkLoader. RELATIVE_PATH + DISPLAY_NAME is not a safe
+// substitute: MediaStore does not guarantee that the reconstructed path exists. Removing DATA
+// requires migrating the whole Track.path pipeline to content URIs; keep the dependency isolated
+// here until that migration happens.
+@Suppress("DEPRECATION")
 private val contentResolverColumns =
     arrayOf(
         Media._ID,
@@ -1298,6 +1304,7 @@ private val contentResolverColumns =
         Media.BITRATE,
     )
 
+@Suppress("DEPRECATION")
 suspend fun scanTracks(
     context: Context,
     advancedMetadataExtraction: Boolean,

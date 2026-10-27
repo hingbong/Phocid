@@ -3,7 +3,6 @@ package org.sunsetware.phocid
 import android.app.Application
 import android.media.MediaScannerConnection
 import android.net.Uri
-import android.os.Environment
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -26,6 +25,7 @@ import org.sunsetware.phocid.data.scanTracks
 import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.ui.components.ArtworkCache
 import org.sunsetware.phocid.ui.views.library.LibraryScreenTabInfo
+import org.sunsetware.phocid.utils.externalStorageRoots
 
 class MainViewModel(private val application: Application) : AndroidViewModel(application) {
     private val _initialized = MutableStateFlow(false)
@@ -104,17 +104,10 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
 
                         if (force || preferences.value.alwaysRescanMediaStore) {
                             val mediaScannerSignal = AtomicBoolean(false)
-                            // Try to obtain all external storage paths through hack.
-                            // Result from getExternalStorageDirectory() is still kept in case the
-                            // hack no longer works.
                             val storages =
                                 application.applicationContext
-                                    .getExternalFilesDirs(null)
-                                    .mapNotNull {
-                                        it?.parentFile?.parentFile?.parentFile?.parentFile?.path
-                                    }
-                                    .plus(Environment.getExternalStorageDirectory().path)
-                                    .distinct()
+                                    .externalStorageRoots()
+                                    .map { it.path }
                                     .toTypedArray()
                             MediaScannerConnection.scanFile(
                                 application.applicationContext,
