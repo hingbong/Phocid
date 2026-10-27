@@ -1,3 +1,6 @@
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -24,8 +27,8 @@ val buildCommit =
 
 val buildTime =
     System.getenv("PHOCID_BUILD_TIME")?.takeIf { it.isNotBlank() }
-        ?: java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)
-            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'"))
+        ?: OffsetDateTime.now(ZoneOffset.UTC)
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'"))
 
 android {
     namespace = "org.sunsetware.phocid"
