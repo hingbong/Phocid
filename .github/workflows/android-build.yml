@@ -111,7 +111,9 @@ jobs:
           PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
           PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
           PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
+          PHOCID_BUILD_COMMIT: ${{ github.sha }}
         run: |
+          export PHOCID_BUILD_TIME="$(date -u '+%Y-%m-%d %H:%M UTC')"
           ./gradlew --no-daemon --stacktrace :app:assembleRelease
 
       - name: Verify APK signatures
@@ -127,6 +129,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: phocid-next-latest
+          commit: ${{ github.sha }}
           name: Phocid Next - Latest
           body: |
             **Latest Phocid Next build**
@@ -145,3 +148,8 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move release tag to this commit
+        run: |
+          git tag --force phocid-next-latest "$GITHUB_SHA"
+          git push --force origin "refs/tags/phocid-next-latest"

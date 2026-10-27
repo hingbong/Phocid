@@ -67,6 +67,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RoundedCorner
 import androidx.compose.material.icons.filled.SafetyDivider
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShapeLine
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.ShuffleOn
@@ -1037,6 +1038,16 @@ private val About =
                 subtitle = { BuildConfig.VERSION_NAME },
                 icon = Icons.Filled.Commit,
             ),
+            Item.NonInteractive(
+                title = { Strings[R.string.preferences_build_time] },
+                subtitle = { BuildConfig.BUILD_TIME },
+                icon = Icons.Filled.Schedule,
+            ),
+            Item.NonInteractive(
+                title = { Strings[R.string.preferences_build_commit] },
+                subtitle = { BuildConfig.BUILD_COMMIT.take(12) },
+                icon = Icons.Filled.Commit,
+            ),
             Item.Clickable(
                 title = { Strings[R.string.preferences_website] },
                 subtitle = { Strings[R.string.app_url] },
@@ -1068,6 +1079,10 @@ private fun PreferencesScreenContext.dumpLogcat() {
             try {
                 File(requireNotNull(logcatDumpPath)).bufferedWriter().use { writer ->
                     writer.write(BuildConfig.VERSION_NAME)
+                    writer.write("\n\n")
+                    writer.write(
+                        "Build ${BuildConfig.BUILD_TIME} (${BuildConfig.BUILD_COMMIT.take(12)})"
+                    )
                     writer.write("\n\n")
                     writer.write("API level ${Build.VERSION.SDK_INT}")
                     writer.write("\n\n")

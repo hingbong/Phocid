@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -93,6 +94,7 @@ class PlaybackStatisticsImportDialog(private val backup: StatsBackup) : Dialog()
 class PlaybackStatisticsClearDialog : Dialog() {
     @Composable
     override fun Compose(viewModel: MainViewModel) {
+        var acknowledged by rememberSaveable { mutableStateOf(false) }
         DialogBase(
             title = Strings[R.string.playback_statistics_clear_title],
             onConfirm = {
@@ -115,12 +117,29 @@ class PlaybackStatisticsClearDialog : Dialog() {
                 }
             },
             onDismiss = { viewModel.uiManager.closeDialog() },
-            confirmText = Strings[R.string.commons_clear],
+            confirmText = Strings[R.string.playback_statistics_clear_confirm],
+            confirmEnabled = acknowledged,
+            confirmColor = MaterialTheme.colorScheme.error,
         ) {
-            Text(
-                Strings[R.string.playback_statistics_clear_body],
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Text(Strings[R.string.playback_statistics_clear_body])
+                Row(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .clickable { acknowledged = !acknowledged }
+                            .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = acknowledged,
+                        onCheckedChange = { acknowledged = it },
+                    )
+                    Text(
+                        Strings[R.string.playback_statistics_clear_acknowledge],
+                        modifier = Modifier.weight(1f).padding(start = 8.dp),
+                    )
+                }
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -16,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import org.sunsetware.phocid.R
@@ -31,6 +33,7 @@ fun DialogBase(
     confirmText: String = Strings[R.string.commons_ok],
     dismissText: String = Strings[R.string.commons_cancel],
     confirmEnabled: Boolean = true,
+    confirmColor: Color? = null,
     properties: DialogProperties = DialogProperties(),
     content: @Composable () -> Unit,
 ) {
@@ -42,7 +45,16 @@ fun DialogBase(
             }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm, enabled = confirmEnabled) { Text(confirmText) }
+            TextButton(
+                onClick = onConfirm,
+                enabled = confirmEnabled,
+                colors =
+                    if (confirmColor != null)
+                        ButtonDefaults.textButtonColors(contentColor = confirmColor)
+                    else ButtonDefaults.textButtonColors(),
+            ) {
+                Text(confirmText)
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(dismissText) } },
         onDismissRequest = onDismiss,

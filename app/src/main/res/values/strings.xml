@@ -79,10 +79,12 @@
     <string name="player_up_next">Up next</string>
     <string name="playback_statistics">Playback statistics</string>
     <string name="playback_statistics_clear">Clear statistics</string>
-    <string name="playback_statistics_clear_body">All play counts and listening history will be permanently deleted.</string>
+    <string name="playback_statistics_clear_acknowledge">I understand this cannot be undone</string>
+    <string name="playback_statistics_clear_body">All play counts and listening history will be permanently deleted. This cannot be undone. Export a backup first if you want to keep them.</string>
+    <string name="playback_statistics_clear_confirm">Delete permanently</string>
     <string name="playback_statistics_clear_failed">Failed to clear statistics: {0}</string>
     <string name="playback_statistics_clear_success">Cleared playback statistics</string>
-    <string name="playback_statistics_clear_title">Clear playback statistics?</string>
+    <string name="playback_statistics_clear_title">Delete all playback statistics?</string>
     <string name="playback_statistics_empty">No playback statistics in this range. A play is counted after 30 seconds or half of the track.</string>
     <string name="playback_statistics_export">Export statistics</string>
     <string name="playback_statistics_export_failed">Statistics export failed: {0}</string>
@@ -310,6 +312,8 @@
     <string name="preferences_third_party_licenses">Third party licenses</string>
     <string name="preferences_treat_embedded_lyrics_as_lrc">Treat embedded lyrics as LRC</string>
     <string name="preferences_ui_scaling">UI scaling</string>
+    <string name="preferences_build_commit">Commit hash</string>
+    <string name="preferences_build_time">Build time</string>
     <string name="preferences_version">Version</string>
     <string name="preferences_website">Website</string>
     <string name="preferences_widget_accent_background">Colored background</string>

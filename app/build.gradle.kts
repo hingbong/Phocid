@@ -10,6 +10,23 @@ plugins {
     id("com.jaredsburrows.license") version "0.9.91"
 }
 
+val buildCommit =
+    System.getenv("PHOCID_BUILD_COMMIT")?.takeIf { it.isNotBlank() }
+        ?: runCatching {
+                providers
+                    .exec { commandLine("git", "rev-parse", "--short=12", "HEAD") }
+                    .standardOutput.asText.get()
+                    .trim()
+            }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+        ?: "unknown"
+
+val buildTime =
+    System.getenv("PHOCID_BUILD_TIME")?.takeIf { it.isNotBlank() }
+        ?: java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'"))
+
 android {
     namespace = "org.sunsetware.phocid"
     compileSdk = 37
@@ -20,6 +37,9 @@ android {
         targetSdk = 37
         versionCode = 20260610
         versionName = "20260610"
+
+        buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
+        buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

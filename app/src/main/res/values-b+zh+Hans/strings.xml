@@ -68,10 +68,12 @@
     <string name="player_up_next">剩余队列</string>
     <string name="playback_statistics">播放统计</string>
     <string name="playback_statistics_clear">清除统计</string>
-    <string name="playback_statistics_clear_body">所有播放次数和收听历史将被永久删除。</string>
+    <string name="playback_statistics_clear_acknowledge">我明白此操作无法撤销</string>
+    <string name="playback_statistics_clear_body">所有播放次数和收听历史将被永久删除，且无法恢复。如需保留，请先导出备份。</string>
+    <string name="playback_statistics_clear_confirm">永久删除</string>
     <string name="playback_statistics_clear_failed">清除统计失败：{0}</string>
     <string name="playback_statistics_clear_success">已清除播放统计</string>
-    <string name="playback_statistics_clear_title">清除播放统计？</string>
+    <string name="playback_statistics_clear_title">删除所有播放统计？</string>
     <string name="playback_statistics_empty">该时间段内没有播放统计。播放满 30 秒或曲目一半时长后会计数。</string>
     <string name="playback_statistics_export">导出统计</string>
     <string name="playback_statistics_export_failed">统计导出失败：{0}</string>
@@ -292,6 +294,8 @@
     <string name="preferences_third_party_licenses">第三方许可协议</string>
     <string name="preferences_treat_embedded_lyrics_as_lrc">将内嵌歌词视为 LRC</string>
     <string name="preferences_ui_scaling">界面大小</string>
+    <string name="preferences_build_commit">提交哈希</string>
+    <string name="preferences_build_time">构建时间</string>
     <string name="preferences_version">版本</string>
     <string name="preferences_website">网站</string>
     <string name="preferences_widget_accent_background">彩色背景</string>
