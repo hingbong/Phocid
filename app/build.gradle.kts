@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.ksp)
     kotlin("plugin.serialization") version "2.4.21"
     id("com.ncorti.ktfmt.gradle") version "0.23.0"
-    id("com.jaredsburrows.license") version "0.9.8"
+    id("com.jaredsburrows.license") version "0.9.91"
 }
 
 android {
