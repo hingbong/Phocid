@@ -76,7 +76,7 @@ class StatsBackupPortabilityTest {
     }
 
     @Test
-    fun exportOmitsLocalUriAlias() = runBlocking {
+    fun exportOmitsLocalUriAlias() = runBlocking<Unit> {
         seed(db)
         val out = ByteArrayOutputStream()
         StatsBackupManager(db).export(out)
@@ -87,7 +87,7 @@ class StatsBackupPortabilityTest {
     }
 
     @Test
-    fun restoreIgnoresLocalUriAlias() = runBlocking {
+    fun restoreIgnoresLocalUriAlias() = runBlocking<Unit> {
         seed(db)
         val out = ByteArrayOutputStream()
         StatsBackupManager(db).export(out)

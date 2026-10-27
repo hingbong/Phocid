@@ -64,7 +64,7 @@ class StatsResolverTest {
     )
 
     @Test
-    fun sameHashDifferentUriUsesSameRow() = runBlocking {
+    fun sameHashDifferentUriUsesSameRow() = runBlocking<Unit> {
         val resolver = resolver { "hash" }
         val first = resolver.resolve(meta(uri = "content://media/external/audio/media/1"))
         val second = resolver.resolve(meta(uri = "content://media/external/audio/media/2"))
@@ -90,7 +90,7 @@ class StatsResolverTest {
     }
 
     @Test
-    fun tagKeyMatchesWhenHashIsUnavailable() = runBlocking {
+    fun tagKeyMatchesWhenHashIsUnavailable() = runBlocking<Unit> {
         val resolver = resolver { null }
         val first = resolver.resolve(meta(uri = "content://media/external/audio/media/1"))
         val second = resolver.resolve(meta(uri = "content://media/external/audio/media/2"))
@@ -99,7 +99,7 @@ class StatsResolverTest {
     }
 
     @Test
-    fun localUriMatchesWhenFileAndTagsAreUnavailable() = runBlocking {
+    fun localUriMatchesWhenFileAndTagsAreUnavailable() = runBlocking<Unit> {
         val resolver = resolver { null }
         val localMeta = meta(uri = "content://media/external/audio/media/9", title = null)
         val localMetaNoTags = localMeta.copy(artist = null, album = null)
@@ -111,7 +111,7 @@ class StatsResolverTest {
     }
 
     @Test
-    fun relativePathFallbackStillWorksWithoutHashOrTags() = runBlocking {
+    fun relativePathFallbackStillWorksWithoutHashOrTags() = runBlocking<Unit> {
         val file = temporaryFolder.newFile("Song.flac")
         val resolver = resolver { null }
         val first =
