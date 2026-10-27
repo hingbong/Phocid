@@ -5,3 +5,13 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      androidx-glance:
+        patterns:
+          - "androidx.glance:*"
+      androidx-lifecycle:
+        patterns:
+          - "androidx.lifecycle:*"
+      androidx-room:
+        patterns:
+          - "androidx.room:*"
