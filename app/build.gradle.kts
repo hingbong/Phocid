@@ -12,7 +12,7 @@ plugins {
 
 android {
     namespace = "org.sunsetware.phocid"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "org.sunsetware.phocid.next"
