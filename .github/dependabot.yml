@@ -2,6 +2,8 @@ version: 2
 updates:
   - package-ecosystem: "gradle"
     directory: "/"
+    exclude-paths:
+      - "deps/OpusMetadataIo"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
