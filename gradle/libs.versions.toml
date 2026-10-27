@@ -27,7 +27,7 @@ media3Common = "1.10.1"
 media3Session = "1.10.1"
 paletteKtx = "1.0.0"
 reorderable = "3.1.0"
-robolectric = "4.16.1"
+robolectric = "4.17"
 jaudiotagger = "3.0.1"
 
 [libraries]
