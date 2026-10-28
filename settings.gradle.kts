@@ -23,5 +23,6 @@ dependencyResolutionManagement {
 rootProject.name = "Phocid"
 
 include(":app")
+include(":agent-bridge")
 
 includeBuild("deps/OpusMetadataIo")

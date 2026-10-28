@@ -114,13 +114,14 @@ jobs:
           PHOCID_BUILD_COMMIT: ${{ github.sha }}
         run: |
           export PHOCID_BUILD_TIME="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          ./gradlew --no-daemon --stacktrace :app:assembleRelease
+          ./gradlew --no-daemon --stacktrace :app:assembleRelease :agent-bridge:assembleRelease
 
       - name: Verify APK signatures
         run: |
           set -euo pipefail
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-          for apk in app/build/outputs/apk/release/*.apk; do
+          for apk in app/build/outputs/apk/release/*.apk agent-bridge/build/outputs/apk/release/*.apk; do
+            [ -f "$apk" ] || continue
             echo "=== $apk"
             "$APKSIGNER" verify --print-certs "$apk"
           done
@@ -134,12 +135,15 @@ jobs:
           body: |
             **Latest Phocid Next build**
 
-            - Package: `org.sunsetware.phocid.next`
+            - Main package: `org.sunsetware.phocid.next`
+            - Agent bridge package: `org.sunsetware.phocid.bridge`
             - Commit: `${{ github.sha }}`
             - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             Old APKs in this release are replaced on every build.
-          artifacts: app/build/outputs/apk/release/*.apk
+          artifacts: |
+            app/build/outputs/apk/release/*.apk
+            agent-bridge/build/outputs/apk/release/*.apk
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
