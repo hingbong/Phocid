@@ -398,7 +398,7 @@ interface TrackTotalsDao {
         SELECT COALESCE(SUM(totalCount), 0) AS plays,
                COALESCE(SUM(totalMillis), 0) AS millis,
                COUNT(*) AS uniqueTracks,
-               0 AS activeDays
+               (SELECT COUNT(DISTINCT epochDay) FROM track_daily) AS activeDays
         FROM track_totals
         """
     )
