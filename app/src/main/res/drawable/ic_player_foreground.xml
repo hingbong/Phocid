@@ -22,5 +22,8 @@
       </gradient>
     </aapt:attr>
   </path>
-  <path android:fillColor="#FF8B2E60" android:pathData="M47.7,59 A3.7,2.9 -22 1,0 55.1,59 A3.7,2.9 -22 1,0 47.7,59Z M54.4,46.8h2.2v12.4h-2.2Z M56.5,46.8C60.3,47.9 61.8,50.3 60.9,53.3 60.2,51.5 58.7,50.6 56.5,50.4Z M54.7,47A1.5,1.5 0 1,0 57.7,47A1.5,1.5 0 1,0 54.7,47Z"/>
+  <path android:fillColor="#FF8B2E60" android:pathData="M47.7,59 A3.7,2.9 -22 1,0 55.1,59 A3.7,2.9 -22 1,0 47.7,59Z"/>
+  <path android:fillColor="#FF8B2E60" android:pathData="M54.4,46.8h2.2v12.4h-2.2Z"/>
+  <path android:fillColor="#FF8B2E60" android:pathData="M56.5,46.8C60.3,47.9 61.8,50.3 60.9,53.3 60.2,51.5 58.7,50.6 56.5,50.4Z"/>
+  <path android:fillColor="#FF8B2E60" android:pathData="M54.7,47A1.5,1.5 0 1,0 57.7,47A1.5,1.5 0 1,0 54.7,47Z"/>
 </vector>
