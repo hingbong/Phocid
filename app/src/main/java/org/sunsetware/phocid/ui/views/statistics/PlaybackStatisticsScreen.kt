@@ -217,26 +217,32 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                                     Strings[R.string.playback_statistics_export],
                             )
                         }
-                        IconButton(onClick = { importStatistics() }) {
-                            Icon(
-                                Icons.Filled.UploadFile,
-                                contentDescription =
-                                    Strings[R.string.playback_statistics_import],
-                            )
-                        }
-                        if (summary.plays > 0) {
-                            OverflowMenu(
-                                listOf(
+                        OverflowMenu(
+                            buildList {
+                                add(
                                     MenuItem.Button(
-                                        Strings[R.string.playback_statistics_clear],
-                                        Icons.Filled.DeleteSweep,
-                                        dangerous = true,
+                                        Strings[R.string.playback_statistics_import],
+                                        Icons.Filled.UploadFile,
                                     ) {
-                                        uiManager.openDialog(PlaybackStatisticsClearDialog())
+                                        importStatistics()
                                     }
                                 )
-                            )
-                        }
+                                if (summary.plays > 0) {
+                                    add(MenuItem.Divider)
+                                    add(
+                                        MenuItem.Button(
+                                            Strings[R.string.playback_statistics_clear],
+                                            Icons.Filled.DeleteSweep,
+                                            dangerous = true,
+                                        ) {
+                                            uiManager.openDialog(
+                                                PlaybackStatisticsClearDialog()
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        )
                     },
                 )
             }
