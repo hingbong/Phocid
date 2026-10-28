@@ -2,7 +2,8 @@
 :note-caption: ℹ️
 :warning-caption: ⚠️
 
-image:metadata/en-US/images/icon.png[Icon,64px]
+image:metadata/en-US/images/icon.png[Player icon,64px]
+image:docs/icons/bridge-512.png[Agent bridge icon,64px]
 image:https://img.shields.io/f-droid/v/org.sunsetware.phocid[F-Droid Version,link=https://f-droid.org/en/packages/org.sunsetware.phocid/]
 image:https://img.shields.io/badge/official-website-blue[Official website,link=https://sunsetware.org/phocid]
 image:https://img.shields.io/badge/works_on-my_machine-yellow[Works on my machine]
@@ -16,7 +17,7 @@ image:metadata/en-US/images/phoneScreenshots/02-screenshot-home-folders.png[Scre
 image:metadata/en-US/images/phoneScreenshots/03-screenshot-search.png[Screenshot,15%]
 image:metadata/en-US/images/phoneScreenshots/04-screenshot-player.png[Screenshot,15%]
 
-A modern offline music player with familiar designs for Android 15+.
+A modern offline music player with familiar designs for Android 15+, playback statistics, and an optional local agent bridge.
 
 This project aims to be a replacement with personal tweaks for the now-defunct https://github.com/kabouzeid/Phonograph[Phonograph] music player, but has no connections with it.
 
@@ -35,7 +36,22 @@ If your problem is not covered by this page, you can create an https://github.co
 * Playback speed and pitch control
 * More lyrics styles
 * Optional less-vibrant colors
+* Playback statistics with daily history, multiple ranges, and top tracks
+* Statistics backup and restore that identifies tracks by UUID, not by file path
 * Brand new design based on Material Design 3
+
+== Optional agent bridge
+
+The main APK has no `INTERNET` permission and works entirely offline.
+The separate `agent-bridge` APK is an optional, read-only companion for
+on-device MCP clients. It exposes library metadata, playback statistics, and
+the current player state over `127.0.0.1`; it never controls playback, edits
+the library, or exposes file paths.
+
+Both APKs must be signed with the same certificate because the main app
+protects its query service with a signature-level permission. See
+link:agent-bridge/README.md[the bridge documentation] for setup and the MCP
+tool reference.
 
 == Missing features that are intentionally left out
 
@@ -44,9 +60,11 @@ If your problem is not covered by this page, you can create an https://github.co
 The scene of audio file tagging is a disaster.
 The best metadata support library I could find is still buggy; I recommend using well-known dedicated software for this task.
 * Deleting files
-* Anything that requires an internet connection
+* Online services in the main player
++
+The player itself never requests network access.
+The optional agent bridge is a separate APK and only listens on the loopback interface.
 * Lock screen
-* Playback statistics
 
 == Reporting a crash
 
@@ -61,6 +79,15 @@ Although it should not contain sensitive information, you are responsible for ch
 == Building
 
 Remember to clone the submodule with `git clone --recurse-submodules`.
+
+[source,bash]
+----
+./gradlew :app:assembleRelease
+./gradlew :agent-bridge:assembleRelease
+----
+
+The bridge is optional, but both APKs must be signed with the same certificate.
+The CI workflow builds and publishes both.
 
 == Contributing
 
@@ -87,8 +114,12 @@ I don't accept donations.
 
 === App icon artwork
 
+The player uses a rose-pink sakura with a note; the optional bridge uses a
+mint-green node graph. Both are adaptive icons with themed monochrome layers.
+Source SVGs, previews, and the palette are in link:docs/icons/README.md[docs/icons].
+
 ....
-This work by tjysunset is licensed under CC BY-SA 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by-sa/4.0/
+The original Phocid artwork by tjysunset and the replacement player/bridge artwork are licensed under CC BY-SA 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by-sa/4.0/
 ....
 
 === Code

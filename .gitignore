@@ -12,6 +12,7 @@
 *.webp
 !/app/src/main/res/**
 !/metadata/**
+!/docs/icons/**
 
 # Created by https://www.toptal.com/developers/gitignore/api/androidstudio,windows,linux,macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=androidstudio,windows,linux,macos

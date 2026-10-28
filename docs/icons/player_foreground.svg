@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="pf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF2F7"/>
+      <stop offset="0.42" stop-color="#FFB6D4"/>
+      <stop offset="1" stop-color="#E2679F"/>
+    </linearGradient>
+    <radialGradient id="pc" cx="0.5" cy="0.38" r="0.72">
+      <stop offset="0" stop-color="#FFFDF8"/>
+      <stop offset="1" stop-color="#F2DCC4"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(54 54)">
+    <g fill="url(#pf)">
+      <path d="M0 0C-9-8.4-10.6-19.4 0-28.4 10.6-19.4 9-8.4 0 0Z"/>
+      <path d="M0 0C-9-8.4-10.6-19.4 0-28.4 10.6-19.4 9-8.4 0 0Z" transform="rotate(72)"/>
+      <path d="M0 0C-9-8.4-10.6-19.4 0-28.4 10.6-19.4 9-8.4 0 0Z" transform="rotate(144)"/>
+      <path d="M0 0C-9-8.4-10.6-19.4 0-28.4 10.6-19.4 9-8.4 0 0Z" transform="rotate(216)"/>
+      <path d="M0 0C-9-8.4-10.6-19.4 0-28.4 10.6-19.4 9-8.4 0 0Z" transform="rotate(288)"/>
+    </g>
+    <circle r="11.5" fill="url(#pc)"/>
+    <g fill="#8B2E60">
+      <ellipse cx="-2.6" cy="5" rx="3.7" ry="2.9" transform="rotate(-22 -2.6 5)"/>
+      <rect x="0.4" y="-7.2" width="2.2" height="12.4" rx="1.1"/>
+      <path d="M2.5-7.2C6.3-6.1 7.8-3.7 6.9-0.7 6.2-2.5 4.7-3.4 2.5-3.6Z"/>
+      <circle cx="2.2" cy="-7" r="1.5"/>
+    </g>
+  </g>
+</svg>

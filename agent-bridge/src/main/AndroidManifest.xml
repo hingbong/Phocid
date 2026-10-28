@@ -13,8 +13,9 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/ic_bridge"
+        android:icon="@mipmap/ic_bridge"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_bridge"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 

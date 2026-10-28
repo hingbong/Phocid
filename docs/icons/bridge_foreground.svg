@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="bf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B4F5E6"/>
+      <stop offset="0.55" stop-color="#59D6BB"/>
+      <stop offset="1" stop-color="#1F9E86"/>
+    </linearGradient>
+    <radialGradient id="bc" cx="0.45" cy="0.36" r="0.78">
+      <stop offset="0" stop-color="#FFF3D2"/>
+      <stop offset="0.55" stop-color="#F5CE84"/>
+      <stop offset="1" stop-color="#DFA23F"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(54 54)">
+    <g stroke="url(#bf)" stroke-width="2.6" stroke-linecap="round">
+      <line x1="0" y1="-8.5" x2="0" y2="-17.5"/>
+      <line x1="7.36" y1="-4.25" x2="15.16" y2="-8.75"/>
+      <line x1="7.36" y1="4.25" x2="15.16" y2="8.75"/>
+      <line x1="0" y1="8.5" x2="0" y2="17.5"/>
+      <line x1="-7.36" y1="4.25" x2="-15.16" y2="8.75"/>
+      <line x1="-7.36" y1="-4.25" x2="-15.16" y2="-8.75"/>
+    </g>
+    <g fill="url(#bf)">
+      <circle cx="0" cy="-22" r="4.4"/>
+      <circle cx="19.05" cy="-11" r="4.4"/>
+      <circle cx="19.05" cy="11" r="4.4"/>
+      <circle cx="0" cy="22" r="4.4"/>
+      <circle cx="-19.05" cy="11" r="4.4"/>
+      <circle cx="-19.05" cy="-11" r="4.4"/>
+    </g>
+    <circle r="7.2" fill="url(#bc)"/>
+  </g>
+</svg>
