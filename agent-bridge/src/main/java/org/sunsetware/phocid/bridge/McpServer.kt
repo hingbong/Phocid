@@ -32,6 +32,7 @@ import org.json.JSONObject
 class McpServer(
     private val port: Int,
     private val tokenProvider: () -> String,
+    private val dataSource: PhocidDataSource? = null,
 ) {
     private val running = AtomicBoolean(false)
     private val startedAt = AtomicLong(0)
@@ -299,7 +300,7 @@ class McpServer(
             )
             .put(
                 "serverInfo",
-                JSONObject().put("name", "phocid-agent-bridge").put("version", "0.1.0"),
+                JSONObject().put("name", "phocid-agent-bridge").put("version", "0.2.0"),
             )
     }
 
@@ -309,10 +310,56 @@ class McpServer(
             tool(
                 "ping",
                 "Health check for the Phocid agent bridge. Returns pong.",
-                JSONObject()
-                    .put("type", "object")
-                    .put("properties", JSONObject())
-                    .put("additionalProperties", false),
+                emptySchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "phocid_capabilities",
+                "Read the Phocid agent API version, library revision, time zone, and supported ranges.",
+                emptySchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "library_search_tracks",
+                "Search the Phocid library by tag fields. Returns a page of track metadata.",
+                searchSchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "library_get_track",
+                "Read every exposed tag field for one library track, including its stats UUID when resolvable.",
+                libraryIdSchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "stats_summary",
+                "Read playback totals for a range: plays, millis, unique tracks, and active days.",
+                rangeSchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "stats_top_tracks",
+                "Read the top played tracks for a range.",
+                topTracksSchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "stats_daily",
+                "Read the daily playback trend for a range.",
+                rangeSchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "resolve_stats_uuid",
+                "Resolve a library track id to its portable statistics UUID.",
+                libraryIdSchema(),
             )
         )
         return JSONObject().put("tools", tools)
@@ -320,11 +367,119 @@ class McpServer(
 
     private fun toolsCall(params: JSONObject?): JSONObject {
         val name = params?.optString("name").orEmpty()
+        val args = params?.optJSONObject("arguments") ?: JSONObject()
+        val source = dataSource
         return when (name) {
             "ping" -> toolResult("pong")
+            "phocid_capabilities" -> dataResult(source?.capabilities())
+            "library_search_tracks" -> dataResult(source?.searchTracks(args.toString()))
+            "library_get_track" ->
+                dataResult(source?.getTrack(args.optLong("libraryId", -1L)))
+            "stats_summary" ->
+                dataResult(source?.statsSummary(args.optString("range", "30d")))
+            "stats_top_tracks" -> dataResult(source?.statsTopTracks(args.toString()))
+            "stats_daily" ->
+                dataResult(source?.statsDaily(args.optString("range", "30d")))
+            "resolve_stats_uuid" ->
+                dataResult(source?.resolveStatsUuid(args.optLong("libraryId", -1L)))
             else -> toolResult("Unknown tool: $name", isError = true)
         }
     }
+
+    private fun dataResult(value: String?): JSONObject {
+        if (value == null) {
+            return toolResult("Phocid data service is not available", isError = true)
+        }
+        val isError =
+            try {
+                JSONObject(value).has("error")
+            } catch (_: Exception) {
+                false
+            }
+        return toolResult(value, isError)
+    }
+
+    private fun emptySchema(): JSONObject =
+        JSONObject()
+            .put("type", "object")
+            .put("properties", JSONObject())
+            .put("additionalProperties", false)
+
+    private fun libraryIdSchema(): JSONObject =
+        JSONObject()
+            .put("type", "object")
+            .put(
+                "properties",
+                JSONObject().put("libraryId", integerProp("Phocid library track id")),
+            )
+            .put("required", JSONArray().put("libraryId"))
+            .put("additionalProperties", false)
+
+    private fun rangeSchema(): JSONObject =
+        JSONObject()
+            .put("type", "object")
+            .put(
+                "properties",
+                JSONObject().put("range", rangeProp()),
+            )
+            .put("additionalProperties", false)
+
+    private fun topTracksSchema(): JSONObject =
+        JSONObject()
+            .put("type", "object")
+            .put(
+                "properties",
+                JSONObject()
+                    .put("range", rangeProp())
+                    .put("sort", stringProp("plays or time"))
+                    .put("limit", integerProp("1..200, default 20")),
+            )
+            .put("additionalProperties", false)
+
+    private fun searchSchema(): JSONObject =
+        JSONObject()
+            .put("type", "object")
+            .put(
+                "properties",
+                JSONObject()
+                    .put("query", stringProp("Full-text match across title, artist, album, genre, and file name"))
+                    .put("title", stringProp("Title contains"))
+                    .put("artist", stringProp("Any artist contains"))
+                    .put("album", stringProp("Album contains"))
+                    .put("albumArtist", stringProp("Any album artist contains"))
+                    .put("genre", stringProp("Any genre contains"))
+                    .put("year", integerProp("Exact year"))
+                    .put("yearFrom", integerProp("Minimum year"))
+                    .put("yearTo", integerProp("Maximum year"))
+                    .put("format", stringProp("Container format, case-insensitive"))
+                    .put("hasArtwork", booleanProp("Filter by embedded artwork"))
+                    .put("minDurationMs", integerProp("Minimum duration in milliseconds"))
+                    .put("maxDurationMs", integerProp("Maximum duration in milliseconds"))
+                    .put("sort", stringProp("title, artist, album, year, dateAdded, or duration"))
+                    .put("descending", booleanProp("Reverse the sort order"))
+                    .put("limit", integerProp("1..200, default 50"))
+                    .put("offset", integerProp("Pagination offset")),
+            )
+            .put("additionalProperties", false)
+
+    private fun rangeProp(): JSONObject =
+        stringProp("7d, 30d, month, 90d, 365d, year, 3y, or all")
+            .put(
+                "enum",
+                JSONArray().apply {
+                    listOf("7d", "30d", "month", "90d", "365d", "year", "3y", "all")
+                        .forEach { put(it) }
+                },
+            )
+
+    private fun stringProp(description: String): JSONObject =
+        JSONObject().put("type", "string").put("description", description)
+
+    private fun integerProp(description: String): JSONObject =
+        JSONObject().put("type", "integer").put("description", description)
+
+    private fun booleanProp(description: String): JSONObject =
+        JSONObject().put("type", "boolean").put("description", description)
 
     private fun tool(name: String, description: String, inputSchema: JSONObject): JSONObject =
         JSONObject()

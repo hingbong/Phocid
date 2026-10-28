@@ -14,7 +14,7 @@ android {
         minSdk = 35
         targetSdk = 37
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.2.0"
     }
 
     val customKeystorePath = System.getenv("PHOCID_KEYSTORE_PATH")
@@ -57,4 +57,8 @@ kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_21
     }
+}
+
+dependencies {
+    implementation(project(":agent-api"))
 }

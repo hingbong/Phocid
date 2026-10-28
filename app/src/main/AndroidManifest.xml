@@ -11,6 +11,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <permission
+        android:name="org.sunsetware.phocid.permission.AGENT_QUERY"
+        android:protectionLevel="signature" />
+
     <application
         android:name=".MainApplication"
         android:allowBackup="true"
@@ -68,6 +72,11 @@
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".agent.AgentQueryService"
+            android:exported="true"
+            android:permission="org.sunsetware.phocid.permission.AGENT_QUERY" />
 
         <service
             android:name=".PlaybackService"

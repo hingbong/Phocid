@@ -113,6 +113,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":agent-api"))
     implementation(libs.accompanist.permissions)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.activity.ktx)

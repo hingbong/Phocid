@@ -35,6 +35,7 @@ class BridgeService : Service() {
     }
 
     private var server: McpServer? = null
+    private var dataSource: BinderPhocidDataSource? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -58,7 +59,9 @@ class BridgeService : Service() {
                 buildNotification("Starting local MCP server…"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
-            instance = McpServer(PORT) { TokenStore.getOrCreate(this) }
+            val source = BinderPhocidDataSource(this)
+            dataSource = source
+            instance = McpServer(PORT, { TokenStore.getOrCreate(this) }, source)
             instance.start()
             server = instance
             isRunning = true
@@ -66,6 +69,8 @@ class BridgeService : Service() {
             return START_STICKY
         } catch (t: Throwable) {
             instance?.stop()
+            dataSource?.close()
+            dataSource = null
             lastError = t.message ?: t.javaClass.simpleName
             isRunning = false
             server = null
@@ -78,6 +83,8 @@ class BridgeService : Service() {
     override fun onDestroy() {
         server?.stop()
         server = null
+        dataSource?.close()
+        dataSource = null
         isRunning = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
