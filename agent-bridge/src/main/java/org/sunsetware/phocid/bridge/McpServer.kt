@@ -300,7 +300,7 @@ class McpServer(
             )
             .put(
                 "serverInfo",
-                JSONObject().put("name", "phocid-agent-bridge").put("version", "0.2.0"),
+                JSONObject().put("name", "phocid-agent-bridge").put("version", "0.3.0"),
             )
     }
 
@@ -332,6 +332,20 @@ class McpServer(
                 "library_get_track",
                 "Read every exposed tag field for one library track, including its stats UUID when resolvable.",
                 libraryIdSchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "library_list_facets",
+                "List artists, albums, album artists, or genres with optional filtering and pagination.",
+                facetSchema(),
+            )
+        )
+        tools.put(
+            tool(
+                "player_state",
+                "Read the current player state, including live position when the playback service is running.",
+                emptySchema(),
             )
         )
         tools.put(
@@ -372,6 +386,8 @@ class McpServer(
         return when (name) {
             "ping" -> toolResult("pong")
             "phocid_capabilities" -> dataResult(source?.capabilities())
+            "library_list_facets" -> dataResult(source?.listFacets(args.toString()))
+            "player_state" -> dataResult(source?.playerState())
             "library_search_tracks" -> dataResult(source?.searchTracks(args.toString()))
             "library_get_track" ->
                 dataResult(source?.getTrack(args.optLong("libraryId", -1L)))
@@ -434,6 +450,30 @@ class McpServer(
                     .put("sort", stringProp("plays or time"))
                     .put("limit", integerProp("1..200, default 20")),
             )
+            .put("additionalProperties", false)
+
+    private fun facetSchema(): JSONObject =
+        JSONObject()
+            .put("type", "object")
+            .put(
+                "properties",
+                JSONObject()
+                    .put(
+                        "kind",
+                        stringProp("artists, albums, album_artists, or genres")
+                            .put(
+                                "enum",
+                                JSONArray().apply {
+                                    listOf("artists", "albums", "album_artists", "genres")
+                                        .forEach { put(it) }
+                                },
+                            ),
+                    )
+                    .put("query", stringProp("Case-insensitive name filter"))
+                    .put("limit", integerProp("1..200, default 50"))
+                    .put("offset", integerProp("Pagination offset")),
+            )
+            .put("required", JSONArray().put("kind"))
             .put("additionalProperties", false)
 
     private fun searchSchema(): JSONObject =

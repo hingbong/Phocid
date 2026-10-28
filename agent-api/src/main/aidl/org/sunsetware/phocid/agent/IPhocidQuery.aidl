@@ -14,4 +14,8 @@ interface IPhocidQuery {
     String statsDaily(String range);
 
     String resolveStatsUuid(long libraryId);
+
+    String listFacets(String requestJson);
+
+    String playerState();
 }

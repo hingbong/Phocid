@@ -64,6 +64,11 @@ import org.sunsetware.phocid.utils.Random
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
+    companion object {
+        @Volatile var isRunning = false
+            private set
+    }
+
     private var mediaSession: MediaLibrarySession? = null
     private val mainScope = MainScope()
     private val timerMutex = Mutex()
@@ -145,6 +150,8 @@ class PlaybackService : MediaLibraryService() {
                 .setMediaButtonPreferences(commandButtons(player))
                 .build()
 
+        isRunning = true
+
         // Update command buttons on global data changes.
         mainScope.launch {
             GlobalData.preferences
@@ -164,6 +171,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onTaskRemoved(rootIntent: Intent?) {}
 
     override fun onDestroy() {
+        isRunning = false
         statisticsRecorder.onShutdown()
         getSystemService(AudioManager::class.java)
             .unregisterAudioDeviceCallback(audioDeviceCallback)

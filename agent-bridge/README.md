@@ -11,13 +11,13 @@ Phocid's main APK has no `INTERNET` permission. The bridge owns:
 - the MCP/HTTP server
 - the bearer token
 
-The main APK will expose a read-only Binder query API to the bridge. The bridge
+The main APK exposes a read-only Binder query API to the bridge. The bridge
 translates MCP tool calls into Binder calls. The agent app never needs Android
 native integration; it only sees a standard MCP HTTP endpoint.
 
 ## Current state
 
-This is the transport skeleton. It exposes:
+It exposes:
 
 - `GET /health`
   - `status`, `port`, `stateless`
@@ -25,14 +25,32 @@ This is the transport skeleton. It exposes:
 - `POST /mcp` (Streamable HTTP JSON-RPC)
 - `GET /mcp` (SSE stream, ping comments)
 - `DELETE /mcp` (session teardown)
-- one MCP tool: `ping` → `pong`
+
+MCP tools:
+
+- `ping`
+- `phocid_capabilities` (includes library counts)
+- `library_search_tracks`
+- `library_get_track`
+- `library_list_facets` (artists, albums, album_artists, genres)
+- `stats_summary`
+- `stats_top_tracks`
+- `stats_daily`
+- `resolve_stats_uuid`
+- `player_state` (read-only, optional live position)
 
 The service uses `START_STICKY`, `stopWithTask=false`, an ongoing
 notification, and a notification Stop action. The UI also shows whether the
 app is exempt from battery optimization.
 
-Real library and statistics tools are added after OpenMinis completes the MCP
-handshake.
+`player_state` distinguishes `active` (PlaybackService is running) from
+`isPlaying`. It reads a `MediaController` only when the service is already
+running; if the service is not running it returns `active: false` and
+`positionMs: null` without starting playback. It never calls play, pause, seek,
+or any queue mutation.
+
+The main app reports `apiVersion: 2`. Newer bridge tools return
+`unsupported_api` when the installed main APK is older.
 
 ## Build
 
@@ -102,17 +120,13 @@ frozen client from a frozen server.
 - The bridge does not make outbound network requests.
 - The bridge is a separate UID; the main APK still has no `INTERNET` permission.
 
-## Next step
+## API version
 
-Add the read-only Binder query API to the main app:
+The main app currently reports `apiVersion: 2`. The bridge caches this value
+and rejects `library_list_facets` / `player_state` with `unsupported_api`
+when an older main APK is installed.
 
-- `capabilities`
-- `library_search_tracks`
-- `library_get_track`
-- `library_list_facets`
-- `stats_summary`
-- `stats_top_tracks`
-- `stats_daily`
-- `stats_track`
+## Out of scope
 
-Expose those as MCP tools in the bridge.
+Playback control, seek, queue mutation, playlist editing, lyrics, and file
+paths are intentionally not exposed.

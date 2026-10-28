@@ -25,23 +25,29 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
     @Volatile private var query: IPhocidQuery? = null
     @Volatile private var bindAttempted = false
     @Volatile private var bindFailed = false
+    @Volatile private var apiVersion: Int? = null
 
     private val connection =
         object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
                 synchronized(lock) {
                     query = service?.let { IPhocidQuery.Stub.asInterface(it) }
+                    apiVersion = null
                     connected.countDown()
                 }
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
-                synchronized(lock) { query = null }
+                synchronized(lock) {
+                    query = null
+                    apiVersion = null
+                }
             }
 
             override fun onBindingDied(name: ComponentName?) {
                 synchronized(lock) {
                     query = null
+                    apiVersion = null
                     connected.countDown()
                 }
             }
@@ -91,7 +97,31 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
 
     override fun resolveStatsUuid(libraryId: Long): String = call { it.resolveStatsUuid(libraryId) }
 
-    private fun call(block: (IPhocidQuery) -> String): String {
+    override fun listFacets(requestJson: String): String =
+        call(requiredApi = 2) { it.listFacets(requestJson) }
+
+    override fun playerState(): String = call(requiredApi = 2) { it.playerState() }
+
+    private fun supports(requiredApi: Int): Boolean {
+        apiVersion?.let { return it >= requiredApi }
+        val service = ensureQuery() ?: return false
+        val version =
+            try {
+                JSONObject(service.capabilities()).optInt("apiVersion", 1)
+            } catch (_: Exception) {
+                1
+            }
+        apiVersion = version
+        return version >= requiredApi
+    }
+
+    private fun call(requiredApi: Int = 1, block: (IPhocidQuery) -> String): String {
+        if (requiredApi > 1 && !supports(requiredApi)) {
+            return errorJson(
+                "unsupported_api",
+                "Phocid main app is too old; update it to use this tool",
+            )
+        }
         val service = ensureQuery()
         if (service == null) {
             return errorJson(
@@ -115,6 +145,7 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
     override fun close() {
         synchronized(lock) {
             query = null
+            apiVersion = null
             if (bindAttempted) {
                 try {
                     appContext.unbindService(connection)

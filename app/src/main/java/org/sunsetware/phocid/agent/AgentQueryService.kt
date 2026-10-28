@@ -1,14 +1,21 @@
 package org.sunsetware.phocid.agent
 
 import android.app.Service
+import android.content.ComponentName
 import android.content.Intent
 import android.os.IBinder
+import android.os.SystemClock
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import org.sunsetware.phocid.PlaybackService
 import org.sunsetware.phocid.data.Track
 import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.stats.db.DayBucket
@@ -43,6 +50,11 @@ class AgentQueryService : Service() {
 
             override fun resolveStatsUuid(libraryId: Long): String =
                 guarded { resolveStatsUuidJson(libraryId) }
+
+            override fun listFacets(requestJson: String): String =
+                guarded { listFacetsJson(requestJson) }
+
+            override fun playerState(): String = guarded { playerStateJson() }
         }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -55,7 +67,17 @@ class AgentQueryService : Service() {
             .put("zoneId", ZoneId.systemDefault().id)
             .put("maxLimit", MAX_LIMIT)
             .put("ranges", stringArray(RANGES))
+            .put("facetKinds", stringArray(FACET_KINDS))
             .put("fields", stringArray(TRACK_FIELDS))
+            .put(
+                "counts",
+                JSONObject()
+                    .put("tracks", index.tracks.size)
+                    .put("artists", index.artists.size)
+                    .put("albums", index.albums.size)
+                    .put("albumArtists", index.albumArtists.size)
+                    .put("genres", index.genres.size),
+            )
             .put("statsDailyRetentionDays", 1095)
             .toString()
     }
@@ -99,6 +121,202 @@ class AgentQueryService : Service() {
             .put("tracks", JSONArray().apply { page.forEach { put(trackJson(it)) } })
             .toString()
     }
+
+    private fun listFacetsJson(requestJson: String): String {
+        val request = JSONObject(requestJson)
+        val kind = request.optString("kind", "").trim().lowercase()
+        val query = request.optString("query", "").trim()
+        val limit = request.optInt("limit", DEFAULT_LIMIT).coerceIn(1, MAX_LIMIT)
+        val offset = request.optInt("offset", 0).coerceAtLeast(0)
+        val index = GlobalData.libraryIndex.value
+        val collator = GlobalData.preferences.value.sortCollator
+
+        return when (kind) {
+            "artists", "artist" -> {
+                val page =
+                    pageFacets(
+                        items = index.artists.values.toList(),
+                        query = query,
+                        limit = limit,
+                        offset = offset,
+                        compare = { left, right -> collator.compare(left, right) },
+                        name = { it.name },
+                        searchText = { it.name },
+                    )
+                facetResponse("artists", page) { artist ->
+                    JSONObject()
+                        .put("name", artist.name)
+                        .put("trackCount", artist.tracks.size)
+                        .put("albumCount", artist.albumSlices.size)
+                }.toString()
+            }
+            "albums", "album" -> {
+                val page =
+                    pageFacets(
+                        items = index.albums.values.toList(),
+                        query = query,
+                        limit = limit,
+                        offset = offset,
+                        compare = { left, right -> collator.compare(left, right) },
+                        name = { it.name },
+                        searchText = { it.name + " " + it.albumArtists.joinToString(" ") },
+                    )
+                facetResponse("albums", page) { album ->
+                    JSONObject()
+                        .put("name", album.name)
+                        .put("albumArtists", stringArray(album.albumArtists))
+                        .putNullable("year", album.year)
+                        .putNullable("originalYear", album.originalYear)
+                        .put("trackCount", album.tracks.size)
+                }.toString()
+            }
+            "album_artists", "album_artist" -> {
+                val page =
+                    pageFacets(
+                        items = index.albumArtists.values.toList(),
+                        query = query,
+                        limit = limit,
+                        offset = offset,
+                        compare = { left, right -> collator.compare(left, right) },
+                        name = { it.name },
+                        searchText = { it.name },
+                    )
+                facetResponse("album_artists", page) { albumArtist ->
+                    JSONObject()
+                        .put("name", albumArtist.name)
+                        .put("trackCount", albumArtist.tracks.size)
+                        .put("albumCount", albumArtist.albums.size)
+                }.toString()
+            }
+            "genres", "genre" -> {
+                val page =
+                    pageFacets(
+                        items = index.genres.values.toList(),
+                        query = query,
+                        limit = limit,
+                        offset = offset,
+                        compare = { left, right -> collator.compare(left, right) },
+                        name = { it.name },
+                        searchText = { it.name },
+                    )
+                facetResponse("genres", page) { genre ->
+                    JSONObject()
+                        .put("name", genre.name)
+                        .put("trackCount", genre.tracks.size)
+                }.toString()
+            }
+            else -> errorJson("invalid_kind", "Unknown facet kind: " + kind)
+        }
+    }
+
+    private fun <T> facetResponse(
+        kind: String,
+        page: FacetPage<T>,
+        toJson: (T) -> JSONObject,
+    ): JSONObject =
+        JSONObject()
+            .put("kind", kind)
+            .put("total", page.total)
+            .put("offset", page.offset)
+            .put("limit", page.limit)
+            .put("items", JSONArray().apply { page.items.forEach { put(toJson(it)) } })
+
+    private fun playerStateJson(): String {
+        if (!PlaybackService.isRunning) {
+            return inactivePlayerJson()
+        }
+
+        val sessionToken =
+            SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        val controller =
+            try {
+                MediaController.Builder(this, sessionToken)
+                    .buildAsync()
+                    .get(2, TimeUnit.SECONDS)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return errorJson("player_unavailable", "Interrupted while connecting to player")
+            } catch (e: Exception) {
+                return errorJson("player_unavailable", e.message ?: e.javaClass.simpleName)
+            }
+
+        try {
+            if (!PlaybackService.isRunning) {
+                return inactivePlayerJson()
+            }
+            val mediaItem = controller.currentMediaItem
+            val mediaId = mediaItem?.mediaId
+            val track = mediaId?.toLongOrNull()?.let { GlobalData.libraryIndex.value.tracks[it] }
+            val hasMedia = controller.mediaItemCount > 0
+            val duration = controller.duration
+            return JSONObject()
+                .put("active", true)
+                .put("isPlaying", controller.isPlaying)
+                .put("positionAvailable", hasMedia)
+                .putNullable(
+                    "positionMs",
+                    if (hasMedia) controller.currentPosition.coerceAtLeast(0L) else null,
+                )
+                .putNullable("durationMs", if (duration > 0L) duration else null)
+                .put("sampledAtElapsedMs", SystemClock.elapsedRealtime())
+                .putNullable("currentMediaId", mediaId)
+                .putNullable("currentTrack", track?.let { trackSummaryJson(it) })
+                .put("queueLength", controller.mediaItemCount)
+                .putNullable(
+                    "currentIndex",
+                    if (hasMedia) controller.currentMediaItemIndex else null,
+                )
+                .put("shuffle", controller.shuffleModeEnabled)
+                .put("repeat", repeatLabel(controller.repeatMode))
+                .put("playbackState", playbackStateLabel(controller.playbackState))
+                .toString()
+        } catch (e: Exception) {
+            return errorJson("player_unavailable", e.message ?: e.javaClass.simpleName)
+        } finally {
+            controller.release()
+        }
+    }
+
+    private fun inactivePlayerJson(): String =
+        JSONObject()
+            .put("active", false)
+            .put("isPlaying", false)
+            .put("positionAvailable", false)
+            .putNullable("positionMs", null)
+            .putNullable("durationMs", null)
+            .put("sampledAtElapsedMs", 0L)
+            .putNullable("currentMediaId", null)
+            .putNullable("currentTrack", null)
+            .put("queueLength", 0)
+            .putNullable("currentIndex", null)
+            .put("shuffle", false)
+            .put("repeat", "off")
+            .put("playbackState", "idle")
+            .toString()
+
+    private fun trackSummaryJson(track: Track): JSONObject =
+        JSONObject()
+            .put("libraryId", track.id)
+            .putNullable("title", track.title)
+            .put("artists", stringArray(track.artists))
+            .putNullable("album", track.album)
+            .put("durationMs", track.duration.inWholeMilliseconds)
+
+    private fun repeatLabel(mode: Int): String =
+        when (mode) {
+            Player.REPEAT_MODE_ONE -> "one"
+            Player.REPEAT_MODE_ALL -> "all"
+            else -> "off"
+        }
+
+    private fun playbackStateLabel(state: Int): String =
+        when (state) {
+            Player.STATE_IDLE -> "idle"
+            Player.STATE_BUFFERING -> "buffering"
+            Player.STATE_READY -> "ready"
+            Player.STATE_ENDED -> "ended"
+            else -> "unknown"
+        }
 
     private fun getTrackJson(libraryId: Long): String {
         val track = GlobalData.libraryIndex.value.tracks[libraryId]
@@ -343,11 +561,13 @@ class AgentQueryService : Service() {
     }
 
     companion object {
-        private const val API_VERSION = 1
+        private const val API_VERSION = 2
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 200
         private val RANGES =
             listOf("7d", "30d", "month", "90d", "365d", "year", "3y", "all")
+        private val FACET_KINDS =
+            listOf("artists", "albums", "album_artists", "genres")
         private val TRACK_FIELDS =
             listOf(
                 "libraryId",

@@ -9,4 +9,6 @@ interface PhocidDataSource {
     fun statsTopTracks(requestJson: String): String
     fun statsDaily(range: String): String
     fun resolveStatsUuid(libraryId: Long): String
+    fun listFacets(requestJson: String): String
+    fun playerState(): String
 }
