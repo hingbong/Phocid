@@ -83,7 +83,11 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         return query
     }
 
-    override fun capabilities(): String = call { it.capabilities() }
+    override fun capabilities(): String {
+        val result = call { it.capabilities() }
+        runCatching { apiVersion = JSONObject(result).optInt("apiVersion", 1) }
+        return result
+    }
 
     override fun searchTracks(requestJson: String): String = call { it.searchTracks(requestJson) }
 
@@ -103,13 +107,16 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
     override fun playerState(): String = call(requiredApi = 2) { it.playerState() }
 
     private fun supports(requiredApi: Int): Boolean {
-        apiVersion?.let { return it >= requiredApi }
+        apiVersion?.let { cached ->
+            if (cached >= requiredApi) return true
+            apiVersion = null
+        }
         val service = ensureQuery() ?: return false
         val version =
             try {
                 JSONObject(service.capabilities()).optInt("apiVersion", 1)
             } catch (_: Exception) {
-                1
+                return false
             }
         apiVersion = version
         return version >= requiredApi
@@ -134,6 +141,7 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
             block(service)
         } catch (e: RemoteException) {
             query = null
+            apiVersion = null
             errorJson("phocid_error", e.message ?: e.javaClass.simpleName)
         } catch (e: SecurityException) {
             errorJson("phocid_permission", e.message ?: "Signature permission rejected")

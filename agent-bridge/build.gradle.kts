@@ -14,7 +14,7 @@ android {
         minSdk = 35
         targetSdk = 37
         versionCode = 1
-        versionName = "0.3.0"
+        versionName = "0.3.1"
     }
 
     val customKeystorePath = System.getenv("PHOCID_KEYSTORE_PATH")
