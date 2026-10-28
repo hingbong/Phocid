@@ -178,19 +178,15 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
 
     val playQueueDragLock = uiManager.playerScreenQueueDragLock
     val playQueueLazyListState = rememberLazyListState()
-    // Do not animate the first scroll to reduce lags
-    val firstAutoPlayQueueScroll = remember { AtomicBoolean(true) }
-    suspend fun scrollPlayQueueToNextTrack() {
+    fun scrollPlayQueueToNextTrack() {
         val state = playerManager.state.value
         val currentIndex = state.currentIndex
         val nextIndex =
             (currentIndex + 1).wrap(playQueue.size, state.repeat != Player.REPEAT_MODE_OFF)
                 ?: currentIndex
-        if (firstAutoPlayQueueScroll.getAndSet(false)) {
-            playQueueLazyListState.requestScrollToItem(nextIndex)
-        } else {
-            playQueueLazyListState.animateScrollToItem(nextIndex)
-        }
+        // Keep the upcoming list in sync on the same frame as the track change. Animating this
+        // scroll makes the queue slide independently after the artwork has already snapped.
+        playQueueLazyListState.requestScrollToItem(nextIndex)
     }
     val playQueueDragState = uiManager.playerScreenQueueDragState
     val playQueueDragTarget by playQueueDragState.targetValue.collectAsStateWithLifecycle()
