@@ -105,8 +105,7 @@ class AgentQueryService : Service() {
         if (track == null) {
             return errorJson("not_found", "No library track with id " + libraryId)
         }
-        val statsUuid =
-            runBlocking { GlobalData.statsManager.repository.lifetimeForTrack(track)?.uuid }
+        val statsUuid = statsUuidFor(track)
         return trackJson(track).put("statsUuid", statsUuid ?: JSONObject.NULL).toString()
     }
 
@@ -156,13 +155,20 @@ class AgentQueryService : Service() {
         if (track == null) {
             return errorJson("not_found", "No library track with id " + libraryId)
         }
-        val statsUuid =
-            runBlocking { GlobalData.statsManager.repository.lifetimeForTrack(track)?.uuid }
+        val statsUuid = statsUuidFor(track)
         return JSONObject()
             .put("libraryId", libraryId)
             .put("statsUuid", statsUuid ?: JSONObject.NULL)
             .toString()
     }
+
+    private fun statsUuidFor(track: Track): String? =
+        runBlocking {
+            val totals =
+                GlobalData.statsManager.repository.lifetimeForTrack(track)
+                    ?: return@runBlocking null
+            GlobalData.statsManager.database.trackDao().byRowId(totals.trackRowId)?.uuid
+        }
 
     private fun summaryJson(range: String, summary: RangeSummary): String =
         JSONObject()
