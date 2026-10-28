@@ -104,7 +104,7 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
     override fun listFacets(requestJson: String): String =
         call(requiredApi = 2) { it.listFacets(requestJson) }
 
-    override fun playerState(): String = call(requiredApi = 2) { it.playerState() }
+    override fun playerState(): String = call(requiredApi = 3) { it.playerState() }
 
     private fun supports(requiredApi: Int): Boolean {
         apiVersion?.let { cached ->

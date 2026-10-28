@@ -49,8 +49,13 @@ running; if the service is not running it returns `active: false` and
 `positionMs: null` without starting playback. It never calls play, pause, seek,
 or any queue mutation.
 
-The main app reports `apiVersion: 2`. Newer bridge tools return
-`unsupported_api` when the installed main APK is older.
+`positionMs` is a snapshot. `sampledAtElapsedRealtimeMs` is
+`SystemClock.elapsedRealtime()`: milliseconds since device boot, including deep
+sleep. It is not a Unix timestamp and not bridge process uptime; clients should
+use elapsed-time differences for interpolation.
+
+The main app reports `apiVersion: 3`. `library_list_facets` requires API 2;
+`player_state` requires API 3. Older main APKs return `unsupported_api`.
 
 ## Build
 
@@ -122,9 +127,9 @@ frozen client from a frozen server.
 
 ## API version
 
-The main app currently reports `apiVersion: 2`. The bridge caches this value
-and rejects `library_list_facets` / `player_state` with `unsupported_api`
-when an older main APK is installed.
+The main app currently reports `apiVersion: 3`. The bridge caches this value
+and rejects `library_list_facets` (API 2) / `player_state` (API 3) with
+`unsupported_api` when an older main APK is installed.
 
 ## Out of scope
 

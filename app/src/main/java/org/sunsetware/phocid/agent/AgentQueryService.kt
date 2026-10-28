@@ -263,7 +263,7 @@ class AgentQueryService : Service() {
                         shuffle = controller.shuffleModeEnabled,
                         repeatMode = controller.repeatMode,
                         playbackState = controller.playbackState,
-                        sampledAtElapsedMs = SystemClock.elapsedRealtime(),
+                        sampledAtElapsedRealtimeMs = SystemClock.elapsedRealtime(),
                     )
                 }
             val track =
@@ -279,7 +279,7 @@ class AgentQueryService : Service() {
                     "durationMs",
                     if (snapshot.durationMs > 0L) snapshot.durationMs else null,
                 )
-                .put("sampledAtElapsedMs", snapshot.sampledAtElapsedMs)
+                .put("sampledAtElapsedRealtimeMs", snapshot.sampledAtElapsedRealtimeMs)
                 .putNullable("currentMediaId", snapshot.mediaId)
                 .putNullable("currentTrack", track?.let { trackSummaryJson(it) })
                 .put("queueLength", snapshot.queueLength)
@@ -333,7 +333,7 @@ class AgentQueryService : Service() {
         val shuffle: Boolean,
         val repeatMode: Int,
         val playbackState: Int,
-        val sampledAtElapsedMs: Long,
+        val sampledAtElapsedRealtimeMs: Long,
     )
 
     private fun inactivePlayerJson(): String =
@@ -343,7 +343,7 @@ class AgentQueryService : Service() {
             .put("positionAvailable", false)
             .putNullable("positionMs", null)
             .putNullable("durationMs", null)
-            .put("sampledAtElapsedMs", 0L)
+            .put("sampledAtElapsedRealtimeMs", 0L)
             .putNullable("currentMediaId", null)
             .putNullable("currentTrack", null)
             .put("queueLength", 0)
@@ -620,7 +620,7 @@ class AgentQueryService : Service() {
     }
 
     companion object {
-        private const val API_VERSION = 2
+        private const val API_VERSION = 3
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 200
         private val RANGES =

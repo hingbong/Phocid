@@ -300,7 +300,7 @@ class McpServer(
             )
             .put(
                 "serverInfo",
-                JSONObject().put("name", "phocid-agent-bridge").put("version", "0.3.1"),
+                JSONObject().put("name", "phocid-agent-bridge").put("version", "0.3.2"),
             )
     }
 
