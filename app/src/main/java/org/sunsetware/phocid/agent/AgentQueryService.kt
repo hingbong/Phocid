@@ -3,14 +3,18 @@ package org.sunsetware.phocid.agent
 import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.SystemClock
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
@@ -231,6 +235,7 @@ class AgentQueryService : Service() {
         val controller =
             try {
                 MediaController.Builder(this, sessionToken)
+                    .setApplicationLooper(Looper.getMainLooper())
                     .buildAsync()
                     .get(2, TimeUnit.SECONDS)
             } catch (e: InterruptedException) {
@@ -244,38 +249,92 @@ class AgentQueryService : Service() {
             if (!PlaybackService.isRunning) {
                 return inactivePlayerJson()
             }
-            val mediaItem = controller.currentMediaItem
-            val mediaId = mediaItem?.mediaId
-            val track = mediaId?.toLongOrNull()?.let { GlobalData.libraryIndex.value.tracks[it] }
-            val hasMedia = controller.mediaItemCount > 0
-            val duration = controller.duration
+            val snapshot =
+                withController(controller) {
+                    val hasMedia = controller.mediaItemCount > 0
+                    PlayerSnapshot(
+                        isPlaying = controller.isPlaying,
+                        positionMs = controller.currentPosition.coerceAtLeast(0L),
+                        durationMs = controller.duration,
+                        hasMedia = hasMedia,
+                        mediaId = controller.currentMediaItem?.mediaId,
+                        queueLength = controller.mediaItemCount,
+                        currentIndex = controller.currentMediaItemIndex,
+                        shuffle = controller.shuffleModeEnabled,
+                        repeatMode = controller.repeatMode,
+                        playbackState = controller.playbackState,
+                        sampledAtElapsedMs = SystemClock.elapsedRealtime(),
+                    )
+                }
+            val track =
+                snapshot.mediaId
+                    ?.toLongOrNull()
+                    ?.let { GlobalData.libraryIndex.value.tracks[it] }
             return JSONObject()
                 .put("active", true)
-                .put("isPlaying", controller.isPlaying)
-                .put("positionAvailable", hasMedia)
+                .put("isPlaying", snapshot.isPlaying)
+                .put("positionAvailable", snapshot.hasMedia)
+                .putNullable("positionMs", if (snapshot.hasMedia) snapshot.positionMs else null)
                 .putNullable(
-                    "positionMs",
-                    if (hasMedia) controller.currentPosition.coerceAtLeast(0L) else null,
+                    "durationMs",
+                    if (snapshot.durationMs > 0L) snapshot.durationMs else null,
                 )
-                .putNullable("durationMs", if (duration > 0L) duration else null)
-                .put("sampledAtElapsedMs", SystemClock.elapsedRealtime())
-                .putNullable("currentMediaId", mediaId)
+                .put("sampledAtElapsedMs", snapshot.sampledAtElapsedMs)
+                .putNullable("currentMediaId", snapshot.mediaId)
                 .putNullable("currentTrack", track?.let { trackSummaryJson(it) })
-                .put("queueLength", controller.mediaItemCount)
+                .put("queueLength", snapshot.queueLength)
                 .putNullable(
                     "currentIndex",
-                    if (hasMedia) controller.currentMediaItemIndex else null,
+                    if (snapshot.hasMedia) snapshot.currentIndex else null,
                 )
-                .put("shuffle", controller.shuffleModeEnabled)
-                .put("repeat", repeatLabel(controller.repeatMode))
-                .put("playbackState", playbackStateLabel(controller.playbackState))
+                .put("shuffle", snapshot.shuffle)
+                .put("repeat", repeatLabel(snapshot.repeatMode))
+                .put("playbackState", playbackStateLabel(snapshot.playbackState))
                 .toString()
         } catch (e: Exception) {
             return errorJson("player_unavailable", e.message ?: e.javaClass.simpleName)
         } finally {
-            controller.release()
+            runCatching { withController(controller) { controller.release() } }
         }
     }
+
+    private fun <T> withController(controller: MediaController, block: () -> T): T {
+        val looper = controller.applicationLooper
+        if (Looper.myLooper() == looper) {
+            return block()
+        }
+        val latch = CountDownLatch(1)
+        val result = AtomicReference<T>()
+        val failure = AtomicReference<Throwable>()
+        Handler(looper).post {
+            try {
+                result.set(block())
+            } catch (t: Throwable) {
+                failure.set(t)
+            } finally {
+                latch.countDown()
+            }
+        }
+        if (!latch.await(2, TimeUnit.SECONDS)) {
+            throw IllegalStateException("Timed out waiting for the MediaController thread")
+        }
+        failure.get()?.let { throw it }
+        return result.get()
+    }
+
+    private data class PlayerSnapshot(
+        val isPlaying: Boolean,
+        val positionMs: Long,
+        val durationMs: Long,
+        val hasMedia: Boolean,
+        val mediaId: String?,
+        val queueLength: Int,
+        val currentIndex: Int,
+        val shuffle: Boolean,
+        val repeatMode: Int,
+        val playbackState: Int,
+        val sampledAtElapsedMs: Long,
+    )
 
     private fun inactivePlayerJson(): String =
         JSONObject()
