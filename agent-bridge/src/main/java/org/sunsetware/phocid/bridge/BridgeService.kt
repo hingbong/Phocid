@@ -16,6 +16,7 @@ class BridgeService : Service() {
 
         private const val CHANNEL_ID = "phocid_agent_bridge"
         private const val NOTIFICATION_ID = 1
+        private const val ACTION_STOP = "org.sunsetware.phocid.bridge.action.STOP"
 
         @Volatile var isRunning = false
             private set
@@ -41,30 +42,37 @@ class BridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (server != null) {
+        if (intent?.action == ACTION_STOP) {
+            stopSelf()
             return START_NOT_STICKY
+        }
+        if (server != null) {
+            return START_STICKY
         }
 
         lastError = null
+        var instance: McpServer? = null
         try {
             startForeground(
                 NOTIFICATION_ID,
                 buildNotification("Starting local MCP server…"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
-            val instance = McpServer(PORT) { TokenStore.getOrCreate(this) }
+            instance = McpServer(PORT) { TokenStore.getOrCreate(this) }
             instance.start()
             server = instance
             isRunning = true
             updateNotification("Listening on http://127.0.0.1:" + PORT + "/mcp")
+            return START_STICKY
         } catch (t: Throwable) {
+            instance?.stop()
             lastError = t.message ?: t.javaClass.simpleName
             isRunning = false
             server = null
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
+            return START_NOT_STICKY
         }
-        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -98,6 +106,15 @@ class BridgeService : Service() {
                 Intent(this, MainActivity::class.java),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
+        val stopIntent =
+            Intent(this, BridgeService::class.java).setAction(ACTION_STOP)
+        val stopPending =
+            PendingIntent.getService(
+                this,
+                1,
+                stopIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Phocid Agent Bridge")
@@ -106,6 +123,13 @@ class BridgeService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_SERVICE)
+            .addAction(
+                Notification.Action.Builder(
+                    android.R.drawable.ic_menu_close_clear_cancel,
+                    "Stop",
+                    stopPending,
+                ).build()
+            )
             .build()
     }
 

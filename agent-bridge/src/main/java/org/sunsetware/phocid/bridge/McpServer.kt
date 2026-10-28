@@ -1,5 +1,6 @@
 package org.sunsetware.phocid.bridge
 
+import android.os.SystemClock
 import android.util.Log
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -16,6 +17,7 @@ import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -32,7 +34,11 @@ class McpServer(
     private val tokenProvider: () -> String,
 ) {
     private val running = AtomicBoolean(false)
+    private val startedAt = AtomicLong(0)
+    private val heartbeatCount = AtomicLong(0)
+    private val lastHeartbeatAt = AtomicLong(0)
     private val executor = Executors.newCachedThreadPool()
+    private var heartbeatThread: Thread? = null
     private var serverSocket: ServerSocket? = null
 
     fun start() {
@@ -42,7 +48,9 @@ class McpServer(
             socket.reuseAddress = true
             socket.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port), 50)
             serverSocket = socket
+            startedAt.set(SystemClock.elapsedRealtime())
             Thread({ acceptLoop(socket) }, "mcp-accept").start()
+            startHeartbeat()
         } catch (t: Throwable) {
             running.set(false)
             throw t
@@ -55,7 +63,30 @@ class McpServer(
             serverSocket?.close()
         } catch (_: IOException) {}
         serverSocket = null
+        heartbeatThread?.interrupt()
+        heartbeatThread = null
         executor.shutdownNow()
+    }
+
+    private fun startHeartbeat() {
+        heartbeatThread =
+            Thread(
+                {
+                    while (running.get()) {
+                        heartbeatCount.incrementAndGet()
+                        lastHeartbeatAt.set(SystemClock.elapsedRealtime())
+                        try {
+                            Thread.sleep(1_000)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
+                    }
+                },
+                "mcp-heartbeat",
+            ).apply {
+                isDaemon = true
+                start()
+            }
     }
 
     private fun acceptLoop(socket: ServerSocket) {
@@ -106,6 +137,14 @@ class McpServer(
                     .put("status", "ok")
                     .put("port", port)
                     .put("stateless", true)
+                    .put("uptimeMs", SystemClock.elapsedRealtime() - startedAt.get())
+                    .put("heartbeatCount", heartbeatCount.get())
+                    .put(
+                        "heartbeatLagMs",
+                        lastHeartbeatAt.get().let { last ->
+                            if (last == 0L) 0L else SystemClock.elapsedRealtime() - last
+                        },
+                    )
                     .toString()
                     .toByteArray(StandardCharsets.UTF_8)
             safeWrite(socket, 200, "application/json; charset=utf-8", body)

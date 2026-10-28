@@ -5,12 +5,15 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -23,6 +26,7 @@ class MainActivity : Activity() {
     private lateinit var statusValue: TextView
     private lateinit var urlValue: TextView
     private lateinit var tokenValue: TextView
+    private lateinit var batteryValue: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
 
@@ -80,6 +84,16 @@ class MainActivity : Activity() {
         root.addView(label("Bearer token"), matchWrap())
         tokenValue = value("")
         root.addView(tokenValue, matchWrap())
+
+        root.addView(label("Battery"), matchWrap())
+        batteryValue = value("")
+        root.addView(batteryValue, matchWrap())
+        root.addView(
+            button("Battery settings") {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            },
+            matchWrap(),
+        )
 
         root.addView(
             TextView(this).apply {
@@ -153,6 +167,14 @@ class MainActivity : Activity() {
         stopButton.isEnabled = running
         urlValue.text = "http://127.0.0.1:" + BridgeService.PORT + "/mcp"
         tokenValue.text = TokenStore.getOrCreate(this)
+        val power = getSystemService(PowerManager::class.java)
+        val unrestricted = power.isIgnoringBatteryOptimizations(packageName)
+        batteryValue.text =
+            if (unrestricted) "Unrestricted"
+            else "Optimized — background freeze likely"
+        batteryValue.setTextColor(
+            if (unrestricted) Color.rgb(0, 100, 0) else Color.rgb(180, 0, 0)
+        )
     }
 
     private fun delayedRefresh() {
