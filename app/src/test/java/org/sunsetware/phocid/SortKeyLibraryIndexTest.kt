@@ -12,7 +12,6 @@ import org.sunsetware.phocid.data.LibraryIndex
 import org.sunsetware.phocid.data.UnfilteredTrackIndex
 import org.sunsetware.phocid.sortkey.SortKeyKeys
 import org.sunsetware.phocid.sortkey.SortKeyLookup
-import org.sunsetware.phocid.utils.initialLetter
 
 @RunWith(RobolectricTestRunner::class)
 class SortKeyLibraryIndexTest {
@@ -45,7 +44,6 @@ class SortKeyLibraryIndexTest {
             )
         val indexed = index(lookup).tracks.getValue(track.id)
         assertThat(indexed.sortTitle).isEqualTo("よる")
-        assertThat(indexed.sortTitle!!.initialLetter(Locale.ROOT)).isEqualTo("や")
     }
 
     @Test

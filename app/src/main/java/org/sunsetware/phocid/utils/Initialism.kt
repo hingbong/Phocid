@@ -41,8 +41,8 @@ private fun String.initialHan(locale: Locale): String {
                         !it.contains("TW")
             }
     ) {
-        val transliterated = pinyinTransliterator?.transliterate(this) ?: return this
-        return transliterated.firstCharacter() ?: symbolInitial
+        val transliterated = pinyinTransliterator?.transliterate(this)
+        return transliterated?.firstCharacter() ?: firstCharacter() ?: symbolInitial
     } else this
 }
 

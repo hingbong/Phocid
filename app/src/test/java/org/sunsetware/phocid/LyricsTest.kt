@@ -6,9 +6,12 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import org.assertj.core.api.Assertions.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import org.sunsetware.phocid.data.Lyrics
 import org.sunsetware.phocid.data.parseLrc
 
+@RunWith(RobolectricTestRunner::class)
 class LyricsTest {
     @Test
     fun testParseLrc() {
