@@ -87,6 +87,16 @@ jobs:
             tail -80 "$RUNNER_TEMP/unit-test.log"
           fi
 
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: unit-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            agent-bridge/build/reports/tests/testDebugUnitTest
+          if-no-files-found: warn
+
       - name: Scan deprecated storage APIs
         run: |
           chmod +x scripts/scan-deprecated-storage.sh
