@@ -32,6 +32,72 @@ Replacing it with RELATIVE_PATH + DISPLAY_NAME is not a safe substitute: MediaSt
 guarantee that the reconstructed path exists, and the result can differ on case-insensitive
 filesystems, symlinks, and multi-volume devices.
 
+## Pending path-dependency removal
+
+Status: deferred. Do not start this migration as part of a routine dependency or SDK bump.
+
+The remaining dependency is wider than `MediaStore.DATA` alone.
+
+### 1. MediaStore.DATA -> Track.path
+
+`MediaStore.DATA` is read in `LibraryIndex.kt` (`contentResolverColumns`) and stored as
+`Track.path`:
+
+```kotlin
+Media.DATA,
+...
+.getString(ci[Media.DATA]!!)
+```
+
+The source comment records why it is still present:
+
+> MediaStore.DATA is deprecated, but it is the only column that gives us the real file path
+> required by Jaudiotagger and ArtworkLoader.
+
+### 2. Track.path dependencies
+
+| Purpose | Location |
+| --- | --- |
+| Jaudiotagger tag reading | `LibraryIndex.kt` (`AudioFileIO.read(File(path))`) |
+| Opus metadata | `FileInputStream(File(path))` |
+| Artwork loading | `ArtworkLoader.kt` (`File(path)` / `FileInputStream`) |
+| Lyrics sidecar | `LibraryIndex.kt` (`File(FilenameUtils.getPath(track.path)).listFiles()`) |
+| Folder view | `getFolders()` via `FilenameUtils.getPathNoEndSeparator(track.path)` |
+| Blacklist/whitelist | `blacklist.containsMatchIn(track.path)` |
+| Title fallback | `displayTitle` via `FilenameUtils.getBaseName(path)` |
+| File name | `fileName = FilenameUtils.getName(path)` |
+| Statistics identity fallback | `TrackResolver` (`TrackMeta.file`, `REL_PATH`, legacy fingerprint cache) |
+
+### 3. TrackEntity.path dependencies
+
+`TrackEntity.path` is documented as a local display hint, not identity:
+
+```kotlin
+/**
+ * [path] is only a local display hint for looking up artwork and metadata.
+ * It is deliberately not part of the identity.
+ */
+val path: String = ""
+```
+
+It is still used by:
+
+- `StatsDao.rowIdOfPath()` / `byPath()`
+- `StatsRepository.lifetimeForTrack()` path fallback
+- legacy fingerprint cache path key
+
+`TrackEntity.uuid` is the identity; `path` is not.
+
+### Conclusion
+
+The app currently depends on path for file access, folder views, filtering, display fallbacks,
+and legacy statistics lookups. New features must not use `Track.path`,
+`MediaStore.DATA`, or `TrackEntity.path` as a persistent key. Use `TrackEntity.uuid` with
+`LOCAL_URI` / `TAG_KEY` aliases instead.
+
+Removing these dependencies remains a separate migration. The blocking pieces are Jaudiotagger
+and the path-based identity fallbacks, not the statistics UUID layer.
+
 ## Statistics identity
 
 Statistics already use a portable identity layer:
