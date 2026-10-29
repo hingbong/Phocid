@@ -47,7 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.ibm.icu.text.DateFormat
+import android.icu.text.DateFormat
 import java.time.LocalDate
 import java.util.Date
 import kotlin.time.Duration.Companion.milliseconds

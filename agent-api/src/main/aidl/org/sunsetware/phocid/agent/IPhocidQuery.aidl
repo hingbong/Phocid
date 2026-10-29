@@ -18,4 +18,6 @@ interface IPhocidQuery {
     String listFacets(String requestJson);
 
     String playerState();
+
+    String updateSortKeys(String requestJson);
 }

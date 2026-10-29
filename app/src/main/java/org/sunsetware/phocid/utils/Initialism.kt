@@ -1,8 +1,8 @@
 package org.sunsetware.phocid.utils
 
-import com.ibm.icu.lang.UCharacter
-import com.ibm.icu.text.Transliterator
-import com.ibm.icu.text.UnicodeSet
+import android.icu.lang.UCharacter
+import android.icu.text.Transliterator
+import android.icu.text.UnicodeSet
 import java.util.Locale
 
 /** Input is assumed to be NFC normalized. */
@@ -24,7 +24,8 @@ private val kanaSet = UnicodeSet("[[:Hira:]+[:Kana:]]").freeze()
 private val letterSet = UnicodeSet("[:Letter:]").freeze()
 
 private val pinyinTransliterator =
-    Transliterator.getInstance("Han-Latin; NFD; [:Mark:] Remove; NFC; Lower")
+    runCatching { Transliterator.getInstance("Han-Latin; NFD; [:Mark:] Remove; NFC; Lower") }
+        .getOrNull()
 
 private fun String.initialHan(locale: Locale): String {
     // ICU only has Han -> Pinyin conversion, so we can't get a meaningful result for
@@ -39,16 +40,22 @@ private fun String.initialHan(locale: Locale): String {
                         !it.contains("MO") &&
                         !it.contains("TW")
             }
-    )
-        pinyinTransliterator.transliterate(this).firstCharacter() ?: symbolInitial
-    else this
+    ) {
+        val transliterated = pinyinTransliterator?.transliterate(this) ?: return this
+        return transliterated.firstCharacter() ?: symbolInitial
+    } else this
 }
 
 private val kanaTransliterator =
-    Transliterator.getInstance("NFD; [:Mark:] Remove; NFC; Any-Latin; [:^Letter:] Remove; Lower")
+    runCatching {
+            Transliterator.getInstance(
+                "NFD; [:Mark:] Remove; NFC; Any-Latin; [:^Letter:] Remove; Lower"
+            )
+        }
+        .getOrNull()
 
 private fun String.initialKana(): String {
-    val s = kanaTransliterator.transliterate(this)
+    val s = kanaTransliterator?.transliterate(this) ?: return firstCharacter() ?: symbolInitial
     val c = s.firstCharacter()
     return when (s) {
         "a",

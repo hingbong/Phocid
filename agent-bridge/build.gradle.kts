@@ -34,8 +34,8 @@ android {
         applicationId = "org.sunsetware.phocid.bridge"
         minSdk = 35
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.3.2"
+        versionCode = 2
+        versionName = "0.4.0"
 
         buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")

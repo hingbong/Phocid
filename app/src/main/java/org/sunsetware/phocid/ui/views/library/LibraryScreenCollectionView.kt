@@ -71,6 +71,7 @@ import org.sunsetware.phocid.data.searchIndices
 import org.sunsetware.phocid.data.sorted
 import org.sunsetware.phocid.data.sortedBy
 import org.sunsetware.phocid.globals.Strings
+import org.sunsetware.phocid.globals.SystemLocale
 import org.sunsetware.phocid.globals.format
 import org.sunsetware.phocid.ui.components.Artwork
 import org.sunsetware.phocid.ui.components.ArtworkImage
@@ -375,6 +376,7 @@ class LibraryScreenCollectionViewState(
                     .hintBy(
                         preferences.sortCollator,
                         (type.sortingOptions[id] ?: type.sortingOptions.values.first()).keys,
+                        preferences.sortingLocale ?: SystemLocale,
                     ) {
                         it.sortable
                     }

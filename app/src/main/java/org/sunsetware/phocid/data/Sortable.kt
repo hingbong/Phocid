@@ -2,10 +2,10 @@ package org.sunsetware.phocid.data
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
-import com.ibm.icu.text.Collator
-import com.ibm.icu.text.DateFormat
-import com.ibm.icu.util.ULocale
+import android.icu.text.Collator
+import android.icu.text.DateFormat
 import java.util.Date
+import java.util.Locale
 import kotlinx.serialization.Serializable
 import org.sunsetware.phocid.R
 import org.sunsetware.phocid.globals.Strings
@@ -161,9 +161,9 @@ fun <T : Sortable> Iterable<T>.sorted(
 inline fun <T> Iterable<T>.hintBy(
     collator: Collator,
     sortingKeys: List<SortingKey>,
+    locale: Locale = Locale.getDefault(),
     crossinline selector: (T) -> Sortable,
 ): List<Pair<T, String>> {
-    val locale = collator.getLocale(ULocale.VALID_LOCALE).toLocale()
     return mapIndexed { index, item ->
         val sortable = selector(item)
         item to
@@ -201,6 +201,7 @@ inline fun <T> Iterable<T>.hintBy(
 fun <T : Sortable> Iterable<T>.hint(
     collator: Collator,
     sortingKeys: List<SortingKey>,
+    locale: Locale = Locale.getDefault(),
 ): List<Pair<T, String>> {
-    return hintBy(collator, sortingKeys) { it }
+    return hintBy(collator, sortingKeys, locale) { it }
 }

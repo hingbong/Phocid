@@ -22,6 +22,8 @@ import org.json.JSONObject
 import org.sunsetware.phocid.PlaybackService
 import org.sunsetware.phocid.data.Track
 import org.sunsetware.phocid.globals.GlobalData
+import org.sunsetware.phocid.sortkey.SortKeyKeys
+import org.sunsetware.phocid.sortkey.SortKeyTarget
 import org.sunsetware.phocid.stats.db.DayBucket
 import org.sunsetware.phocid.stats.db.RangeSummary
 import org.sunsetware.phocid.stats.db.TrackAggregate
@@ -31,8 +33,8 @@ import org.sunsetware.phocid.stats.domain.StatsSort
 /**
  * Read-only query surface for the companion agent bridge.
  *
- * The service is exported with a signature permission. It never accepts writes and it never
- * exposes the filesystem path by default.
+ * The service is exported with a signature permission. It exposes read methods plus one
+ * opt-in method for writing local sort keys. It never exposes the filesystem path by default.
  */
 class AgentQueryService : Service() {
     private val binder =
@@ -59,6 +61,9 @@ class AgentQueryService : Service() {
                 guarded { listFacetsJson(requestJson) }
 
             override fun playerState(): String = guarded { playerStateJson() }
+
+            override fun updateSortKeys(requestJson: String): String =
+                guarded { updateSortKeysJson(requestJson) }
         }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -70,6 +75,7 @@ class AgentQueryService : Service() {
             .put("libraryRevision", index.flowVersion)
             .put("zoneId", ZoneId.systemDefault().id)
             .put("maxLimit", MAX_LIMIT)
+            .put("writeSortKeys", true)
             .put("ranges", stringArray(RANGES))
             .put("facetKinds", stringArray(FACET_KINDS))
             .put("fields", stringArray(TRACK_FIELDS))
@@ -439,6 +445,57 @@ class AgentQueryService : Service() {
             .toString()
     }
 
+    private fun updateSortKeysJson(requestJson: String): String {
+        val parsed = SortKeyRequest.parse(requestJson)
+        if (parsed is SortKeyRequestResult.Failure) {
+            return errorJson(parsed.code, parsed.message)
+        }
+        val batch = (parsed as SortKeyRequestResult.Ok).batch
+        val index = GlobalData.libraryIndex.value
+        val errors = batch.errors.toMutableList()
+        val targets = mutableListOf<SortKeyTarget>()
+        for (item in batch.items) {
+            val track = index.tracks[item.libraryId]
+            if (track == null) {
+                errors +=
+                    SortKeyItemError(
+                        item.libraryId,
+                        "not_found",
+                        "No library track with id " + item.libraryId,
+                    )
+                continue
+            }
+            targets +=
+                SortKeyTarget(
+                    libraryId = item.libraryId,
+                    localUriKey = SortKeyKeys.localUriKey(track),
+                    tagCandidates = SortKeyKeys.tagCandidates(track),
+                    sortKey = item.sortKey,
+                    overwrite = batch.overwrite,
+                )
+        }
+        val result = runBlocking { GlobalData.sortKeyManager.apply(targets) }
+        errors += result.errors.map { SortKeyItemError(it.libraryId, it.code, it.message) }
+        return JSONObject()
+            .put("updated", result.updated)
+            .put("cleared", result.cleared)
+            .put("skipped", result.skipped)
+            .put(
+                "errors",
+                JSONArray().apply {
+                    errors.forEach { error ->
+                        put(
+                            JSONObject()
+                                .put("libraryId", error.libraryId ?: JSONObject.NULL)
+                                .put("code", error.code)
+                                .put("message", error.message)
+                        )
+                    }
+                },
+            )
+            .toString()
+    }
+
     private fun statsUuidFor(track: Track): String? =
         runBlocking {
             val totals =
@@ -495,6 +552,7 @@ class AgentQueryService : Service() {
             .put("bitRate", track.bitRate)
             .put("bitDepth", track.bitDepth)
             .put("hasArtwork", track.hasArtwork)
+            .put("hasSortKey", track.sortKey != null)
             .putNullable("comment", track.comment)
             .putNullable("unsyncedLyrics", track.unsyncedLyrics)
             .put("dateAdded", track.dateAdded)
@@ -620,7 +678,7 @@ class AgentQueryService : Service() {
     }
 
     companion object {
-        private const val API_VERSION = 3
+        private const val API_VERSION = 4
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 200
         private val RANGES =
@@ -647,6 +705,7 @@ class AgentQueryService : Service() {
                 "bitRate",
                 "bitDepth",
                 "hasArtwork",
+                "hasSortKey",
                 "comment",
                 "unsyncedLyrics",
                 "dateAdded",

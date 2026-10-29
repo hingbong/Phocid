@@ -38,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -72,6 +73,7 @@ fun BridgeScreen() {
     var savedConfig by remember { mutableStateOf(BridgeSettings.load(context)) }
     var hostInput by rememberSaveable { mutableStateOf(savedConfig.host) }
     var portInput by rememberSaveable { mutableStateOf(savedConfig.port.toString()) }
+    var allowWritesInput by rememberSaveable { mutableStateOf(savedConfig.allowWrites) }
     var token by remember { mutableStateOf(TokenStore.getOrCreate(context)) }
     var showRegenerateDialog by remember { mutableStateOf(false) }
     var batteryUnrestricted by remember { mutableStateOf(isBatteryUnrestricted(context)) }
@@ -90,9 +92,12 @@ fun BridgeScreen() {
     val normalizedHost = BridgeEndpoint.normalizeHost(hostInput)
     val parsedPort = portInput.trim().toIntOrNull()
     val canSubmit = hostError == null && portError == null
-    val draftConfig = if (canSubmit) BridgeConfig(normalizedHost, parsedPort!!) else null
+    val draftConfig =
+        if (canSubmit) BridgeConfig(normalizedHost, parsedPort!!, allowWritesInput) else null
     val dirty = draftConfig != null && draftConfig != savedConfig
-    val displayedConfig = if (state.running) BridgeConfig(state.host, state.port) else savedConfig
+    val displayedConfig =
+        if (state.running) BridgeConfig(state.host, state.port, savedConfig.allowWrites)
+        else savedConfig
     val endpoint = BridgeEndpoint.httpUrl(displayedConfig.host, displayedConfig.port)
 
     fun copy(label: String, value: String) {
@@ -152,8 +157,10 @@ fun BridgeScreen() {
                 hostError = hostError,
                 portError = portError,
                 dirty = dirty,
+                allowWrites = allowWritesInput,
                 onHostChange = { hostInput = it },
                 onPortChange = { portInput = it },
+                onAllowWritesChange = { allowWritesInput = it },
                 onStart = { startServer() },
                 onStop = { BridgeService.stop(context) },
                 onRestart = { restartServer() },
@@ -181,8 +188,8 @@ fun BridgeScreen() {
             AboutCard()
             Text(
                 text =
-                    "Read-only library metadata, statistics, and player state. " +
-                        "Playback is never controlled.",
+                    "Read-only by default; optional local sort-key writes. " +
+                        "Audio files, tags, and playback are never modified.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
@@ -353,8 +360,10 @@ private fun ServerCard(
     hostError: String?,
     portError: String?,
     dirty: Boolean,
+    allowWrites: Boolean,
     onHostChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
+    onAllowWritesChange: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRestart: () -> Unit,
@@ -411,6 +420,23 @@ private fun ServerCard(
                     ),
                 shape = RoundedCornerShape(16.dp),
             )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Allow agent writes",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = "Only local sort keys. Audio files and tags are never modified.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = allowWrites, onCheckedChange = onAllowWritesChange)
+            }
             if (BridgeEndpoint.isWildcard(BridgeEndpoint.normalizeHost(hostInput))) {
                 Text(
                     text =

@@ -111,7 +111,14 @@ class BridgeService : Service() {
             )
             val source = BinderPhocidDataSource(this)
             dataSource = source
-            instance = McpServer(config.host, config.port, { TokenStore.getOrCreate(this) }, source)
+            instance =
+                McpServer(
+                    config.host,
+                    config.port,
+                    { TokenStore.getOrCreate(this) },
+                    source,
+                    allowWrites = config.allowWrites,
+                )
             instance.start()
             server = instance
             _state.update {

@@ -12,9 +12,10 @@ Phocid's main APK has no `INTERNET` permission. The bridge owns:
 - the MCP/HTTP server
 - the bearer token
 
-The main APK exposes a read-only Binder query API to the bridge. The bridge
-translates MCP tool calls into Binder calls. The agent app never needs Android
-native integration; it only sees a standard MCP HTTP endpoint.
+The main APK exposes a read-only Binder query API to the bridge, plus one
+opt-in method for local sort keys. The bridge translates MCP tool calls into
+Binder calls. The agent app never needs Android native integration; it only
+sees a standard MCP HTTP endpoint.
 
 ## Current state
 
@@ -41,6 +42,7 @@ MCP tools:
 - `stats_daily`
 - `resolve_stats_uuid`
 - `player_state` (read-only, optional live position)
+- `library_update_sort_keys` (opt-in; stores local sort keys only)
 
 The service uses `START_STICKY`, `stopWithTask=false`, an ongoing
 notification, and a notification Stop action. The UI also shows whether the
@@ -57,8 +59,9 @@ or any queue mutation.
 sleep. It is not a Unix timestamp and not bridge process uptime; clients should
 use elapsed-time differences for interpolation.
 
-The main app reports `apiVersion: 3`. `library_list_facets` requires API 2;
-`player_state` requires API 3. Older main APKs return `unsupported_api`.
+The main app reports `apiVersion: 4`. `library_list_facets` requires API 2;
+`player_state` requires API 3; `library_update_sort_keys` requires API 4. Older
+main APKs return `unsupported_api`.
 
 ## Build
 
@@ -79,7 +82,8 @@ and the current UTC time. The About card displays all three values.
 1. Install `agent-bridge-release.apk`.
 2. Open **Phocid Agent Bridge**. The default listen address is
    `127.0.0.1:8765`; change **Listen address** and **Port** if needed.
-3. Tap **Start server**. Changing the address or port while running uses
+3. Tap **Start server**. **Allow agent writes** is off by default; enabling it
+   exposes only `library_update_sort_keys`. Changing settings while running uses
    **Apply & restart**, which disconnects current MCP sessions.
 4. In OpenMinis, add an MCP server:
 
@@ -89,7 +93,7 @@ and the current UTC time. The About card displays all three values.
      `http://127.0.0.1:8765/mcp`
    - Header: `Authorization: Bearer <token>`
    - Authorization: `None`
-   - Note: `Read-only Phocid library tags and playback statistics.`
+   - Note: `Read-only by default; optional local sort keys.`
 
 5. Keep the bridge foreground service running while the agent uses it.
 6. If the bridge is reported as "Optimized", open **Battery settings** and set
@@ -163,12 +167,15 @@ frozen client from a frozen server.
   untrusted networks and untrusted proxies.
 - The bridge does not make outbound network requests.
 - The bridge is a separate UID; the main APK still has no `INTERNET` permission.
+- Sort-key writes are off by default. When enabled, only the local `sort_keys`
+  table is written; audio files, tags, and statistics are untouched.
 
 ## API version
 
-The main app currently reports `apiVersion: 3`. The bridge caches this value
-and rejects `library_list_facets` (API 2) / `player_state` (API 3) with
-`unsupported_api` when an older main APK is installed.
+The main app currently reports `apiVersion: 4`. The bridge caches this value
+and rejects `library_list_facets` (API 2), `player_state` (API 3), and
+`library_update_sort_keys` (API 4) with `unsupported_api` when an older main APK
+is installed. The write tool is also hidden unless **Allow agent writes** is on.
 
 ## Out of scope
 

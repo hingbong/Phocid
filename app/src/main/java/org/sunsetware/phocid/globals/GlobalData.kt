@@ -9,6 +9,7 @@ import org.sunsetware.phocid.data.PlayerTransientState
 import org.sunsetware.phocid.data.PlaylistManager
 import org.sunsetware.phocid.data.Preferences
 import org.sunsetware.phocid.data.UnfilteredTrackIndex
+import org.sunsetware.phocid.sortkey.SortKeyManager
 import org.sunsetware.phocid.stats.StatsManager
 
 /**
@@ -30,4 +31,6 @@ object GlobalData {
     @Volatile lateinit var playlistManager: PlaylistManager
 
     @Volatile lateinit var statsManager: StatsManager
+
+    @Volatile lateinit var sortKeyManager: SortKeyManager
 }

@@ -1,12 +1,15 @@
 package org.sunsetware.phocid
 
-import com.ibm.icu.lang.UCharacter
+import android.icu.lang.UCharacter
 import java.util.Locale
 import kotlin.streams.toList
 import org.assertj.core.api.Assertions.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import org.sunsetware.phocid.utils.initialLetter
 
+@RunWith(RobolectricTestRunner::class)
 class InitialismTest {
     @Test
     fun testInitialLetter() {

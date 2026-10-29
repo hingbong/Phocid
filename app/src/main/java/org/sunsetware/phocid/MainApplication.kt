@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.sunsetware.phocid.data.LibraryIndex
 import org.sunsetware.phocid.data.PlayerState
 import org.sunsetware.phocid.data.PlaylistManager
@@ -24,6 +25,7 @@ import org.sunsetware.phocid.data.loadCbor
 import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.globals.StringSource
 import org.sunsetware.phocid.globals.Strings
+import org.sunsetware.phocid.sortkey.SortKeyManager
 import org.sunsetware.phocid.stats.StatsManager
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.maintenance.StatsMaintenanceWorker
@@ -69,6 +71,8 @@ class MainApplication : Application() {
                     )
                 StatsDatabase.discardLegacyStats(context)
                 statsManager = StatsManager(context)
+                sortKeyManager = SortKeyManager(context, defaultScope)
+                runBlocking { sortKeyManager.loadInitial() }
                 runCatching { StatsMaintenanceWorker.schedule(context) }
                     .onFailure { Log.e("Phocid", "Unable to schedule stats maintenance", it) }
 
@@ -84,8 +88,15 @@ class MainApplication : Application() {
                                 val whitelist = it.whitelistRegexes
                             }
                         },
-                    ) { trackIndex, tuple ->
-                        LibraryIndex(trackIndex, tuple.collator, tuple.blacklist, tuple.whitelist)
+                        sortKeyManager.keys,
+                    ) { trackIndex, tuple, sortKeys ->
+                        LibraryIndex(
+                            trackIndex,
+                            tuple.collator,
+                            tuple.blacklist,
+                            tuple.whitelist,
+                            sortKeys,
+                        )
                     }
 
                 playlistManager = PlaylistManager(context, defaultScope, preferences, libraryIndex)

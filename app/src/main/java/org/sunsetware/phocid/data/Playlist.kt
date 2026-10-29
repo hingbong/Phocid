@@ -19,7 +19,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.os.bundleOf
-import com.ibm.icu.text.DateFormat
+import android.icu.text.DateFormat
 import java.util.Date
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean

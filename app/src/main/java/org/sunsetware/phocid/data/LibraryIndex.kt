@@ -18,8 +18,8 @@ import androidx.core.database.getLongOrNull
 import androidx.core.database.getStringOrNull
 import androidx.palette.graphics.Palette
 import androidx.palette.graphics.Target
-import com.ibm.icu.text.Collator
-import com.ibm.icu.util.CaseInsensitiveString
+import android.icu.text.Collator
+import org.sunsetware.phocid.utils.CaseInsensitiveString
 import java.io.File
 import java.io.FileInputStream
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -67,6 +67,7 @@ import org.sunsetware.phocid.utils.distinctCaseInsensitive
 import org.sunsetware.phocid.utils.icuFormat
 import org.sunsetware.phocid.utils.mode
 import org.sunsetware.phocid.utils.modeOrNull
+import org.sunsetware.phocid.sortkey.SortKeyLookup
 import org.sunsetware.phocid.utils.trimAndNormalize
 
 @Immutable
@@ -98,6 +99,8 @@ data class Track(
     @Serializable(with = ColorSerializer::class) val mutedColor: Color?,
     val unsyncedLyrics: String?,
     val comment: String?,
+    /** Applied from the local sort-key database; never serialized into the track cache. */
+    @Transient val sortKey: String? = null,
 ) : Searchable, Sortable {
     @Suppress("DEPRECATION")
     fun upgrade(): Track {
@@ -153,7 +156,7 @@ data class Track(
         listOfNotNull(displayTitle, displayArtist, album, displayAlbumArtist, fileName)
 
     override val sortTitle
-        get() = displayTitle
+        get() = sortKey ?: displayTitle
 
     override val sortArtist
         get() = Strings.conjoin(artists)
@@ -485,7 +488,7 @@ data class AlbumKey(
      * TODO: Find a less hacky hack
      */
     override fun toString(): String {
-        return listOf(Base64.encode(name.string.toByteArray(Charsets.UTF_8)))
+        return listOf(Base64.encode(name.string.orEmpty().toByteArray(Charsets.UTF_8)))
             .plus(
                 albumArtists.map {
                     it.string?.let { Base64.encode(it.toByteArray(Charsets.UTF_8)) }
@@ -1098,12 +1101,18 @@ fun LibraryIndex(
     collator: Collator,
     blacklist: List<Regex>,
     whitelist: List<Regex>,
+    sortKeys: SortKeyLookup = SortKeyLookup.EMPTY,
 ): LibraryIndex {
     val tracks =
-        unfilteredTrackIndex.tracks.filter { (_, track) ->
-            blacklist.none { it.containsMatchIn(track.path) } ||
-                whitelist.any { it.containsMatchIn(track.path) }
-        }
+        unfilteredTrackIndex.tracks
+            .filter { (_, track) ->
+                blacklist.none { it.containsMatchIn(track.path) } ||
+                    whitelist.any { it.containsMatchIn(track.path) }
+            }
+            .mapValues { (_, track) ->
+                val key = sortKeys.keyFor(track)
+                if (key == track.sortKey) track else track.copy(sortKey = key)
+            }
     val albums = getAlbums(tracks.values, collator)
     val artists = getArtists(tracks.values, albums, collator)
     val albumArtists = getAlbumArtists(albums, collator)

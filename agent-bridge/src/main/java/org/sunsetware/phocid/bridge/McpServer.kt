@@ -34,6 +34,7 @@ class McpServer(
     private val port: Int,
     private val tokenProvider: () -> String,
     private val dataSource: PhocidDataSource? = null,
+    private val allowWrites: Boolean = false,
 ) {
     private val running = AtomicBoolean(false)
     private val startedAt = AtomicLong(0)
@@ -396,6 +397,15 @@ class McpServer(
                 libraryIdSchema(),
             )
         )
+        if (canWrite()) {
+            tools.put(
+                tool(
+                    "library_update_sort_keys",
+                    "Set or clear phonetic sort keys for library titles. Does not modify audio files or tags.",
+                    sortKeysSchema(),
+                )
+            )
+        }
         return JSONObject().put("tools", tools)
     }
 
@@ -418,8 +428,24 @@ class McpServer(
                 dataResult(source?.statsDaily(args.optString("range", "30d")))
             "resolve_stats_uuid" ->
                 dataResult(source?.resolveStatsUuid(args.optLong("libraryId", -1L)))
+            "library_update_sort_keys" ->
+                if (!canWrite()) {
+                    toolResult("Writes are disabled or the main app is too old", isError = true)
+                } else {
+                    dataResult(source?.updateSortKeys(args.toString()))
+                }
             else -> toolResult("Unknown tool: $name", isError = true)
         }
+    }
+
+    private fun canWrite(): Boolean {
+        if (!allowWrites) return false
+        val capabilities = dataSource?.capabilities() ?: return false
+        return runCatching {
+                val json = JSONObject(capabilities)
+                json.optInt("apiVersion", 1) >= 4 && json.optBoolean("writeSortKeys", false)
+            }
+            .getOrDefault(false)
     }
 
     private fun dataResult(value: String?): JSONObject {
@@ -449,6 +475,58 @@ class McpServer(
                 JSONObject().put("libraryId", integerProp("Phocid library track id")),
             )
             .put("required", JSONArray().put("libraryId"))
+            .put("additionalProperties", false)
+
+    private fun sortKeysSchema(): JSONObject =
+        JSONObject()
+            .put("type", "object")
+            .put(
+                "properties",
+                JSONObject()
+                    .put(
+                        "items",
+                        JSONObject()
+                            .put("type", "array")
+                            .put("minItems", 1)
+                            .put("maxItems", 200)
+                            .put(
+                                "items",
+                                JSONObject()
+                                    .put("type", "object")
+                                    .put(
+                                        "properties",
+                                        JSONObject()
+                                            .put(
+                                                "libraryId",
+                                                integerProp("Phocid library track id"),
+                                            )
+                                            .put(
+                                                "sortKey",
+                                                JSONObject()
+                                                    .put(
+                                                        "anyOf",
+                                                        JSONArray()
+                                                            .put(
+                                                                JSONObject()
+                                                                    .put("type", "string")
+                                                            )
+                                                            .put(
+                                                                JSONObject()
+                                                                    .put("type", "null")
+                                                            ),
+                                                    ),
+                                            ),
+                                    )
+                                    .put(
+                                        "required",
+                                        JSONArray().put("libraryId").put("sortKey"),
+                                    )
+                                    .put("additionalProperties", false),
+                            ),
+                    )
+                    .put("overwrite", booleanProp("Overwrite existing values; default false")),
+            )
+            .put("required", JSONArray().put("items"))
             .put("additionalProperties", false)
 
     private fun rangeSchema(): JSONObject =

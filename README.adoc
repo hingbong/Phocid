@@ -43,11 +43,12 @@ If your problem is not covered by this page, you can create an https://github.co
 == Optional agent bridge
 
 The main APK has no `INTERNET` permission and works entirely offline.
-The separate `agent-bridge` APK is an optional, read-only companion for
-on-device MCP clients. It exposes library metadata, playback statistics, and
-the current player state over a local HTTP endpoint (loopback by default; the
-listen address and port are configurable in the bridge app); it never controls
-playback, edits the library, or exposes file paths.
+The separate `agent-bridge` APK is an optional companion for on-device MCP
+clients. It is read-only by default and exposes library metadata, playback
+statistics, and the current player state over a local HTTP endpoint (loopback
+by default; the listen address and port are configurable in the bridge app).
+An opt-in write tool can store local phonetic sort keys; it never edits audio
+files or tags, controls playback, or exposes file paths.
 
 Both APKs must be signed with the same certificate because the main app
 protects its query service with a signature-level permission. See

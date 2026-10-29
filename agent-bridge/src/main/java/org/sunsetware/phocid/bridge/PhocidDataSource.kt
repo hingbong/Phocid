@@ -11,4 +11,5 @@ interface PhocidDataSource {
     fun resolveStatsUuid(libraryId: Long): String
     fun listFacets(requestJson: String): String
     fun playerState(): String
+    fun updateSortKeys(requestJson: String): String
 }

@@ -106,6 +106,9 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
 
     override fun playerState(): String = call(requiredApi = 3) { it.playerState() }
 
+    override fun updateSortKeys(requestJson: String): String =
+        call(requiredApi = 4) { it.updateSortKeys(requestJson) }
+
     private fun supports(requiredApi: Int): Boolean {
         apiVersion?.let { cached ->
             if (cached >= requiredApi) return true

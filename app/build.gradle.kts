@@ -139,8 +139,6 @@ dependencies {
     // TODO: Maybe requiring a dependency just for `FilenameUtils` is too much
     implementation(libs.commons.io)
     implementation(libs.core.splashscreen)
-    // ICU can't be mocked by Robolectric, WTF
-    implementation(libs.icu4j)
     implementation(libs.kotlinx.serialization.cbor)
     implementation(libs.kotlinx.serialization.json)
     implementation(platform(libs.androidx.compose.bom))

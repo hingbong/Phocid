@@ -107,16 +107,16 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import com.ibm.icu.number.Notation
-import com.ibm.icu.number.NumberFormatter
-import com.ibm.icu.number.Precision
-import com.ibm.icu.text.Collator
-import com.ibm.icu.text.ListFormatter
-import com.ibm.icu.text.SimpleDateFormat
-import com.ibm.icu.util.MeasureUnit
+import android.icu.number.Notation
+import android.icu.number.NumberFormatter
+import android.icu.number.Precision
+import android.icu.text.Collator
+import android.icu.text.ListFormatter
+import android.icu.util.MeasureUnit
 import java.io.File
 import java.nio.charset.Charset
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
@@ -994,7 +994,7 @@ private val Miscellaneous =
                 icon = Icons.Filled.Save,
                 onClick = {
                     val date =
-                        SimpleDateFormat.getInstanceForSkeleton("yyyy-MM-dd", Locale.ROOT)
+                        DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
                             .format(LocalDateTime.now())
                     uiManager.intentLauncher.get()?.createJsonDocument(
                         "phocid-preferences-$date.json"

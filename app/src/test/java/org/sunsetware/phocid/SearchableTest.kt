@@ -1,13 +1,16 @@
 package org.sunsetware.phocid
 
-import com.ibm.icu.text.Collator
-import com.ibm.icu.text.RuleBasedCollator
+import android.icu.text.Collator
+import android.icu.text.RuleBasedCollator
 import java.util.Locale
 import org.assertj.core.api.Assertions.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import org.sunsetware.phocid.data.Searchable
 import org.sunsetware.phocid.data.search
 
+@RunWith(RobolectricTestRunner::class)
 class SearchableTest {
 
     private val collator = Collator.getInstance(Locale.ROOT) as RuleBasedCollator

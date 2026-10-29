@@ -7,8 +7,8 @@ import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
-import com.ibm.icu.text.Collator
-import com.ibm.icu.text.RuleBasedCollator
+import android.icu.text.Collator
+import android.icu.text.RuleBasedCollator
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.PI

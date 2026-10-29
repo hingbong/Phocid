@@ -48,10 +48,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ibm.icu.number.Notation
-import com.ibm.icu.number.NumberFormatter
-import com.ibm.icu.number.Precision
-import com.ibm.icu.util.MeasureUnit
+import android.icu.number.Notation
+import android.icu.number.NumberFormatter
+import android.icu.number.Precision
+import android.icu.util.MeasureUnit
 import java.util.Locale
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking

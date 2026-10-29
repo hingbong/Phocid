@@ -1,8 +1,8 @@
 package org.sunsetware.phocid.data
 
 import androidx.compose.runtime.Stable
-import com.ibm.icu.text.RuleBasedCollator
-import com.ibm.icu.text.StringSearch
+import android.icu.text.RuleBasedCollator
+import android.icu.text.StringSearch
 import java.text.StringCharacterIterator
 
 interface Searchable {

@@ -40,7 +40,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
-import com.ibm.icu.util.ULocale
+import android.icu.util.ULocale
 import java.lang.ref.WeakReference
 import java.net.URLConnection
 import java.util.Locale

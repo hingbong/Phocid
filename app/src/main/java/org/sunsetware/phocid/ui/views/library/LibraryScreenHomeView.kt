@@ -86,6 +86,7 @@ import org.sunsetware.phocid.data.search
 import org.sunsetware.phocid.data.sorted
 import org.sunsetware.phocid.data.sortedBy
 import org.sunsetware.phocid.globals.Strings
+import org.sunsetware.phocid.globals.SystemLocale
 import org.sunsetware.phocid.globals.format
 import org.sunsetware.phocid.ui.components.Artwork
 import org.sunsetware.phocid.ui.components.ArtworkImage
@@ -210,7 +211,7 @@ class LibraryScreenHomeViewState(
             libraryIndex.tracks.values
                 .search(searchQuery, preferences.searchCollator)
                 .sorted(preferences.sortCollator, tab.sortingKeys, tab.sortAscending)
-                .hint(preferences.sortCollator, tab.sortingKeys)
+                .hint(preferences.sortCollator, tab.sortingKeys, preferences.sortingLocale ?: SystemLocale)
         return tracks.mapIndexed { index, (track, hint) ->
             LibraryScreenHomeViewItem(
                 key = track.id,
@@ -258,7 +259,7 @@ class LibraryScreenHomeViewState(
                 .asIterable()
                 .search(searchQuery, preferences.searchCollator) { it.value }
                 .sortedBy(preferences.sortCollator, tab.sortingKeys, tab.sortAscending) { it.value }
-                .hintBy(preferences.sortCollator, tab.sortingKeys) { it.value }
+                .hintBy(preferences.sortCollator, tab.sortingKeys, preferences.sortingLocale ?: SystemLocale) { it.value }
         return albums.map { (pair, hint) ->
             val (key, album) = pair
             LibraryScreenHomeViewItem(
@@ -295,7 +296,7 @@ class LibraryScreenHomeViewState(
             libraryIndex.artists.values
                 .search(searchQuery, preferences.searchCollator)
                 .sorted(preferences.sortCollator, tab.sortingKeys, tab.sortAscending)
-                .hint(preferences.sortCollator, tab.sortingKeys)
+                .hint(preferences.sortCollator, tab.sortingKeys, preferences.sortingLocale ?: SystemLocale)
         return artists.map { (artist, hint) ->
             LibraryScreenHomeViewItem(
                 key = artist.name,
@@ -331,7 +332,7 @@ class LibraryScreenHomeViewState(
             libraryIndex.albumArtists.values
                 .search(searchQuery, preferences.searchCollator)
                 .sorted(preferences.sortCollator, tab.sortingKeys, tab.sortAscending)
-                .hint(preferences.sortCollator, tab.sortingKeys)
+                .hint(preferences.sortCollator, tab.sortingKeys, preferences.sortingLocale ?: SystemLocale)
         return albumArtists.map { (albumArtist, hint) ->
             LibraryScreenHomeViewItem(
                 key = albumArtist.name,
@@ -367,7 +368,7 @@ class LibraryScreenHomeViewState(
             libraryIndex.genres.values
                 .search(searchQuery, preferences.searchCollator)
                 .sorted(preferences.sortCollator, tab.sortingKeys, tab.sortAscending)
-                .hint(preferences.sortCollator, tab.sortingKeys)
+                .hint(preferences.sortCollator, tab.sortingKeys, preferences.sortingLocale ?: SystemLocale)
         return genres.map { (genre, hint) ->
             LibraryScreenHomeViewItem(
                 key = genre.name,
@@ -415,13 +416,13 @@ class LibraryScreenHomeViewState(
             folders
                 .search(searchQuery, preferences.searchCollator)
                 .sorted(preferences.sortCollator, tab.sortingKeys, tab.sortAscending)
-                .hint(preferences.sortCollator, tab.sortingKeys)
+                .hint(preferences.sortCollator, tab.sortingKeys, preferences.sortingLocale ?: SystemLocale)
         // Sorting is required here because onClick is "baked" with this order.
         val filteredSortedChildTracks =
             tracks
                 .search(searchQuery, preferences.searchCollator)
                 .sorted(preferences.sortCollator, tab.sortingKeys, tab.sortAscending)
-                .hint(preferences.sortCollator, tab.sortingKeys)
+                .hint(preferences.sortCollator, tab.sortingKeys, preferences.sortingLocale ?: SystemLocale)
         val folderItems =
             filteredChildFolders.map { (folder, hint) ->
                 folder to
@@ -506,7 +507,7 @@ class LibraryScreenHomeViewState(
                 .asIterable()
                 .search(searchQuery, preferences.searchCollator) { it.value }
                 .sortedBy(preferences.sortCollator, tab.sortingKeys, tab.sortAscending) { it.value }
-                .hintBy(preferences.sortCollator, tab.sortingKeys) { it.value }
+                .hintBy(preferences.sortCollator, tab.sortingKeys, preferences.sortingLocale ?: SystemLocale) { it.value }
         return filteredSortedPlaylists.map { (pair, hint) ->
             val (key, playlist) = pair
             LibraryScreenHomeViewItem(

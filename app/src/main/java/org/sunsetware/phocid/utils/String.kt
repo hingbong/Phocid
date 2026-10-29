@@ -1,11 +1,10 @@
 package org.sunsetware.phocid.utils
 
 import android.util.Log
-import com.ibm.icu.lang.UCharacter
-import com.ibm.icu.number.NumberFormatter
-import com.ibm.icu.text.CharsetDetector
-import com.ibm.icu.text.MessageFormat
-import com.ibm.icu.text.Normalizer2
+import android.icu.lang.UCharacter
+import android.icu.number.NumberFormatter
+import android.icu.text.MessageFormat
+import android.icu.text.Normalizer2
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.util.Locale
@@ -37,11 +36,31 @@ fun String.firstCharacter(): String? {
 }
 
 fun ByteArray.decodeWithCharsetName(charsetName: String?): String {
-    return if (charsetName != null && Charset.isSupported(charsetName)) {
-        Charset.forName(charsetName).decode(ByteBuffer.wrap(this)).toString()
-    } else {
-        CharsetDetector().setText(this).detect().string
+    if (!charsetName.isNullOrBlank() && Charset.isSupported(charsetName)) {
+        return runCatching {
+                Charset.forName(charsetName).decode(ByteBuffer.wrap(this)).toString()
+            }
+            .getOrElse { decodeUtf8WithBom() }
     }
+    return decodeUtf8WithBom()
+}
+
+private fun ByteArray.decodeUtf8WithBom(): String {
+    if (
+        size >= 3 &&
+            this[0] == 0xEF.toByte() &&
+            this[1] == 0xBB.toByte() &&
+            this[2] == 0xBF.toByte()
+    ) {
+        return String(this, 3, size - 3, Charsets.UTF_8)
+    }
+    if (size >= 2 && this[0] == 0xFE.toByte() && this[1] == 0xFF.toByte()) {
+        return String(this, 2, size - 2, Charsets.UTF_16BE)
+    }
+    if (size >= 2 && this[0] == 0xFF.toByte() && this[1] == 0xFE.toByte()) {
+        return String(this, 2, size - 2, Charsets.UTF_16LE)
+    }
+    return String(this, Charsets.UTF_8)
 }
 
 fun Iterable<String>.distinctCaseInsensitive(): List<String> {
