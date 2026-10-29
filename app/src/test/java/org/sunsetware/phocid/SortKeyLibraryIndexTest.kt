@@ -1,7 +1,7 @@
 package org.sunsetware.phocid
 
 import android.icu.text.Collator
-import java.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import java.util.Locale
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
@@ -25,7 +25,7 @@ class SortKeyLibraryIndexTest {
             title = "夜",
             artists = listOf("Artist"),
             album = "Album",
-            duration = Duration.ofSeconds(3),
+            duration = 3.seconds,
         )
 
     private fun index(lookup: SortKeyLookup): LibraryIndex =

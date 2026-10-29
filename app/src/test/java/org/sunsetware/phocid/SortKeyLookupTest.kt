@@ -1,6 +1,6 @@
 package org.sunsetware.phocid
 
-import java.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,7 +20,7 @@ class SortKeyLookupTest {
             title = "夜",
             artists = listOf("Artist"),
             album = "Album",
-            duration = Duration.ofSeconds(3),
+            duration = 3.seconds,
         )
 
     @Test
