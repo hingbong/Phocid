@@ -233,8 +233,6 @@
     <string name="preferences_shape_circle">Kreis</string>
     <string name="preferences_shape_rounded_square">Abgerundetes Quadrat</string>
     <string name="preferences_shape_square">Quadrat</string>
-    <string name="preferences_sorting_language">Sortiersprache</string>
-    <string name="preferences_sorting_language_system">Systemsprache</string>
     <string name="preferences_swipe_threshold">Wischgesten-Schwellenwert</string>
     <string name="preferences_swipe_to_remove_from_queue">Wischen um aus Warteschlange zu entfernen</string>
     <string name="preferences_system_equalizer">Systemeigenen Equalizer öffnen</string>

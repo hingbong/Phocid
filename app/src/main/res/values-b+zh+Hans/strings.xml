@@ -271,8 +271,6 @@
     <string name="preferences_shape_circle">圆形</string>
     <string name="preferences_shape_rounded_square">圆角方形</string>
     <string name="preferences_shape_square">方形</string>
-    <string name="preferences_sorting_language">排序语言</string>
-    <string name="preferences_sorting_language_system">系统语言</string>
     <string name="preferences_swipe_threshold">滑动阈值</string>
     <string name="preferences_swipe_to_remove_from_queue">滑动移除队列中的曲目</string>
     <string name="preferences_system_equalizer">打开系统均衡器</string>

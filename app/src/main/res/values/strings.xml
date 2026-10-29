@@ -289,8 +289,6 @@
     <string name="preferences_shape_circle">Circle</string>
     <string name="preferences_shape_rounded_square">Rounded square</string>
     <string name="preferences_shape_square">Square</string>
-    <string name="preferences_sorting_language">Sorting language</string>
-    <string name="preferences_sorting_language_system">System language</string>
     <string name="preferences_swipe_threshold">Swipe threshold</string>
     <string name="preferences_swipe_to_remove_from_queue">Swipe to remove from queue</string>
     <string name="preferences_system_equalizer">Open system equalizer</string>

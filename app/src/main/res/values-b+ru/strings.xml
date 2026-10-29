@@ -211,8 +211,6 @@
     <string name="preferences_shape_circle">Круг</string>
     <string name="preferences_shape_rounded_square">Скруглённый квадрат</string>
     <string name="preferences_shape_square">Квадрат</string>
-    <string name="preferences_sorting_language">Язык сортировки</string>
-    <string name="preferences_sorting_language_system">Системный язык</string>
     <string name="preferences_swipe_threshold">Порог смахивания</string>
     <string name="preferences_swipe_to_remove_from_queue">Проведите пальцем, чтобы удалить из очереди</string>
     <string name="preferences_system_equalizer">Открыть системный эквалайзер</string>

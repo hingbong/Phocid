@@ -211,8 +211,6 @@
     <string name="preferences_shape_circle">Cercle</string>
     <string name="preferences_shape_rounded_square">Carré arrondi</string>
     <string name="preferences_shape_square">Carré</string>
-    <string name="preferences_sorting_language">Langue de tri</string>
-    <string name="preferences_sorting_language_system">Langue système</string>
     <string name="preferences_swipe_threshold">Seuil du glissement</string>
     <string name="preferences_swipe_to_remove_from_queue">Faire glisser pour retirer de la queue</string>
     <string name="preferences_system_equalizer">Ouvrir l’égaliseur du système</string>

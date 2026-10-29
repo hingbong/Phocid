@@ -31,7 +31,7 @@ If your problem is not covered by this page, you can create an https://github.co
 
 * Familiar user experience
 * Better metadata support; Namely, multiple artists.
-* Better sorting when your music library differs from your system language
+* Optional local sort keys for titles whose script has no alphabetic order
 * Regex-based blocklist
 * Playback speed and pitch control
 * More lyrics styles

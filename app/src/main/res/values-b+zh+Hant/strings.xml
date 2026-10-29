@@ -232,8 +232,6 @@
     <string name="preferences_shape_circle">圓形</string>
     <string name="preferences_shape_rounded_square">圓角方形</string>
     <string name="preferences_shape_square">正方形</string>
-    <string name="preferences_sorting_language">排序語言</string>
-    <string name="preferences_sorting_language_system">系統語言</string>
     <string name="preferences_swipe_threshold">滑動閾值</string>
     <string name="preferences_swipe_to_remove_from_queue">滑動來從待播清單中移除</string>
     <string name="preferences_system_equalizer">開啟系統等化器</string>

@@ -232,8 +232,6 @@
     <string name="preferences_shape_circle">Círculo</string>
     <string name="preferences_shape_rounded_square">Cuadrado redondeado</string>
     <string name="preferences_shape_square">Cuadrado</string>
-    <string name="preferences_sorting_language">Idioma del ordenamiento</string>
-    <string name="preferences_sorting_language_system">Idioma del sistema</string>
     <string name="preferences_swipe_threshold">Umbral de deslizamiento</string>
     <string name="preferences_swipe_to_remove_from_queue">Deslizar para eliminar de la fila</string>
     <string name="preferences_system_equalizer">Abrir ecualizador del sistema</string>

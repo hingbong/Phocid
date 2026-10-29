@@ -376,7 +376,7 @@ class LibraryScreenCollectionViewState(
                     .hintBy(
                         preferences.sortCollator,
                         (type.sortingOptions[id] ?: type.sortingOptions.values.first()).keys,
-                        preferences.sortingLocale ?: SystemLocale,
+                        SystemLocale,
                     ) {
                         it.sortable
                     }

@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import android.icu.text.Collator
 import android.icu.text.RuleBasedCollator
-import java.util.Locale
 import java.util.UUID
 import kotlin.math.PI
 import kotlinx.serialization.Serializable
@@ -60,7 +59,6 @@ data class Preferences(
     val folderTabRoot: String? = null,
     val coloredCards: Boolean = true,
     val libraryTrackClickAction: LibraryTrackClickAction = LibraryTrackClickAction.PLAY_ALL,
-    val sortingLocaleLanguageTag: String? = null,
     // Now playing
     val playerScreenLayout: PlayerScreenLayoutType = PlayerScreenLayoutType.DEFAULT,
     /** Use artwork color as theme color */
@@ -178,12 +176,9 @@ data class Preferences(
     val notificationButtons =
         notificationButtonOrderAndVisibility.filter { it.second }.map { it.first }
 
-    @Transient val sortingLocale = sortingLocaleLanguageTag?.let { Locale.forLanguageTag(it) }
-
     @Transient
     val sortCollator =
-        (if (sortingLocale != null) Collator.getInstance(sortingLocale)
-            else Collator.getInstance(SystemLocale))
+        Collator.getInstance(SystemLocale)
             .apply {
                 this.strength = Collator.PRIMARY
                 (this as RuleBasedCollator).numericCollation = true
@@ -192,8 +187,7 @@ data class Preferences(
 
     @Transient
     val searchCollator =
-        (if (sortingLocale != null) Collator.getInstance(sortingLocale)
-            else Collator.getInstance(SystemLocale))
+        Collator.getInstance(SystemLocale)
             .apply { this.strength = Collator.PRIMARY }
             .freeze() as RuleBasedCollator
 }

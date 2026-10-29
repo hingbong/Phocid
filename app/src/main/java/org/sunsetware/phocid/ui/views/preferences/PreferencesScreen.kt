@@ -71,7 +71,6 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShapeLine
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.ShuffleOn
-import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.SpaceDashboard
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Swipe
@@ -110,7 +109,6 @@ import com.google.accompanist.permissions.rememberPermissionState
 import android.icu.number.Notation
 import android.icu.number.NumberFormatter
 import android.icu.number.Precision
-import android.icu.text.Collator
 import android.icu.text.ListFormatter
 import android.icu.util.MeasureUnit
 import java.io.File
@@ -629,23 +627,6 @@ private val HomeScreen =
                 options = LibraryTrackClickAction.entries,
                 value = { it.libraryTrackClickAction },
                 onSetValue = { preferences, new -> preferences.copy(libraryTrackClickAction = new) },
-            ),
-            Item.SingleChoice(
-                title = { Strings[R.string.preferences_sorting_language] },
-                itemName = {
-                    if (it == null) Strings[R.string.preferences_sorting_language_system]
-                    else "${it.displayName} (${it.toLanguageTag()})"
-                },
-                icon = Icons.Filled.SortByAlpha,
-                options =
-                    listOf(null) +
-                        Collator.getAvailableLocales()
-                            .sortedBy { it.toLanguageTag() }
-                            .filter { it.language != "zh" || it.country.isEmpty() },
-                value = { it.sortingLocale },
-                onSetValue = { preferences, new ->
-                    preferences.copy(sortingLocaleLanguageTag = new?.toLanguageTag())
-                },
             ),
         ),
     )
