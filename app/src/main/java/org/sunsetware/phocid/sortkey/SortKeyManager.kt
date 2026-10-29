@@ -90,7 +90,7 @@ class SortKeyManager(
                             SortKeyEntity(
                                 localUriKey = target.localUriKey,
                                 tagKey = target.tagCandidates.firstOrNull(),
-                                sortKey = desired,
+                                sortKey = desired!!,
                                 updatedAt = nowMillis,
                             )
                         )
@@ -106,7 +106,7 @@ class SortKeyManager(
                             existing.copy(
                                 localUriKey = target.localUriKey,
                                 tagKey = target.tagCandidates.firstOrNull(),
-                                sortKey = desired,
+                                sortKey = desired!!,
                                 updatedAt = nowMillis,
                             )
                         )

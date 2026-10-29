@@ -40,7 +40,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
-import android.icu.util.ULocale
 import java.lang.ref.WeakReference
 import java.net.URLConnection
 import java.util.Locale
@@ -96,7 +95,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
         val systemLocale = LocaleListCompat.getDefault().getFirstMatch(arrayOf(resourceLocaleTag))
         val locale =
             if (systemLocale?.language == resourceLocale.language) systemLocale else resourceLocale
-        ULocale.setDefault(ULocale.forLocale(locale))
+        Locale.setDefault(locale)
 
         super.onCreate(savedInstanceState)
 
