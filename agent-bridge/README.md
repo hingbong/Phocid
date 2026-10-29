@@ -63,6 +63,27 @@ The main app reports `apiVersion: 4`. `library_list_facets` requires API 2;
 `player_state` requires API 3; `library_update_sort_keys` requires API 4. Older
 main APKs return `unsupported_api`.
 
+## Sort keys
+
+`library_search_tracks` and `library_get_track` include `hasSortKey`.
+The opt-in write tool can set or clear the value:
+
+```json
+{
+  "items": [
+    { "libraryId": 123, "sortKey": "example" }
+  ],
+  "overwrite": false
+}
+```
+
+- `items` accepts 1..200 entries.
+- `sortKey: null` clears the existing value.
+- `overwrite` defaults to false; existing values are skipped.
+- The tool is hidden unless **Allow agent writes** is enabled.
+- It only writes the local `sort_keys` table; audio files, tags, and statistics
+  are never modified.
+
 ## Build
 
 ```bash
