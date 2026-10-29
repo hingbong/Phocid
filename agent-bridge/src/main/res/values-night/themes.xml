@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PhocidBridge" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bridge_window_background</item>
+        <item name="android:windowSplashScreenBackground">@color/bridge_window_background</item>
+        <item name="android:colorAccent">@color/bridge_accent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

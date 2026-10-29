@@ -9,27 +9,62 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+
+data class BridgeState(
+    val running: Boolean = false,
+    val starting: Boolean = false,
+    val host: String = BridgeEndpoint.DEFAULT_HOST,
+    val port: Int = BridgeEndpoint.DEFAULT_PORT,
+    val error: String? = null,
+)
 
 class BridgeService : Service() {
     companion object {
-        const val PORT = 8765
-
         private const val CHANNEL_ID = "phocid_agent_bridge"
         private const val NOTIFICATION_ID = 1
         private const val ACTION_STOP = "org.sunsetware.phocid.bridge.action.STOP"
+        private const val ACTION_RESTART = "org.sunsetware.phocid.bridge.action.RESTART"
 
-        @Volatile var isRunning = false
-            private set
-
-        @Volatile var lastError: String? = null
-            private set
+        private val _state = MutableStateFlow(BridgeState())
+        val state: StateFlow<BridgeState> = _state.asStateFlow()
 
         fun start(context: Context) {
-            lastError = null
-            context.startForegroundService(Intent(context, BridgeService::class.java))
+            _state.update { it.copy(error = null, starting = !it.running) }
+            try {
+                context.startForegroundService(Intent(context, BridgeService::class.java))
+            } catch (t: Throwable) {
+                _state.update {
+                    it.copy(
+                        running = false,
+                        starting = false,
+                        error = "Could not start the bridge: ${t.message ?: t.javaClass.simpleName}",
+                    )
+                }
+            }
+        }
+
+        fun restart(context: Context) {
+            _state.update { it.copy(error = null, starting = true) }
+            try {
+                context.startForegroundService(
+                    Intent(context, BridgeService::class.java).setAction(ACTION_RESTART)
+                )
+            } catch (t: Throwable) {
+                _state.update {
+                    it.copy(
+                        starting = false,
+                        error = "Could not restart the bridge: ${t.message ?: t.javaClass.simpleName}",
+                    )
+                }
+            }
         }
 
         fun stop(context: Context) {
+            _state.update { it.copy(running = false, starting = false, error = null) }
             context.stopService(Intent(context, BridgeService::class.java))
         }
     }
@@ -43,15 +78,30 @@ class BridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                _state.update { it.copy(running = false, starting = false, error = null) }
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_RESTART -> stopServer()
         }
+
         if (server != null) {
+            _state.update { it.copy(running = true, starting = false) }
             return START_STICKY
         }
 
-        lastError = null
+        val config = BridgeSettings.load(this)
+        _state.update {
+            it.copy(
+                running = false,
+                starting = true,
+                host = config.host,
+                port = config.port,
+                error = null,
+            )
+        }
         var instance: McpServer? = null
         try {
             startForeground(
@@ -61,19 +111,36 @@ class BridgeService : Service() {
             )
             val source = BinderPhocidDataSource(this)
             dataSource = source
-            instance = McpServer(PORT, { TokenStore.getOrCreate(this) }, source)
+            instance = McpServer(config.host, config.port, { TokenStore.getOrCreate(this) }, source)
             instance.start()
             server = instance
-            isRunning = true
-            updateNotification("Listening on http://127.0.0.1:" + PORT + "/mcp")
+            _state.update {
+                it.copy(
+                    running = true,
+                    starting = false,
+                    host = config.host,
+                    port = config.port,
+                    error = null,
+                )
+            }
+            updateNotification(notificationText(config))
             return START_STICKY
         } catch (t: Throwable) {
             instance?.stop()
             dataSource?.close()
             dataSource = null
-            lastError = t.message ?: t.javaClass.simpleName
-            isRunning = false
             server = null
+            _state.update {
+                it.copy(
+                    running = false,
+                    starting = false,
+                    host = config.host,
+                    port = config.port,
+                    error =
+                        "Cannot listen on ${config.host}:${config.port}: " +
+                            (t.message ?: t.javaClass.simpleName),
+                )
+            }
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
@@ -81,16 +148,30 @@ class BridgeService : Service() {
     }
 
     override fun onDestroy() {
-        server?.stop()
-        server = null
-        dataSource?.close()
-        dataSource = null
-        isRunning = false
+        stopServer()
+        _state.update { it.copy(running = false, starting = false) }
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun stopServer() {
+        server?.stop()
+        server = null
+        dataSource?.close()
+        dataSource = null
+        _state.update { it.copy(running = false) }
+    }
+
+    private fun notificationText(config: BridgeConfig): String {
+        val endpoint = BridgeEndpoint.httpUrl(config.host, config.port)
+        return if (BridgeEndpoint.isWildcard(config.host)) {
+            "Listening on $endpoint (all interfaces)"
+        } else {
+            "Listening on $endpoint"
+        }
+    }
 
     private fun createNotificationChannel() {
         val manager = getSystemService(NotificationManager::class.java)

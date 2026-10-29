@@ -25,11 +25,12 @@ import org.json.JSONObject
 /**
  * A deliberately small MCP server for the local OpenMinis HTTP transport.
  *
- * It only listens on 127.0.0.1. The peer is authenticated with a bearer token. The first version
- * exposes a single ping tool; real library and statistics tools are added after the transport is
- * verified against the agent app.
+ * The listen address defaults to 127.0.0.1 and can be changed in the bridge UI. The peer is
+ * authenticated with a bearer token. The first version exposes a single ping tool; real library
+ * and statistics tools are added after the transport is verified against the agent app.
  */
 class McpServer(
+    private val host: String,
     private val port: Int,
     private val tokenProvider: () -> String,
     private val dataSource: PhocidDataSource? = null,
@@ -41,13 +42,17 @@ class McpServer(
     private val executor = Executors.newCachedThreadPool()
     private var heartbeatThread: Thread? = null
     private var serverSocket: ServerSocket? = null
+    private var loopbackBind = false
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
         try {
+            require(BridgeEndpoint.isNumericHost(host)) { "Listen address must be an IP address" }
+            val address = InetAddress.getByName(host)
+            loopbackBind = address.isLoopbackAddress
             val socket = ServerSocket()
             socket.reuseAddress = true
-            socket.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port), 50)
+            socket.bind(InetSocketAddress(address, port), 50)
             serverSocket = socket
             startedAt.set(SystemClock.elapsedRealtime())
             Thread({ acceptLoop(socket) }, "mcp-accept").start()
@@ -133,10 +138,23 @@ class McpServer(
         }
 
         if (path == "/health" && request.method == "GET") {
+            if (!loopbackBind && !isAuthorized(request)) {
+                safeWrite(
+                    socket,
+                    401,
+                    "text/plain; charset=utf-8",
+                    "Unauthorized".toByteArray(StandardCharsets.UTF_8),
+                    mapOf("WWW-Authenticate" to "Bearer"),
+                )
+                return
+            }
             val body =
                 JSONObject()
                     .put("status", "ok")
+                    .put("host", host)
                     .put("port", port)
+                    .put("version", BuildConfig.VERSION_NAME)
+                    .put("commit", BuildConfig.BUILD_COMMIT.take(12))
                     .put("stateless", true)
                     .put("uptimeMs", SystemClock.elapsedRealtime() - startedAt.get())
                     .put("heartbeatCount", heartbeatCount.get())
@@ -300,7 +318,9 @@ class McpServer(
             )
             .put(
                 "serverInfo",
-                JSONObject().put("name", "phocid-agent-bridge").put("version", "0.3.2"),
+                JSONObject()
+                    .put("name", "phocid-agent-bridge")
+                    .put("version", BuildConfig.VERSION_NAME),
             )
     }
 

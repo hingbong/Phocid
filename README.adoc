@@ -45,8 +45,9 @@ If your problem is not covered by this page, you can create an https://github.co
 The main APK has no `INTERNET` permission and works entirely offline.
 The separate `agent-bridge` APK is an optional, read-only companion for
 on-device MCP clients. It exposes library metadata, playback statistics, and
-the current player state over `127.0.0.1`; it never controls playback, edits
-the library, or exposes file paths.
+the current player state over a local HTTP endpoint (loopback by default; the
+listen address and port are configurable in the bridge app); it never controls
+playback, edits the library, or exposes file paths.
 
 Both APKs must be signed with the same certificate because the main app
 protects its query service with a signature-level permission. See
@@ -63,7 +64,7 @@ The best metadata support library I could find is still buggy; I recommend using
 * Online services in the main player
 +
 The player itself never requests network access.
-The optional agent bridge is a separate APK and only listens on the loopback interface.
+The optional agent bridge is a separate APK; it listens on loopback by default, and its listen address and port are configurable.
 * Lock screen
 
 == Reporting a crash

@@ -69,7 +69,7 @@ jobs:
         run: |
           chmod +x gradlew
           set +e
-          ./gradlew --no-daemon --stacktrace --console=plain :app:customSetup :app:testDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/unit-test.log"
+          ./gradlew --no-daemon --stacktrace --console=plain :app:customSetup :app:testDebugUnitTest :agent-bridge:testDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           status=${PIPESTATUS[0]}
           exit $status
 
@@ -94,7 +94,7 @@ jobs:
 
       - name: Run Android Lint
         run: |
-          ./gradlew --no-daemon --stacktrace :app:lintDebug
+          ./gradlew --no-daemon --stacktrace :app:lintDebug :agent-bridge:lintDebug
 
       - name: Upload lint report
         if: always()
@@ -104,6 +104,8 @@ jobs:
           path: |
             app/build/reports/lint-results-debug.html
             app/build/reports/lint-results-debug.xml
+            agent-bridge/build/reports/lint-results-debug.html
+            agent-bridge/build/reports/lint-results-debug.xml
           if-no-files-found: warn
 
       - name: Build release APK

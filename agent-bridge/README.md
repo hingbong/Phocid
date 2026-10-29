@@ -1,7 +1,8 @@
 # Phocid Agent Bridge
 
 A small companion APK that exposes Phocid data to an on-device MCP client over a
-local-only HTTP endpoint.
+local HTTP endpoint. It listens on loopback by default; the listen address and
+port can be changed in the app.
 
 ## Why a separate APK
 
@@ -20,8 +21,10 @@ native integration; it only sees a standard MCP HTTP endpoint.
 It exposes:
 
 - `GET /health`
-  - `status`, `port`, `stateless`
+  - `status`, `host`, `port`, `version`, `commit`, `stateless`
   - `uptimeMs`, `heartbeatCount`, `heartbeatLagMs`
+  - The bearer token is required when the server is bound to a non-loopback
+    address.
 - `POST /mcp` (Streamable HTTP JSON-RPC)
 - `GET /mcp` (SSE stream, ping comments)
 - `DELETE /mcp` (session teardown)
@@ -67,29 +70,59 @@ The release build uses the same signing config as the main app. Both APKs must
 be signed with the same certificate before the Binder signature permission can
 work.
 
+The build embeds the app version, UTC build time, and Git commit. CI supplies
+`PHOCID_BUILD_COMMIT` and `PHOCID_BUILD_TIME`; local builds fall back to Git
+and the current UTC time. The About card displays all three values.
+
 ## Use
 
 1. Install `agent-bridge-release.apk`.
-2. Open **Phocid Agent Bridge** and tap **Start**.
-3. In OpenMinis, add an MCP server:
+2. Open **Phocid Agent Bridge**. The default listen address is
+   `127.0.0.1:8765`; change **Listen address** and **Port** if needed.
+3. Tap **Start server**. Changing the address or port while running uses
+   **Apply & restart**, which disconnects current MCP sessions.
+4. In OpenMinis, add an MCP server:
 
    - Name: `Phocid`
    - Type: `HTTP`
-   - URL: `http://127.0.0.1:8765/mcp`
+   - URL: the endpoint shown in the app, for example
+     `http://127.0.0.1:8765/mcp`
    - Header: `Authorization: Bearer <token>`
    - Authorization: `None`
    - Note: `Read-only Phocid library tags and playback statistics.`
 
-4. Keep the bridge foreground service running while the agent uses it.
-5. If the bridge is reported as "Optimized", open **Battery settings** and set
+5. Keep the bridge foreground service running while the agent uses it.
+6. If the bridge is reported as "Optimized", open **Battery settings** and set
    it to unrestricted. Some OEM ROMs freeze foreground services anyway; the
    heartbeat fields below make that visible after the fact.
 
+The **About** card shows the app version, build time, and short commit. The
+same version is reported by MCP `initialize` (`serverInfo.version`) and by
+`/health`.
+
+### Listen address notes
+
+- `127.0.0.1` (default): reachable only from the device.
+- `0.0.0.0`: all IPv4 interfaces. Other devices on the network can reach the
+  bridge; use the phone's LAN IP in the client, not `0.0.0.0`.
+- IPv6 literals such as `::1` and `::` are accepted. The app formats IPv6
+  URLs with brackets.
+- Only IPv4/IPv6 literals are accepted. `localhost` is normalized to
+  `127.0.0.1`; host names and URLs are rejected.
+- Ports must be in `1024-65535`. The default is `8765`.
+
 ## Debug with curl
+
+These examples use the default port `8765`. If you changed the port, replace
+it here. When the bridge is bound to a non-loopback address, `/health` also
+needs the bearer token.
 
 ```bash
 adb forward tcp:8765 tcp:8765
 curl -s http://127.0.0.1:8765/health
+
+# Only needed when the bridge is bound to a non-loopback address:
+curl -s -H "Authorization: Bearer <token>" http://127.0.0.1:8765/health
 
 curl -s \
   -H "Authorization: Bearer <token>" \
@@ -98,8 +131,9 @@ curl -s \
   http://127.0.0.1:8765/mcp
 ```
 
-The response should include `serverInfo.name = phocid-agent-bridge` and a
-`Mcp-Session-Id` response header.
+The response should include `serverInfo.name = phocid-agent-bridge`,
+`serverInfo.version` matching the app's About card, and a `Mcp-Session-Id`
+response header.
 
 ## Freeze diagnostics
 
@@ -119,9 +153,14 @@ frozen client from a frozen server.
 
 ## Security
 
-- The server binds only to `127.0.0.1`.
-- Every `/mcp` request requires the bearer token.
+- The default bind is `127.0.0.1`, which is reachable only from the device.
+- Binding to `0.0.0.0`, `::`, or a LAN IP exposes the server to the network.
+  Only do this on a trusted network.
+- Every `/mcp` request requires the bearer token. `/health` also requires it
+  when the server is bound to a non-loopback address.
 - The token is stored in the bridge's private SharedPreferences.
+- There is no TLS. The bearer token is sent in cleartext over HTTP; avoid
+  untrusted networks and untrusted proxies.
 - The bridge does not make outbound network requests.
 - The bridge is a separate UID; the main APK still has no `INTERNET` permission.
 
