@@ -45,12 +45,24 @@ class SortKeyRequestTest {
     }
 
     @Test
-    fun parse_tooManyItems_fails() {
+    fun parse_tooManyItems_truncates() {
         val array = JSONArray()
         repeat(SortKeyRequest.MAX_ITEMS + 1) { array.put(item(it.toLong() + 1, "x")) }
         val raw = JSONObject().put("items", array).toString()
-        assertThat(SortKeyRequest.parse(raw))
-            .isInstanceOf(SortKeyRequestResult.Failure::class.java)
+        val parsed = SortKeyRequest.parse(raw)
+        assertThat(parsed).isInstanceOf(SortKeyRequestResult.Ok::class.java)
+        val batch = (parsed as SortKeyRequestResult.Ok).batch
+        assertThat(batch.items).hasSize(SortKeyRequest.MAX_ITEMS)
+        assertThat(batch.truncated).isTrue()
+        assertThat(batch.remaining).isEqualTo(1)
+    }
+
+    @Test
+    fun parse_dryRun() {
+        val raw =
+            JSONObject().put("items", JSONArray().put(item(1, "x"))).put("dryRun", true).toString()
+        val batch = (SortKeyRequest.parse(raw) as SortKeyRequestResult.Ok).batch
+        assertThat(batch.dryRun).isTrue()
     }
 
     @Test

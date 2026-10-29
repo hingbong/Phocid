@@ -107,6 +107,7 @@ class AgentQueryService : Service() {
                 yearTo = request.optIntOrNull("yearTo"),
                 format = request.optString("format", "").trim(),
                 hasArtwork = request.optBooleanOrNull("hasArtwork"),
+                hasSortKey = request.optBooleanOrNull("hasSortKey"),
                 minDurationMs = request.optLongOrNull("minDurationMs"),
                 maxDurationMs = request.optLongOrNull("maxDurationMs"),
             )
@@ -474,12 +475,27 @@ class AgentQueryService : Service() {
                     overwrite = batch.overwrite,
                 )
         }
-        val result = runBlocking { GlobalData.sortKeyManager.apply(targets) }
+        val result = runBlocking { GlobalData.sortKeyManager.apply(targets, dryRun = batch.dryRun) }
         errors += result.errors.map { SortKeyItemError(it.libraryId, it.code, it.message) }
         return JSONObject()
+            .put("dryRun", batch.dryRun)
             .put("updated", result.updated)
             .put("cleared", result.cleared)
             .put("skipped", result.skipped)
+            .put("truncated", batch.truncated)
+            .put("remaining", batch.remaining)
+            .put(
+                "skippedItems",
+                JSONArray().apply {
+                    result.skippedItems.forEach { skipped ->
+                        put(
+                            JSONObject()
+                                .put("libraryId", skipped.libraryId)
+                                .put("reason", skipped.reason)
+                        )
+                    }
+                },
+            )
             .put(
                 "errors",
                 JSONArray().apply {
@@ -553,6 +569,7 @@ class AgentQueryService : Service() {
             .put("bitDepth", track.bitDepth)
             .put("hasArtwork", track.hasArtwork)
             .put("hasSortKey", track.sortKey != null)
+            .putNullable("sortKey", track.sortKey)
             .putNullable("comment", track.comment)
             .putNullable("unsyncedLyrics", track.unsyncedLyrics)
             .put("dateAdded", track.dateAdded)
@@ -624,6 +641,7 @@ class AgentQueryService : Service() {
         val yearTo: Int?,
         val format: String,
         val hasArtwork: Boolean?,
+        val hasSortKey: Boolean?,
         val minDurationMs: Long?,
         val maxDurationMs: Long?,
     ) {
@@ -670,6 +688,7 @@ class AgentQueryService : Service() {
                 return false
             }
             if (hasArtwork != null && track.hasArtwork != hasArtwork) return false
+            if (hasSortKey != null && (track.sortKey != null) != hasSortKey) return false
             val duration = track.duration.inWholeMilliseconds
             if (minDurationMs != null && duration < minDurationMs) return false
             if (maxDurationMs != null && duration > maxDurationMs) return false
@@ -706,6 +725,7 @@ class AgentQueryService : Service() {
                 "bitDepth",
                 "hasArtwork",
                 "hasSortKey",
+                "sortKey",
                 "comment",
                 "unsyncedLyrics",
                 "dateAdded",

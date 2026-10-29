@@ -85,6 +85,24 @@ class SortKeyDatabaseTest {
     }
 
     @Test
+    fun apply_dryRunDoesNotWrite() {
+        runBlocking {
+            val result = manager.apply(listOf(target("a", "tag", "one")), dryRun = true)
+            assertThat(result.updated).isEqualTo(1)
+            assertThat(db.sortKeyDao().findByLocalUriKey("a")).isNull()
+        }
+    }
+
+    @Test
+    fun apply_clearMissing_hasReason() {
+        runBlocking {
+            val result = manager.apply(listOf(target("a", "tag", null)), 1)
+            assertThat(result.skipped).isEqualTo(1)
+            assertThat(result.skippedItems.single().reason).isEqualTo("already_absent")
+        }
+    }
+
+    @Test
     fun apply_reusesUniqueTagRow() {
         runBlocking {
             manager.apply(listOf(target("old", "tag", "one")), 1)

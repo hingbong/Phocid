@@ -23,11 +23,14 @@ data class SortKeyApplyError(
     val message: String,
 )
 
+data class SortKeySkipped(val libraryId: Long, val reason: String)
+
 data class SortKeyApplyResult(
     val updated: Int,
     val cleared: Int,
     val skipped: Int,
     val errors: List<SortKeyApplyError>,
+    val skippedItems: List<SortKeySkipped>,
 )
 
 class SortKeyManager(
@@ -55,12 +58,14 @@ class SortKeyManager(
     suspend fun apply(
         targets: List<SortKeyTarget>,
         nowMillis: Long = System.currentTimeMillis(),
+        dryRun: Boolean = false,
     ): SortKeyApplyResult =
         database.withTransaction {
             var updated = 0
             var cleared = 0
             var skipped = 0
             val errors = mutableListOf<SortKeyApplyError>()
+            val skippedItems = mutableListOf<SortKeySkipped>()
 
             for (target in targets) {
                 val local = dao.findByLocalUriKey(target.localUriKey)
@@ -84,32 +89,42 @@ class SortKeyManager(
                 val existing = local ?: tagRows.singleOrNull()
                 val desired = target.sortKey
                 when {
-                    existing == null && desired == null -> skipped++
+                    existing == null && desired == null -> {
+                        skipped++
+                        skippedItems += SortKeySkipped(target.libraryId, "already_absent")
+                    }
                     existing == null -> {
-                        dao.insert(
-                            SortKeyEntity(
-                                localUriKey = target.localUriKey,
-                                tagKey = target.tagCandidates.firstOrNull(),
-                                sortKey = desired!!,
-                                updatedAt = nowMillis,
+                        if (!dryRun) {
+                            dao.insert(
+                                SortKeyEntity(
+                                    localUriKey = target.localUriKey,
+                                    tagKey = target.tagCandidates.firstOrNull(),
+                                    sortKey = desired!!,
+                                    updatedAt = nowMillis,
+                                )
                             )
-                        )
+                        }
                         updated++
                     }
                     desired == null -> {
-                        dao.delete(existing)
+                        if (!dryRun) dao.delete(existing)
                         cleared++
                     }
-                    !target.overwrite -> skipped++
+                    !target.overwrite -> {
+                        skipped++
+                        skippedItems += SortKeySkipped(target.libraryId, "existing_value")
+                    }
                     else -> {
-                        dao.update(
-                            existing.copy(
-                                localUriKey = target.localUriKey,
-                                tagKey = target.tagCandidates.firstOrNull(),
-                                sortKey = desired!!,
-                                updatedAt = nowMillis,
+                        if (!dryRun) {
+                            dao.update(
+                                existing.copy(
+                                    localUriKey = target.localUriKey,
+                                    tagKey = target.tagCandidates.firstOrNull(),
+                                    sortKey = desired!!,
+                                    updatedAt = nowMillis,
+                                )
                             )
-                        )
+                        }
                         updated++
                     }
                 }
@@ -120,6 +135,7 @@ class SortKeyManager(
                 cleared = cleared,
                 skipped = skipped,
                 errors = errors,
+                skippedItems = skippedItems,
             )
         }
 }

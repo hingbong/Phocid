@@ -397,11 +397,20 @@ class McpServer(
                 libraryIdSchema(),
             )
         )
+        if (canSortKeys()) {
+            tools.put(
+                tool(
+                    "library_validate_sort_keys",
+                    "Dry-run sort-key updates and report what would be rejected. Does not write anything.",
+                    sortKeysSchema(),
+                )
+            )
+        }
         if (canWrite()) {
             tools.put(
                 tool(
                     "library_update_sort_keys",
-                    "Set or clear phonetic sort keys for library titles. Does not modify audio files or tags.",
+                    "Set or clear sort keys for library titles. Does not modify audio files or tags.",
                     sortKeysSchema(),
                 )
             )
@@ -428,6 +437,13 @@ class McpServer(
                 dataResult(source?.statsDaily(args.optString("range", "30d")))
             "resolve_stats_uuid" ->
                 dataResult(source?.resolveStatsUuid(args.optLong("libraryId", -1L)))
+            "library_validate_sort_keys" ->
+                if (!canSortKeys()) {
+                    toolResult("The main app is too old for sort keys", isError = true)
+                } else {
+                    val request = JSONObject(args.toString()).put("dryRun", true)
+                    dataResult(source?.updateSortKeys(request.toString()))
+                }
             "library_update_sort_keys" ->
                 if (!canWrite()) {
                     toolResult("Writes are disabled or the main app is too old", isError = true)
@@ -438,8 +454,7 @@ class McpServer(
         }
     }
 
-    private fun canWrite(): Boolean {
-        if (!allowWrites) return false
+    private fun canSortKeys(): Boolean {
         val capabilities = dataSource?.capabilities() ?: return false
         return runCatching {
                 val json = JSONObject(capabilities)
@@ -447,6 +462,8 @@ class McpServer(
             }
             .getOrDefault(false)
     }
+
+    private fun canWrite(): Boolean = allowWrites && canSortKeys()
 
     private fun dataResult(value: String?): JSONObject {
         if (value == null) {
@@ -488,7 +505,11 @@ class McpServer(
                         JSONObject()
                             .put("type", "array")
                             .put("minItems", 1)
-                            .put("maxItems", 200)
+                            .put("maxItems", 1000)
+                            .put(
+                                "description",
+                                "Only the first 200 entries are processed; the response reports the remainder",
+                            )
                             .put(
                                 "items",
                                 JSONObject()
@@ -591,6 +612,7 @@ class McpServer(
                     .put("yearTo", integerProp("Maximum year"))
                     .put("format", stringProp("Container format, case-insensitive"))
                     .put("hasArtwork", booleanProp("Filter by embedded artwork"))
+                    .put("hasSortKey", booleanProp("Filter by presence of a sort key"))
                     .put("minDurationMs", integerProp("Minimum duration in milliseconds"))
                     .put("maxDurationMs", integerProp("Maximum duration in milliseconds"))
                     .put("sort", stringProp("title, artist, album, year, dateAdded, or duration"))

@@ -16,6 +16,9 @@ data class SortKeyBatch(
     val items: List<SortKeyItem>,
     val errors: List<SortKeyItemError>,
     val overwrite: Boolean,
+    val dryRun: Boolean,
+    val truncated: Boolean,
+    val remaining: Int,
 )
 
 sealed interface SortKeyRequestResult {
@@ -50,16 +53,12 @@ object SortKeyRequest {
                 "items must contain at least one entry",
             )
         }
-        if (array.length() > MAX_ITEMS) {
-            return SortKeyRequestResult.Failure(
-                "batch_too_large",
-                "At most $MAX_ITEMS entries are allowed",
-            )
-        }
+        val total = array.length()
+        val accepted = minOf(total, MAX_ITEMS)
 
         val items = mutableListOf<SortKeyItem>()
         val errors = mutableListOf<SortKeyItemError>()
-        for (index in 0 until array.length()) {
+        for (index in 0 until accepted) {
             val entry = array.optJSONObject(index)
             if (entry == null) {
                 errors +=
@@ -114,6 +113,9 @@ object SortKeyRequest {
                 items = items,
                 errors = errors,
                 overwrite = root.optBoolean("overwrite", false),
+                dryRun = root.optBoolean("dryRun", false),
+                truncated = total > accepted,
+                remaining = total - accepted,
             )
         )
     }

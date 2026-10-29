@@ -42,6 +42,7 @@ MCP tools:
 - `stats_daily`
 - `resolve_stats_uuid`
 - `player_state` (read-only, optional live position)
+- `library_validate_sort_keys` (dry-run; validates without writing)
 - `library_update_sort_keys` (opt-in; stores local sort keys only)
 
 The service uses `START_STICKY`, `stopWithTask=false`, an ongoing
@@ -60,13 +61,17 @@ sleep. It is not a Unix timestamp and not bridge process uptime; clients should
 use elapsed-time differences for interpolation.
 
 The main app reports `apiVersion: 4`. `library_list_facets` requires API 2;
-`player_state` requires API 3; `library_update_sort_keys` requires API 4. Older
-main APKs return `unsupported_api`.
+`player_state` requires API 3; `library_validate_sort_keys` and
+`library_update_sort_keys` require API 4. Older main APKs return
+`unsupported_api`.
 
 ## Sort keys
 
-`library_search_tracks` and `library_get_track` include `hasSortKey`.
-The opt-in write tool can set or clear the value:
+`library_search_tracks` and `library_get_track` return both `hasSortKey`
+and the current `sortKey` value. `library_search_tracks` also accepts a
+`hasSortKey` boolean filter.
+
+Set or clear values with `library_update_sort_keys`:
 
 ```json
 {
@@ -77,11 +82,16 @@ The opt-in write tool can set or clear the value:
 }
 ```
 
-- `items` accepts 1..200 entries.
+- `items` may contain more than 200 entries; only the first 200 are processed.
+- The response reports `truncated` and `remaining` when entries are left over.
 - `sortKey: null` clears the existing value.
 - `overwrite` defaults to false; existing values are skipped.
-- The tool is hidden unless **Allow agent writes** is enabled.
-- It only writes the local `sort_keys` table; audio files, tags, and statistics
+- `skippedItems` explains why a valid entry was skipped.
+- `library_validate_sort_keys` accepts the same request and returns the same
+  counts without writing anything.
+- The update tool is hidden unless **Allow agent writes** is enabled. The
+  validate tool only requires a compatible main app.
+- Only the local `sort_keys` table is written; audio files, tags, and statistics
   are never modified.
 
 ## Build
