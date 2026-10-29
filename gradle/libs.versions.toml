@@ -7,6 +7,7 @@ commonsIo = "2.22.0"
 coreSplashscreenVersion = "1.2.0"
 documentfile = "1.1.0"
 glanceAppwidget = "1.1.1"
+juniversalchardet = "2.5.0"
 junit = "4.13.2"
 kotlin = "2.4.21"
 coreKtx = "1.18.0"
@@ -62,6 +63,7 @@ androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-man
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 jaudiotagger = { group = "net.jthink", name = "jaudiotagger", version.ref = "jaudiotagger" }
+juniversalchardet = { module = "com.github.albfernandez:juniversalchardet", version.ref = "juniversalchardet" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-serialization-cbor = { module = "org.jetbrains.kotlinx:kotlinx-serialization-cbor", version.ref = "kotlinxSerializationCbor" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }

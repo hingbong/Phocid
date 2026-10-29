@@ -8,6 +8,7 @@ import android.icu.text.Normalizer2
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.util.Locale
+import org.mozilla.universalchardet.UniversalDetector
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
@@ -40,12 +41,12 @@ fun ByteArray.decodeWithCharsetName(charsetName: String?): String {
         return runCatching {
                 Charset.forName(charsetName).decode(ByteBuffer.wrap(this)).toString()
             }
-            .getOrElse { decodeUtf8WithBom() }
+            .getOrElse { decodeDetected() }
     }
-    return decodeUtf8WithBom()
+    return decodeDetected()
 }
 
-private fun ByteArray.decodeUtf8WithBom(): String {
+private fun ByteArray.decodeDetected(): String {
     if (
         size >= 3 &&
             this[0] == 0xEF.toByte() &&
@@ -60,7 +61,22 @@ private fun ByteArray.decodeUtf8WithBom(): String {
     if (size >= 2 && this[0] == 0xFF.toByte() && this[1] == 0xFE.toByte()) {
         return String(this, 2, size - 2, Charsets.UTF_16LE)
     }
-    return String(this, Charsets.UTF_8)
+
+    val detector = UniversalDetector()
+    return try {
+        detector.handleData(this, 0, size)
+        detector.dataEnd()
+        val detected = detector.detectedCharset
+        if (!detected.isNullOrBlank() && Charset.isSupported(detected)) {
+            Charset.forName(detected).decode(ByteBuffer.wrap(this)).toString()
+        } else {
+            String(this, Charsets.UTF_8)
+        }
+    } catch (_: Exception) {
+        String(this, Charsets.UTF_8)
+    } finally {
+        detector.reset()
+    }
 }
 
 fun Iterable<String>.distinctCaseInsensitive(): List<String> {

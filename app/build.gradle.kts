@@ -143,6 +143,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.jaudiotagger)
+    implementation(libs.juniversalchardet)
     implementation(libs.reorderable)
     ksp(libs.androidx.room.compiler)
     //noinspection UseTomlInstead
