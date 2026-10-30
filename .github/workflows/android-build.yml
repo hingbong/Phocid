@@ -159,7 +159,10 @@ jobs:
           PHOCID_BUILD_COMMIT: ${{ github.sha }}
         run: |
           export PHOCID_BUILD_TIME="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          ./gradlew --no-daemon --stacktrace :app:assembleRelease :agent-bridge:assembleRelease
+          # R8 needs more heap than the local/unit-test cap in gradle.properties.
+          ./gradlew --no-daemon --stacktrace \
+            -Dorg.gradle.jvmargs='-Xmx4g -XX:MaxMetaspaceSize=1g -XX:ReservedCodeCacheSize=256m -Dfile.encoding=UTF-8' \
+            :app:assembleRelease :agent-bridge:assembleRelease
 
       - name: Verify APK signatures
         env:
