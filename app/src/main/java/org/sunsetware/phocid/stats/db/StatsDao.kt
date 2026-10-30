@@ -211,7 +211,7 @@ interface TrackDailyDao {
                MAX(d.lastPlayedAt) AS lastPlayedAt
         FROM track_daily d
         JOIN tracks t ON t.id = d.trackRowId
-        WHERE d.epochDay >= :sinceDay
+        WHERE d.epochDay >= :sinceDay AND d.epochDay <= :untilDay
         GROUP BY d.trackRowId
         ORDER BY plays DESC, millis DESC
         LIMIT :limit
@@ -219,6 +219,7 @@ interface TrackDailyDao {
     )
     fun topTracksByPlays(
         sinceDay: Int,
+        untilDay: Int,
         limit: Int,
         localUriKind: Int,
     ): Flow<List<TrackAggregate>>
@@ -240,7 +241,7 @@ interface TrackDailyDao {
                MAX(d.lastPlayedAt) AS lastPlayedAt
         FROM track_daily d
         JOIN tracks t ON t.id = d.trackRowId
-        WHERE d.epochDay >= :sinceDay
+        WHERE d.epochDay >= :sinceDay AND d.epochDay <= :untilDay
         GROUP BY d.trackRowId
         ORDER BY millis DESC, plays DESC
         LIMIT :limit
@@ -248,6 +249,7 @@ interface TrackDailyDao {
     )
     fun topTracksByTime(
         sinceDay: Int,
+        untilDay: Int,
         limit: Int,
         localUriKind: Int,
     ): Flow<List<TrackAggregate>>
@@ -258,12 +260,12 @@ interface TrackDailyDao {
                SUM(playCount) AS plays,
                SUM(playedMillis) AS millis
         FROM track_daily
-        WHERE epochDay >= :sinceDay
+        WHERE epochDay >= :sinceDay AND epochDay <= :untilDay
         GROUP BY epochDay
         ORDER BY epochDay
         """
     )
-    fun dailyTrend(sinceDay: Int): Flow<List<DayBucket>>
+    fun dailyTrend(sinceDay: Int, untilDay: Int): Flow<List<DayBucket>>
 
     @Query(
         """
@@ -272,10 +274,10 @@ interface TrackDailyDao {
                COUNT(DISTINCT trackRowId) AS uniqueTracks,
                COUNT(DISTINCT epochDay) AS activeDays
         FROM track_daily
-        WHERE epochDay >= :sinceDay
+        WHERE epochDay >= :sinceDay AND epochDay <= :untilDay
         """
     )
-    fun summarySince(sinceDay: Int): Flow<RangeSummary>
+    fun summarySince(sinceDay: Int, untilDay: Int): Flow<RangeSummary>
 
     @Query(
         "SELECT DISTINCT epochDay FROM track_daily WHERE epochDay >= :sinceDay ORDER BY epochDay"

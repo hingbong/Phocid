@@ -122,17 +122,23 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
             }
         val tracksByTagKey =
             remember(libraryIndex) {
-                buildMap {
-                    libraryIndex.tracks.values.forEach { track ->
-                        TagKey.of(
-                                track.artists.joinToString(", "),
-                                track.album,
-                                track.title ?: track.fileName.substringBeforeLast('.'),
-                                track.duration.inWholeMilliseconds,
-                            )
-                            ?.let { put(it, track) }
-                    }
-                }
+                val trackIdsByTagKey =
+                    tagCandidateIndex(
+                        libraryIndex.tracks.values.map { track ->
+                            track.id to
+                                TagKey.candidates(
+                                    track.artists.joinToString(", "),
+                                    track.album,
+                                    track.title ?: track.fileName.substringBeforeLast('.'),
+                                    track.duration.inWholeMilliseconds,
+                                )
+                        }
+                    )
+                // Ambiguous keys are already omitted by the index. Resolve the surviving ids to
+                // the same Track objects the rest of the screen uses.
+                trackIdsByTagKey
+                    .mapNotNull { (key, id) -> libraryIndex.tracks[id]?.let { key to it } }
+                    .toMap()
             }
         val dateFormatter = remember { DateFormat.getInstance() }
 
@@ -306,13 +312,13 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                             val track =
                                 entry.localUriKey?.let { tracksByLocalUri[it] }
                                     ?: tracksByPath[entry.path]
-                                    ?: TagKey.of(
+                                    ?: TagKey.candidates(
                                             entry.artist,
                                             entry.album,
                                             entry.title,
                                             entry.durationMillis,
                                         )
-                                        ?.let { tracksByTagKey[it] }
+                                        .firstNotNullOfOrNull { tracksByTagKey[it] }
                             PlaybackStatisticsListItem(
                                 entry = entry,
                                 track = track,

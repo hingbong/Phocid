@@ -58,8 +58,8 @@ class StatsRepository(
     private val db: StatsDatabase,
     private val zoneId: () -> ZoneId = { ZoneId.systemDefault() },
 ) {
-    private fun sinceDay(range: StatsRange): Int =
-        range.startDate(LocalDate.now(zoneId()))?.toEpochDay()?.toInt() ?: 0
+    private fun sinceDay(range: StatsRange, today: LocalDate): Int =
+        range.startDate(today)?.toEpochDay()?.toInt() ?: 0
 
     private fun sinceMillis(range: StatsRange): Long =
         range
@@ -72,26 +72,41 @@ class StatsRepository(
         range: StatsRange,
         sort: StatsSort,
         limit: Int = 100,
-    ): Flow<List<TrackAggregate>> =
+    ): Flow<List<TrackAggregate>> {
         if (range.isAll) {
-            when (sort) {
+            return when (sort) {
                 StatsSort.PLAYS -> db.totalsDao().topTracksByPlays(limit, AliasKind.LOCAL_URI)
                 StatsSort.TIME -> db.totalsDao().topTracksByTime(limit, AliasKind.LOCAL_URI)
             }
-        } else {
-            val since = sinceDay(range)
-            when (sort) {
-                StatsSort.PLAYS -> db.dailyDao().topTracksByPlays(since, limit, AliasKind.LOCAL_URI)
-                StatsSort.TIME -> db.dailyDao().topTracksByTime(since, limit, AliasKind.LOCAL_URI)
-            }
         }
+        // Discrete ranges end at the target device's local today. A row can legitimately be ahead
+        // of it when a backup was imported from a timezone ahead of this one, but it does not
+        // belong to "the last N days" until that day actually starts here.
+        val today = LocalDate.now(zoneId())
+        val since = sinceDay(range, today)
+        val until = today.toEpochDay().toInt()
+        return when (sort) {
+            StatsSort.PLAYS ->
+                db.dailyDao().topTracksByPlays(since, until, limit, AliasKind.LOCAL_URI)
+            StatsSort.TIME ->
+                db.dailyDao().topTracksByTime(since, until, limit, AliasKind.LOCAL_URI)
+        }
+    }
 
-    fun summary(range: StatsRange): Flow<RangeSummary> =
-        if (range.isAll) db.totalsDao().summaryAll()
-        else db.dailyDao().summarySince(sinceDay(range))
+    fun summary(range: StatsRange): Flow<RangeSummary> {
+        // ALL is all imported history, not a bounded range: lifetime totals stay unbounded.
+        if (range.isAll) return db.totalsDao().summaryAll()
+        val today = LocalDate.now(zoneId())
+        return db.dailyDao().summarySince(sinceDay(range, today), today.toEpochDay().toInt())
+    }
 
-    fun dailyTrend(range: StatsRange): Flow<List<DayBucket>> =
-        db.dailyDao().dailyTrend(sinceDay(if (range.isAll) StatsRange.YEARS_3 else range))
+    fun dailyTrend(range: StatsRange): Flow<List<DayBucket>> {
+        // ALL still shows a trend, but intentionally only over the last three years. That window
+        // is a bounded range too, so it ends at today just like the explicit ranges.
+        val today = LocalDate.now(zoneId())
+        val window = if (range.isAll) StatsRange.YEARS_3 else range
+        return db.dailyDao().dailyTrend(sinceDay(window, today), today.toEpochDay().toInt())
+    }
 
     /** Reads play_events, so it starts from zero after restoring a backup. */
     fun hourlyDistribution(range: StatsRange): Flow<List<HourBucket>> {

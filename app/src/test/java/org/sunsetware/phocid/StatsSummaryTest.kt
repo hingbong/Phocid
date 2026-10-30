@@ -2,6 +2,7 @@ package org.sunsetware.phocid
 
 import androidx.room.Room
 import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
@@ -18,6 +19,7 @@ import org.sunsetware.phocid.stats.db.TrackEntity
 import org.sunsetware.phocid.stats.db.TrackTotalsEntity
 import org.sunsetware.phocid.stats.domain.StatsRange
 import org.sunsetware.phocid.stats.domain.StatsRepository
+import org.sunsetware.phocid.stats.domain.StatsSort
 
 @RunWith(RobolectricTestRunner::class)
 class StatsSummaryTest {
@@ -37,6 +39,42 @@ class StatsSummaryTest {
     @After
     fun tearDown() {
         db.close()
+    }
+
+    private fun repository() = StatsRepository(db, zoneId = { ZoneOffset.UTC })
+
+    private suspend fun insertDailyTrack(
+        uuid: String,
+        days: List<Int>,
+        playCount: Int = 1,
+        millis: Long = 60_000,
+    ): Long {
+        val row =
+            db.trackDao()
+                .insert(
+                    TrackEntity(
+                        uuid = uuid,
+                        title = uuid,
+                        artist = "Artist",
+                        album = "Album",
+                        durationMillis = 180_000,
+                        path = "",
+                        createdAt = 1,
+                    )
+                )
+        db.dailyDao()
+            .insertAll(
+                days.map { day ->
+                    TrackDailyEntity(
+                        trackRowId = row,
+                        epochDay = day,
+                        playCount = playCount,
+                        playedMillis = millis,
+                        lastPlayedAt = day.toLong(),
+                    )
+                }
+            )
+        return row
     }
 
     @Test
@@ -112,5 +150,54 @@ class StatsSummaryTest {
             db.activeDayDao().insertAll(days)
 
             assertThat(StatsRepository(db).currentStreak()).isEqualTo(1_200)
+        }
+
+    @Test
+    fun rangeSummaryExcludesDaysAfterLocalToday() =
+        runBlocking<Unit> {
+            val today = LocalDate.now(ZoneOffset.UTC).toEpochDay().toInt()
+            insertDailyTrack("track", listOf(today, today + 1), playCount = 2, millis = 120_000)
+
+            val summary = repository().summary(StatsRange.DAYS_7).first()
+
+            assertThat(summary.plays).isEqualTo(2)
+            assertThat(summary.millis).isEqualTo(120_000)
+            assertThat(summary.activeDays).isEqualTo(1)
+        }
+
+    @Test
+    fun topTracksExcludeDaysAfterLocalToday() =
+        runBlocking<Unit> {
+            val today = LocalDate.now(ZoneOffset.UTC).toEpochDay().toInt()
+            val todayRow = insertDailyTrack("today", listOf(today))
+            insertDailyTrack("future", listOf(today + 1))
+
+            val entries = repository().topTracks(StatsRange.DAYS_7, StatsSort.PLAYS).first()
+
+            assertThat(entries.map { it.trackRowId }).containsExactly(todayRow)
+        }
+
+    @Test
+    fun dailyTrendForAllStillExcludesDaysAfterLocalToday() =
+        runBlocking<Unit> {
+            val today = LocalDate.now(ZoneOffset.UTC).toEpochDay().toInt()
+            insertDailyTrack("track", listOf(today - 1, today, today + 1))
+
+            val days = repository().dailyTrend(StatsRange.ALL).first()
+
+            assertThat(days.map { it.epochDay }).containsExactly(today - 1, today)
+        }
+
+    @Test
+    fun allTimeSummaryStillCountsActiveDaysInTheTargetFuture() =
+        runBlocking<Unit> {
+            val today = LocalDate.now(ZoneOffset.UTC).toEpochDay().toInt()
+            db.activeDayDao().insertAll(listOf(ActiveDayEntity(today), ActiveDayEntity(today + 1)))
+
+            val summary = repository().summary(StatsRange.ALL).first()
+
+            // active_days is lifetime history and may legitimately hold days ahead of this
+            // device after a cross-timezone restore. ALL must not hide them.
+            assertThat(summary.activeDays).isEqualTo(2)
         }
 }
