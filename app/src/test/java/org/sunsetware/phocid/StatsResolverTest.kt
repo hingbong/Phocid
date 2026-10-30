@@ -392,6 +392,68 @@ class StatsResolverTest {
         }
 
     @Test
+    fun differentHashOnSameTagCreatesNewRowAndIsNotMergedLater() =
+        runBlocking<Unit> {
+            val resolver = resolver { m -> if (m.modified == 1L) "old-hash" else "new-hash" }
+            val oldMeta = meta(modified = 1)
+            val newMeta = meta(modified = 2)
+            val first = resolver.resolve(oldMeta)
+            db.totalsDao().accumulate(first, 2, 500, 10)
+
+            val second = resolver.resolve(newMeta)
+
+            // The tag clue points at the old row, but that row already proves it holds different
+            // audio. The new hash must get its own row instead of becoming a no-op alias.
+            assertThat(second).isNotEqualTo(first)
+            assertThat(db.trackDao().byRowId(first)!!.title).isEqualTo("Song")
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "old-hash")).isEqualTo(first)
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "new-hash")).isEqualTo(second)
+            assertThat(db.aliasDao().aliasesOf(first)).allMatch { it.trackRowId == first }
+
+            // A repeated resolve now has a hash hit for the new row. It must not merge the old
+            // hash row into it just because the tag clue still points there.
+            val repeated = resolver.resolve(newMeta)
+
+            assertThat(repeated).isEqualTo(second)
+            assertThat(db.trackDao().byRowId(first)).isNotNull()
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "old-hash")).isEqualTo(first)
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "new-hash")).isEqualTo(second)
+            assertThat(db.totalsDao().byRowId(first)!!.totalCount).isEqualTo(2)
+        }
+
+    @Test
+    fun differentHashOnSameRelativePathCreatesNewRowAndIsNotMergedLater() =
+        runBlocking<Unit> {
+            val file = temporaryFolder.newFile("Song.flac")
+            val relPath = RelPathKey.of(file.absolutePath, emptyList())
+            val resolver = resolver { m -> if (m.modified == 1L) "old-hash" else "new-hash" }
+            val oldMeta =
+                noIdentityMeta("content://media/external/audio/media/21", 1).copy(file = file)
+            val newMeta =
+                noIdentityMeta("content://media/external/audio/media/22", 2).copy(file = file)
+            val first = resolver.resolve(oldMeta)
+            db.totalsDao().accumulate(first, 3, 700, 10)
+
+            val second = resolver.resolve(newMeta)
+
+            // The relative-path clue points at the old row, but that row owns another hash.
+            assertThat(second).isNotEqualTo(first)
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "old-hash")).isEqualTo(first)
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "new-hash")).isEqualTo(second)
+            assertThat(db.aliasDao().resolve(AliasKind.REL_PATH, relPath)).isEqualTo(first)
+
+            // The repeat resolve has a hash hit for the new row; the old hash row must survive.
+            val repeated = resolver.resolve(newMeta)
+
+            assertThat(repeated).isEqualTo(second)
+            assertThat(db.trackDao().byRowId(first)).isNotNull()
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "old-hash")).isEqualTo(first)
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "new-hash")).isEqualTo(second)
+            assertThat(db.aliasDao().resolve(AliasKind.REL_PATH, relPath)).isEqualTo(first)
+            assertThat(db.totalsDao().byRowId(first)!!.totalCount).isEqualTo(3)
+        }
+
+    @Test
     fun conflictingLocalUriAliasIsNotStolen() =
         runBlocking<Unit> {
             var fingerprint: String? = null

@@ -169,6 +169,20 @@ data class TrackTotalsEntity(
     val lastPlayedAt: Long,
 )
 
+/**
+ * Durable outbox for playback time that could not be attributed to a track row when the process
+ * shut down. Each row holds one CBOR-encoded pending session snapshot; it is deleted in the same
+ * Room transaction that applies its aggregates to the stats tables.
+ *
+ * Outbox rows are process-local recovery state and are never part of a backup.
+ */
+@Entity(tableName = "playback_outbox")
+data class PlaybackOutboxEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val payload: ByteArray,
+    val createdAt: Long,
+)
+
 /** Local cache for audio hashes. Derived data, never included in backups. */
 @Entity(tableName = "fingerprint_cache")
 data class FingerprintCacheEntity(

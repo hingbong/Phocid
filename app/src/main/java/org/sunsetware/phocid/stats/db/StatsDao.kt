@@ -439,6 +439,21 @@ interface TrackTotalsDao {
     @Query("DELETE FROM track_totals") suspend fun clear()
 }
 
+/** Durable shutdown outbox. The row is deleted atomically with the aggregates it carries. */
+@Dao
+interface PlaybackOutboxDao {
+    @Insert suspend fun insert(row: PlaybackOutboxEntity): Long
+
+    @Query("SELECT * FROM playback_outbox ORDER BY id") suspend fun all(): List<PlaybackOutboxEntity>
+
+    @Query("SELECT COUNT(*) FROM playback_outbox WHERE id = :id")
+    suspend fun countById(id: Long): Int
+
+    @Query("DELETE FROM playback_outbox WHERE id = :id") suspend fun delete(id: Long)
+
+    @Query("DELETE FROM playback_outbox") suspend fun clear()
+}
+
 @Dao
 interface FingerprintCacheDao {
     @Query(

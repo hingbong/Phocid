@@ -28,7 +28,6 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
     private var attempt: BindAttempt? = null
 
     @Volatile private var query: IPhocidQuery? = null
-    @Volatile private var apiVersion: Int? = null
     @Volatile private var lastFailure = BindFailure.NONE
 
     private enum class BindFailure {
@@ -74,9 +73,6 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         if (!retry.isCurrent(current.generation)) return null
         return QuerySession(service, current.generation)
     }
-
-    private fun isCurrentSessionLocked(session: QuerySession): Boolean =
-        isCurrentQuery(query, session.service, retry, session.generation)
 
     private fun ensureQuery(): QuerySession? {
         currentSession()?.let {
@@ -167,7 +163,6 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
                         retry.state == BinderConnectionState.BOUND)
             ) {
                 query = IPhocidQuery.Stub.asInterface(service)
-                apiVersion = null
                 lastFailure = BindFailure.NONE
                 retry.markBound(attempt.generation)
                 attempt.latch.countDown()
@@ -197,7 +192,6 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
                 retry.markFailed(attempt.generation)
                 this.attempt = null
                 query = null
-                apiVersion = null
                 lastFailure = failure
                 attempt.latch.countDown()
                 shouldUnbind = unbind
@@ -211,7 +205,6 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         synchronized(lock) {
             if (query !== service) return
             query = null
-            apiVersion = null
             val current = attempt
             if (current != null && retry.isCurrent(current.generation)) {
                 retry.markFailed(current.generation)
@@ -224,20 +217,7 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         stale?.let { runCatching { appContext.unbindService(it) } }
     }
 
-    override fun capabilities(): String {
-        val call = callWithSession { it.service.capabilities() }
-        val session = call.session
-        if (!hasError(call.result) && session != null) {
-            val version =
-                runCatching { JSONObject(call.result).optInt("apiVersion", 1) }.getOrNull()
-            if (version != null) {
-                synchronized(lock) {
-                    if (isCurrentSessionLocked(session)) apiVersion = version
-                }
-            }
-        }
-        return call.result
-    }
+    override fun capabilities(): String = callWithSession { it.service.capabilities() }.result
 
     override fun searchTracks(requestJson: String): String = call { it.searchTracks(requestJson) }
 
@@ -261,32 +241,6 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
     override fun updateSortKeys(requestJson: String): String =
         call(requiredApi = 4) { it.updateSortKeys(requestJson) }
 
-    private fun supports(requiredApi: Int): Boolean {
-        synchronized(lock) {
-            apiVersion?.let { cached ->
-                if (cached >= requiredApi) return true
-                apiVersion = null
-            }
-        }
-        val session = ensureQuery() ?: return false
-        val version =
-            try {
-                JSONObject(session.service.capabilities()).optInt("apiVersion", 1)
-            } catch (_: RemoteException) {
-                invalidateQuery(session.service, BindFailure.REMOTE)
-                return false
-            } catch (_: SecurityException) {
-                invalidateQuery(session.service, BindFailure.PERMISSION)
-                return false
-            } catch (_: Exception) {
-                return false
-            }
-        synchronized(lock) {
-            if (isCurrentSessionLocked(session)) apiVersion = version
-        }
-        return version >= requiredApi
-    }
-
     private fun call(requiredApi: Int = 1, block: (IPhocidQuery) -> String): String =
         callWithSession(requiredApi) { block(it.service) }.result
 
@@ -294,30 +248,80 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         requiredApi: Int = 1,
         block: (QuerySession) -> String,
     ): CallResult {
-        if (requiredApi > 1 && !supports(requiredApi)) {
-            return CallResult(
-                null,
-                errorJson(
-                    "unsupported_api",
-                    "Phocid main app is too old; update it to use this tool",
-                ),
-            )
+        var staleDecisions = 0
+        while (true) {
+            val session = ensureQuery() ?: return CallResult(null, unavailableError())
+            val version =
+                if (requiredApi > 1) {
+                    queryApiVersion(session)
+                        ?: return CallResult(
+                            session,
+                            errorJson(
+                                "phocid_error",
+                                "Phocid data service did not report its API version",
+                            ),
+                        )
+                } else {
+                    MIN_API_VERSION
+                }
+            val decision =
+                synchronized(lock) {
+                    decideApiVersion(
+                        requiredApi,
+                        version,
+                        session.service,
+                        session.generation,
+                        query,
+                        retry,
+                    )
+                }
+            when (decision) {
+                ApiDecision.ALLOWED -> return invokeSession(session, block)
+                ApiDecision.UNSUPPORTED ->
+                    return CallResult(
+                        null,
+                        errorJson(
+                            "unsupported_api",
+                            "Phocid main app is too old; update it to use this tool",
+                        ),
+                    )
+                ApiDecision.STALE_SESSION -> {
+                    // The capability answer came from a session that has since been replaced.
+                    // Discard it and evaluate against the session that is current now.
+                    if (staleDecisions >= MAX_STALE_DECISION_RETRIES) {
+                        return CallResult(
+                            null,
+                            errorJson(
+                                "phocid_unavailable",
+                                "Phocid data service kept changing during the call",
+                            ),
+                        )
+                    }
+                    staleDecisions += 1
+                }
+            }
         }
-        val session = ensureQuery()
-        if (session == null) {
-            return CallResult(
-                null,
-                errorJson(
-                    "phocid_unavailable",
-                    if (lastFailure == BindFailure.BIND_REJECTED) {
-                        "Phocid data service is not installed or is too old"
-                    } else {
-                        "Phocid data service did not connect"
-                    },
-                ),
-            )
+    }
+
+    /** Probes the exact session that is about to run the call; never a cross-session cache. */
+    private fun queryApiVersion(session: QuerySession): Int? =
+        try {
+            JSONObject(session.service.capabilities()).optInt("apiVersion", MIN_API_VERSION)
+        } catch (_: RemoteException) {
+            invalidateQuery(session.service, BindFailure.REMOTE)
+            null
+        } catch (_: SecurityException) {
+            invalidateQuery(session.service, BindFailure.PERMISSION)
+            null
+        } catch (_: Exception) {
+            null
         }
-        return try {
+
+    private fun invokeSession(
+        session: QuerySession,
+        block: (QuerySession) -> String,
+    ): CallResult =
+        try {
             CallResult(session, block(session))
         } catch (e: RemoteException) {
             invalidateQuery(session.service, BindFailure.REMOTE)
@@ -331,7 +335,16 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         } catch (e: Exception) {
             CallResult(session, errorJson("phocid_error", e.message ?: e.javaClass.simpleName))
         }
-    }
+
+    private fun unavailableError(): String =
+        errorJson(
+            "phocid_unavailable",
+            if (lastFailure == BindFailure.BIND_REJECTED) {
+                "Phocid data service is not installed or is too old"
+            } else {
+                "Phocid data service did not connect"
+            },
+        )
 
     override fun close() {
         var current: BindAttempt? = null
@@ -340,16 +353,11 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
             current = attempt
             attempt = null
             query = null
-            apiVersion = null
             retry.close()
             current?.latch?.countDown()
         }
         current?.let { runCatching { appContext.unbindService(it) } }
     }
-
-    private fun hasError(value: String): Boolean = runCatching {
-        JSONObject(value).has("error")
-    }.getOrDefault(false)
 
     private fun errorJson(code: String, message: String): String =
         JSONObject().put("error", JSONObject().put("code", code).put("message", message)).toString()
@@ -359,12 +367,15 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         private const val SERVICE_CLASS = "org.sunsetware.phocid.agent.AgentQueryService"
         private const val BIND_TIMEOUT_MS = 1_500L
         private const val BIND_COOLDOWN_MS = 1_000L
+        private const val MIN_API_VERSION = 1
+        private const val MAX_STALE_DECISION_RETRIES = 3
     }
 }
 
 /**
- * Whether a result read through [service] from bind [generation] may still be cached. A service
- * that was replaced, or a generation that a newer attempt superseded, must not write the cache.
+ * Whether a result read through [service] from bind [generation] still describes the current
+ * connection. A service that was replaced, or a generation that a newer attempt superseded, must
+ * not have its earlier observations trusted.
  */
 internal fun isCurrentQuery(
     connected: IPhocidQuery?,
@@ -375,3 +386,49 @@ internal fun isCurrentQuery(
     connected === service &&
         retry.state == BinderConnectionState.BOUND &&
         retry.isCurrent(generation)
+
+/** The outcome of checking a session's reported API version against a call's requirement. */
+internal enum class ApiDecision {
+    ALLOWED,
+    UNSUPPORTED,
+    STALE_SESSION,
+}
+
+/**
+ * Whether an API-version answer queried from [service] at [generation] is still authoritative for
+ * the session a call would run on. A reconnected or replaced service has a new generation, so its
+ * predecessor's capability answer must not gate the new call.
+ */
+internal fun isQueriedVersionAuthoritative(
+    service: IPhocidQuery,
+    generation: Long,
+    connected: IPhocidQuery?,
+    retry: BinderRetryState,
+): Boolean = isCurrentQuery(connected, service, retry, generation)
+
+/**
+ * Decides whether a call requiring [requiredApi] may run, using only the capability answer
+ * [queriedVersion] that was read from [service] at [generation].
+ *
+ * [ApiDecision.STALE_SESSION] means the session changed while its capabilities were being queried,
+ * so the caller must re-evaluate against the session that is current now; the stale answer must
+ * neither authorize nor reject the call. Calls with [requiredApi] <= 1 need no capability probe,
+ * but their session is still fenced the same way.
+ */
+internal fun decideApiVersion(
+    requiredApi: Int,
+    queriedVersion: Int,
+    service: IPhocidQuery,
+    generation: Long,
+    connected: IPhocidQuery?,
+    retry: BinderRetryState,
+): ApiDecision {
+    if (!isQueriedVersionAuthoritative(service, generation, connected, retry)) {
+        return ApiDecision.STALE_SESSION
+    }
+    return if (requiredApi <= 1 || queriedVersion >= requiredApi) {
+        ApiDecision.ALLOWED
+    } else {
+        ApiDecision.UNSUPPORTED
+    }
+}

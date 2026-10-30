@@ -18,8 +18,9 @@ import java.io.File
             TrackTotalsEntity::class,
             ActiveDayEntity::class,
             FingerprintCacheEntity::class,
+            PlaybackOutboxEntity::class,
         ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class StatsDatabase : RoomDatabase() {
@@ -36,6 +37,8 @@ abstract class StatsDatabase : RoomDatabase() {
     abstract fun activeDayDao(): ActiveDayDao
 
     abstract fun fingerprintCacheDao(): FingerprintCacheDao
+
+    abstract fun outboxDao(): PlaybackOutboxDao
 
     abstract fun maintenanceDao(): StatsMaintenanceDao
 
@@ -58,6 +61,22 @@ abstract class StatsDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * 2 -> 3 adds the durable shutdown outbox. It is local recovery state, so it is not
+         * backfilled and is deliberately not included in backups.
+         */
+        internal val MIGRATION_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS playback_outbox (" +
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "payload BLOB NOT NULL, " +
+                            "createdAt INTEGER NOT NULL)"
+                    )
+                }
+            }
+
         @Volatile private var instance: StatsDatabase? = null
 
         fun get(context: Context): StatsDatabase =
@@ -69,7 +88,7 @@ abstract class StatsDatabase : RoomDatabase() {
         private fun build(context: Context): StatsDatabase =
             Room.databaseBuilder(context, StatsDatabase::class.java, NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .addCallback(
                     object : Callback() {

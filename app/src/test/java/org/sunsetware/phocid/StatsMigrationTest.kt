@@ -65,6 +65,28 @@ class StatsMigrationTest {
         assertThat(activeDays(db)).isEmpty()
     }
 
+    @Test
+    fun migration2To3CreatesEmptyPlaybackOutboxTable() {
+        val db = helper.writableDatabase
+
+        StatsDatabase.MIGRATION_2_3.migrate(db)
+
+        db.query("SELECT COUNT(*) FROM playback_outbox").use { cursor ->
+            assertThat(cursor.moveToFirst()).isTrue()
+            assertThat(cursor.getInt(0)).isEqualTo(0)
+        }
+
+        // The migration must create a usable table with the Room-declared columns, including an
+        // auto-generated id, the CBOR blob and the insertion timestamp.
+        db.execSQL("INSERT INTO playback_outbox (payload, createdAt) VALUES (X'0102', 123)")
+        db.query("SELECT id, payload, createdAt FROM playback_outbox").use { cursor ->
+            assertThat(cursor.moveToFirst()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(1L)
+            assertThat(cursor.getBlob(1)).containsExactly(1.toByte(), 2.toByte())
+            assertThat(cursor.getLong(2)).isEqualTo(123L)
+        }
+    }
+
     private fun activeDays(db: SupportSQLiteDatabase): List<Int> =
         db.query("SELECT epochDay FROM active_days ORDER BY epochDay").use { cursor ->
             buildList { while (cursor.moveToNext()) add(cursor.getInt(0)) }

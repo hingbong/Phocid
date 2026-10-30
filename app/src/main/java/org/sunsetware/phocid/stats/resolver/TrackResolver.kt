@@ -81,14 +81,22 @@ class TrackResolver(
         val ambiguousKey = if (tagHits.size > 1) ambiguousTagKey(tagKeys) else null
         val ambiguousHit = ambiguousKey?.let { aliases.resolve(AliasKind.AMBIGUOUS_TAG, it) }
 
-        val winner =
+        // A weak clue may select a row only when that row does not already prove it holds other
+        // audio. Otherwise the current hash would be inserted with IGNORE against a row owned by
+        // a different audio and silently write the new audio into the old track.
+        val weakWinner =
             when {
-                hashHit != null -> hashHit
                 tagHits.size == 1 -> tagHits.single()
                 // Ambiguous tags are safer as a dedicated row than as a guess between rows. Reuse
                 // that row when the same conflict is seen again instead of splitting every time.
                 tagHits.size > 1 -> ambiguousHit
                 relHit != null -> relHit
+                else -> null
+            }
+        val winner =
+            when {
+                hashHit != null -> hashHit
+                weakWinner != null && !ownsConflictingHash(weakWinner, hash) -> weakWinner
                 else -> null
             }
 
@@ -99,8 +107,11 @@ class TrackResolver(
             weakRows.addAll(tagHits)
             relHit?.let { weakRows.add(it) }
             weakRows.remove(hashHit)
-            if (weakRows.size == 1) {
-                mergeTracks(loser = weakRows.single(), winner = hashHit)
+            val weakRow = weakRows.singleOrNull()
+            // A row that already owns another audio hash is a separate track, not a weak duplicate
+            // of this one. Merging it would steal that identity on every repeated resolve.
+            if (weakRow != null && !ownsConflictingHash(weakRow, hash)) {
+                mergeTracks(loser = weakRow, winner = hashHit)
                 // The merge repoints the loser's aliases, including a matching local URI hint.
                 localHit = aliases.resolve(AliasKind.LOCAL_URI, localUriKey)
             }
@@ -145,6 +156,14 @@ class TrackResolver(
             aliases.insertIgnore(TrackAliasEntity(AliasKind.REL_PATH, it, rowId))
         }
         return rowId
+    }
+
+    /** True when [rowId] already owns an AUDIO_HASH alias for audio other than [hash]. */
+    private suspend fun ownsConflictingHash(rowId: Long, hash: String?): Boolean {
+        if (hash == null) return false
+        return db.aliasDao().aliasesOf(rowId).any {
+            it.kind == AliasKind.AUDIO_HASH && it.value != hash
+        }
     }
 
     private suspend fun createTrack(meta: TrackMeta): Long =

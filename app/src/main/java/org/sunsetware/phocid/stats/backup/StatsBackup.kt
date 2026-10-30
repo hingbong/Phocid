@@ -235,6 +235,9 @@ class StatsBackupManager(
                 }
 
                 if (replace) {
+                    // A replacement owns the whole local aggregate set, so pending recovery rows
+                    // that described it are no longer meaningful and must not be replayed.
+                    db.outboxDao().clear()
                     db.eventDao().clear()
                     db.dailyDao().clear()
                     db.totalsDao().clear()
@@ -431,6 +434,9 @@ class StatsBackupManager(
     suspend fun clear() =
         withContext(Dispatchers.IO) {
             db.withTransaction {
+                // Pending outbox time belongs to the aggregate set being cleared, so it goes in the
+                // same transaction. A later recovery must not resurrect data the user deleted.
+                db.outboxDao().clear()
                 db.eventDao().clear()
                 db.dailyDao().clear()
                 db.totalsDao().clear()
