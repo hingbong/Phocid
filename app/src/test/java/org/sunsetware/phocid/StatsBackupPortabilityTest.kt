@@ -3,7 +3,11 @@ package org.sunsetware.phocid
 import androidx.room.Room
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.cbor.Cbor
+import kotlinx.serialization.encodeToByteArray
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.After
@@ -18,6 +22,7 @@ import org.sunsetware.phocid.stats.backup.BackupTotals
 import org.sunsetware.phocid.stats.backup.BackupTrack
 import org.sunsetware.phocid.stats.backup.StatsBackup
 import org.sunsetware.phocid.stats.backup.StatsBackupManager
+import org.sunsetware.phocid.stats.db.ActiveDayEntity
 import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.TrackAliasEntity
@@ -123,14 +128,18 @@ class StatsBackupPortabilityTest {
         aliases: List<BackupAlias> = emptyList(),
         totals: List<BackupTotals> = emptyList(),
         daily: List<BackupDaily> = emptyList(),
+        activeDays: List<Int> = emptyList(),
+        version: Int = StatsBackup.VERSION,
     ) =
         StatsBackup(
+            version = version,
             exportedAt = 0,
             zoneId = "UTC",
             tracks = tracks,
             aliases = aliases,
             totals = totals,
             daily = daily,
+            activeDays = activeDays,
         )
 
     private fun countRows(table: String): Int =
@@ -138,6 +147,24 @@ class StatsBackupPortabilityTest {
             cursor.moveToFirst()
             cursor.getInt(0)
         }
+
+    private fun storedActiveDays(): List<Int> =
+        db.openHelper.readableDatabase
+            .query("SELECT epochDay FROM active_days ORDER BY epochDay")
+            .use { cursor ->
+                buildList { while (cursor.moveToNext()) add(cursor.getInt(0)) }
+            }
+
+    /** A version 1 payload has no activeDays key; the CBOR encoder omits the default value. */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun version1Bytes(payload: StatsBackup): ByteArray {
+        val out = ByteArrayOutputStream()
+        GZIPOutputStream(out).use { gzip ->
+            gzip.write(StatsBackup.MAGIC.toByteArray(Charsets.US_ASCII))
+            gzip.write(Cbor { ignoreUnknownKeys = true }.encodeToByteArray(payload))
+        }
+        return out.toByteArray()
+    }
 
     @Test
     fun exportOmitsLocalUriAlias() =
@@ -433,5 +460,76 @@ class StatsBackupPortabilityTest {
             assertThat(countRows("tracks")).isEqualTo(1)
             assertThat(db.trackDao().rowIdOfUuid("uuid-1")).isEqualTo(row)
             assertThat(db.totalsDao().byRowId(row)!!.totalCount).isEqualTo(2)
+        }
+
+    @Test
+    fun exportRoundTripsActiveDays() =
+        runBlocking<Unit> {
+            seed(db)
+            db.activeDayDao()
+                .insertAll(
+                    listOf(
+                        ActiveDayEntity(19_500),
+                        ActiveDayEntity(20_000),
+                        ActiveDayEntity(20_001),
+                    )
+                )
+            val out = ByteArrayOutputStream()
+            StatsBackupManager(db).export(out)
+            val payload = StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray()))
+
+            assertThat(payload.version).isEqualTo(2)
+            assertThat(payload.activeDays).containsExactly(19_500, 20_000, 20_001)
+
+            StatsBackupManager(db).restore(payload, replace = true)
+
+            assertThat(storedActiveDays()).containsExactly(19_500, 20_000, 20_001)
+        }
+
+    @Test
+    fun version1PayloadWithoutActiveDaysDerivesThemFromDailyRows() =
+        runBlocking<Unit> {
+            seed(db)
+            db.activeDayDao().insert(ActiveDayEntity(19_000))
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-1")),
+                    totals = listOf(total("uuid-1", 2, 360_000, 1, 2)),
+                    daily =
+                        listOf(
+                            day("uuid-1", 20_000, 1, 180_000, 3),
+                            day("uuid-1", 20_000, 2, 360_000, 4),
+                            day("uuid-1", 20_001, 1, 180_000, 5),
+                        ),
+                    version = 1,
+                )
+            val decoded = StatsBackupManager(db).read(ByteArrayInputStream(version1Bytes(payload)))
+
+            assertThat(decoded.version).isEqualTo(1)
+            assertThat(decoded.activeDays).isEmpty()
+
+            StatsBackupManager(db).restore(decoded, replace = true)
+
+            // Replace clears 19_000, and duplicate daily days collapse into one active day.
+            assertThat(storedActiveDays()).containsExactly(20_000, 20_001)
+        }
+
+    @Test
+    fun duplicateRestoreKeepsActiveDaysIdempotent() =
+        runBlocking<Unit> {
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-new", title = "Different")),
+                    totals = listOf(total("uuid-new", 5, 900_000, 0, 10)),
+                    daily = listOf(day("uuid-new", 20_000, 3, 540_000, 9)),
+                    activeDays = listOf(20_000),
+                )
+            val manager = StatsBackupManager(db)
+
+            manager.restore(payload, replace = false)
+            manager.restore(payload, replace = false)
+
+            assertThat(storedActiveDays()).containsExactly(20_000)
+            assertThat(countRows("active_days")).isEqualTo(1)
         }
 }

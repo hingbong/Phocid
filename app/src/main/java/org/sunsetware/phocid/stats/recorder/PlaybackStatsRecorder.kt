@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.sunsetware.phocid.stats.db.ActiveDayEntity
 import org.sunsetware.phocid.stats.db.PlayEventEntity
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.resolver.TrackMeta
@@ -216,6 +217,8 @@ class PlaybackStatsRecorder(
                         playedMillis = delta,
                         at = now,
                     )
+                // Lifetime active days are never aged out, so they outlive track_daily.
+                db.activeDayDao().insert(ActiveDayEntity(epochDay))
                 db.totalsDao()
                     .accumulate(
                         trackRowId = current.trackRowId,

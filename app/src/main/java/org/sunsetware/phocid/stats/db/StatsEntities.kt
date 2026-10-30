@@ -129,6 +129,16 @@ data class TrackDailyEntity(
 )
 
 /**
+ * One row per calendar day that had any playback anywhere. This is the lifetime "active days" set.
+ * It is global instead of per track and is never pruned, so streaks and all-time active day counts
+ * survive retention of [TrackDailyEntity] and [PlayEventEntity].
+ *
+ * Older backups and the 1 -> 2 migration can only recover the days still present in track_daily, so
+ * a restored/migrated set is a lower bound.
+ */
+@Entity(tableName = "active_days") data class ActiveDayEntity(@PrimaryKey val epochDay: Int)
+
+/**
  * Lifetime totals. They are incremented while writing, never rebuilt during retention. Retention
  * can therefore be a pure DELETE with no double-counting risk.
  */

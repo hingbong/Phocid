@@ -295,6 +295,22 @@ data class RangeSummary(
     val activeDays: Int,
 )
 
+/**
+ * Global lifetime active days. Rows are only inserted, never removed by retention: the whole point
+ * is to outlive [TrackDailyDao]'s 1095-day window.
+ */
+@Dao
+interface ActiveDayDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insert(day: ActiveDayEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(days: List<ActiveDayEntity>)
+
+    @Query("SELECT * FROM active_days ORDER BY epochDay") suspend fun all(): List<ActiveDayEntity>
+
+    @Query("DELETE FROM active_days") suspend fun clear()
+}
+
 @Dao
 interface TrackTotalsDao {
     @Query(
@@ -406,7 +422,7 @@ interface TrackTotalsDao {
         SELECT COALESCE(SUM(totalCount), 0) AS plays,
                COALESCE(SUM(totalMillis), 0) AS millis,
                COUNT(*) AS uniqueTracks,
-               (SELECT COUNT(DISTINCT epochDay) FROM track_daily) AS activeDays
+               (SELECT COUNT(*) FROM active_days) AS activeDays
         FROM track_totals
         """
     )

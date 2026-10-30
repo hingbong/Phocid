@@ -14,6 +14,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.cbor.Cbor
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
+import org.sunsetware.phocid.stats.db.ActiveDayEntity
 import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.StatsRetention
@@ -23,8 +24,9 @@ import org.sunsetware.phocid.stats.db.TrackEntity
 import org.sunsetware.phocid.stats.db.TrackTotalsEntity
 
 /**
- * Backup format. It contains tracks, aliases, lifetime totals, and per-day aggregates. Raw play
- * events are deliberately excluded: they are large and only serve local history.
+ * Backup format. It contains tracks, aliases, lifetime totals, per-day aggregates, and the global
+ * lifetime active-day list. Raw play events are deliberately excluded: they are large and only
+ * serve local history.
  *
  * Identity is the track UUID, never the internal row id or a file path.
  */
@@ -37,10 +39,13 @@ data class StatsBackup(
     val aliases: List<BackupAlias>,
     val totals: List<BackupTotals>,
     val daily: List<BackupDaily>,
+    /** Version 2+. Older payloads decode with an empty list and derive it from [daily]. */
+    val activeDays: List<Int> = emptyList(),
 ) {
     companion object {
-        // Local-only aliases are filtered from the payload; the wire format stays version 1.
-        const val VERSION = 1
+        // Version 2 adds the global active-day list; earlier fields keep their meaning. Local-only
+        // aliases are still filtered from the payload.
+        const val VERSION = 2
         const val MAGIC = "MSTATS1\u0000"
     }
 }
@@ -94,6 +99,7 @@ class StatsBackupManager(
             val aliases = mutableListOf<BackupAlias>()
             val totals = mutableListOf<BackupTotals>()
             val daily = mutableListOf<BackupDaily>()
+            val activeDays = mutableListOf<Int>()
             val idToUuid = HashMap<Long, String>()
 
             db.withTransaction {
@@ -137,6 +143,8 @@ class StatsBackupManager(
                             )
                     }
                 }
+                // Not pruned, and not tied to a track, so this is the full lifetime set.
+                activeDays += db.activeDayDao().all().map { it.epochDay }
             }
 
             val payload =
@@ -147,6 +155,7 @@ class StatsBackupManager(
                     aliases = aliases,
                     totals = totals,
                     daily = daily,
+                    activeDays = activeDays,
                 )
 
             GZIPOutputStream(out.buffered()).use { gzip ->
@@ -215,6 +224,7 @@ class StatsBackupManager(
                     db.eventDao().clear()
                     db.dailyDao().clear()
                     db.totalsDao().clear()
+                    db.activeDayDao().clear()
                     db.aliasDao().clear()
                     db.trackDao().clear()
                 }
@@ -292,6 +302,7 @@ class StatsBackupManager(
 
                 writeTotals(payload, uuidToRowId, replace)
                 writeDaily(payload, uuidToRowId, replace)
+                writeActiveDays(payload)
             }
         }
 
@@ -392,12 +403,24 @@ class StatsBackupManager(
         db.dailyDao().insertAll(rows)
     }
 
+    /**
+     * Version 2 payloads carry the global active-day list. A version 1 payload only has per-track
+     * daily rows, so its distinct days are the best available lower bound.
+     */
+    private suspend fun writeActiveDays(payload: StatsBackup) {
+        val days =
+            if (payload.activeDays.isNotEmpty()) payload.activeDays
+            else payload.daily.map { it.epochDay }
+        db.activeDayDao().insertAll(days.distinct().map { ActiveDayEntity(it) })
+    }
+
     suspend fun clear() =
         withContext(Dispatchers.IO) {
             db.withTransaction {
                 db.eventDao().clear()
                 db.dailyDao().clear()
                 db.totalsDao().clear()
+                db.activeDayDao().clear()
                 db.aliasDao().clear()
                 db.trackDao().clear()
             }

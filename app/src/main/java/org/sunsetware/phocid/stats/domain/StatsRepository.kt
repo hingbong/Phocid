@@ -104,7 +104,8 @@ class StatsRepository(
 
     suspend fun currentStreak(): Int {
         val today = LocalDate.now(zoneId()).toEpochDay().toInt()
-        val days = db.dailyDao().activeDays(today - 1095).toHashSet()
+        // The global active-day table is never pruned, so no retention cutoff applies here.
+        val days = db.activeDayDao().all().mapTo(HashSet()) { it.epochDay }
         if (days.isEmpty()) return 0
         var cursor = if (days.contains(today)) today else today - 1
         var streak = 0

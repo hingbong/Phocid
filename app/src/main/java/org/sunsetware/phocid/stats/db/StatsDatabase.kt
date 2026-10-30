@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
 
 @Database(
@@ -14,9 +16,10 @@ import java.io.File
             PlayEventEntity::class,
             TrackDailyEntity::class,
             TrackTotalsEntity::class,
+            ActiveDayEntity::class,
             FingerprintCacheEntity::class,
         ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class StatsDatabase : RoomDatabase() {
@@ -30,12 +33,30 @@ abstract class StatsDatabase : RoomDatabase() {
 
     abstract fun totalsDao(): TrackTotalsDao
 
+    abstract fun activeDayDao(): ActiveDayDao
+
     abstract fun fingerprintCacheDao(): FingerprintCacheDao
 
     abstract fun maintenanceDao(): StatsMaintenanceDao
 
     companion object {
         private const val NAME = "playback_stats.db"
+
+        /**
+         * 1 -> 2 adds the global lifetime active-day table. The backfill can only copy days that
+         * are still inside track_daily's retention window, so migrated sets are a lower bound.
+         */
+        internal val MIGRATION_1_2 =
+            object : Migration(1, 2) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS active_days (epochDay INTEGER NOT NULL PRIMARY KEY)"
+                    )
+                    db.execSQL(
+                        "INSERT OR IGNORE INTO active_days (epochDay) SELECT DISTINCT epochDay FROM track_daily"
+                    )
+                }
+            }
 
         @Volatile private var instance: StatsDatabase? = null
 
@@ -48,6 +69,7 @@ abstract class StatsDatabase : RoomDatabase() {
         private fun build(context: Context): StatsDatabase =
             Room.databaseBuilder(context, StatsDatabase::class.java, NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+                .addMigrations(MIGRATION_1_2)
                 .fallbackToDestructiveMigration()
                 .addCallback(
                     object : Callback() {

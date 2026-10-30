@@ -35,6 +35,7 @@ class StatsMaintenanceWorker(
                 .toInstant()
                 .toEpochMilli()
 
+        // active_days is deliberately never pruned: lifetime active days and streaks depend on it.
         val deletedEvents = db.eventDao().deleteOlderThan(cutoffMillis)
         val deletedDaily = db.dailyDao().deleteOlderThan(cutoffDay)
 
