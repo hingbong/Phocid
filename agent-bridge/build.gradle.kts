@@ -84,6 +84,10 @@ android {
     lint {
         abortOnError = false
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 kotlin {
@@ -103,4 +107,5 @@ dependencies {
     implementation(libs.androidx.ui)
 
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
 }

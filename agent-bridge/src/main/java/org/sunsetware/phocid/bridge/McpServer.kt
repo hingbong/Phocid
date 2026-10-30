@@ -15,8 +15,13 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.Executors
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONArray
 import org.json.JSONException
@@ -40,10 +45,32 @@ class McpServer(
     private val startedAt = AtomicLong(0)
     private val heartbeatCount = AtomicLong(0)
     private val lastHeartbeatAt = AtomicLong(0)
-    private val executor = Executors.newCachedThreadPool()
+    private val requestExecutor =
+        ThreadPoolExecutor(
+            REQUEST_CORE_POOL_SIZE,
+            REQUEST_MAX_POOL_SIZE,
+            THREAD_KEEP_ALIVE_SECONDS,
+            TimeUnit.SECONDS,
+            ArrayBlockingQueue(REQUEST_QUEUE_CAPACITY),
+            daemonThreadFactory("mcp-request"),
+            ThreadPoolExecutor.AbortPolicy(),
+        )
+    private val sseExecutor =
+        ThreadPoolExecutor(
+            SSE_CORE_POOL_SIZE,
+            SSE_MAX_POOL_SIZE,
+            THREAD_KEEP_ALIVE_SECONDS,
+            TimeUnit.SECONDS,
+            ArrayBlockingQueue(SSE_QUEUE_CAPACITY),
+            daemonThreadFactory("mcp-sse"),
+            ThreadPoolExecutor.AbortPolicy(),
+        )
     private var heartbeatThread: Thread? = null
     private var serverSocket: ServerSocket? = null
     private var loopbackBind = false
+
+    val boundPort: Int
+        get() = serverSocket?.localPort ?: port
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
@@ -72,7 +99,14 @@ class McpServer(
         serverSocket = null
         heartbeatThread?.interrupt()
         heartbeatThread = null
-        executor.shutdownNow()
+        shutdownAndClosePending(requestExecutor)
+        shutdownAndClosePending(sseExecutor)
+    }
+
+    private fun shutdownAndClosePending(executor: ThreadPoolExecutor) {
+        for (task in executor.shutdownNow()) {
+            (task as? ClientTask)?.closePending()
+        }
     }
 
     private fun startHeartbeat() {
@@ -100,7 +134,11 @@ class McpServer(
         while (running.get()) {
             try {
                 val client = socket.accept()
-                executor.execute { handle(client) }
+                try {
+                    requestExecutor.execute(ClientTask(client) { handle(it) })
+                } catch (_: RejectedExecutionException) {
+                    if (running.get()) rejectOverloaded(client) else closeQuietly(client)
+                }
             } catch (e: IOException) {
                 if (running.get()) Log.w(TAG, "accept failed", e)
             }
@@ -108,46 +146,40 @@ class McpServer(
     }
 
     private fun handle(client: Socket) {
+        var transferred = false
         try {
-            client.use { socket ->
-                socket.soTimeout = 15_000
-                try {
-                    route(socket)
-                } catch (e: HttpError) {
-                    safeWrite(
-                        socket,
-                        e.status,
-                        "text/plain; charset=utf-8",
-                        e.message.toByteArray(StandardCharsets.UTF_8),
-                    )
-                }
-            }
+            client.soTimeout = SOCKET_TIMEOUT_MS
+            val input = BufferedInputStream(client.getInputStream())
+            val request = readRequestHead(input)
+            transferred = route(client, input, request)
+        } catch (e: HttpError) {
+            safeWrite(
+                client,
+                e.status,
+                "text/plain; charset=utf-8",
+                e.message.toByteArray(StandardCharsets.UTF_8),
+            )
         } catch (e: IOException) {
             Log.d(TAG, "client closed", e)
         } catch (e: Exception) {
             Log.e(TAG, "request failed", e)
+        } finally {
+            if (!transferred) closeQuietly(client)
         }
     }
 
-    private fun route(socket: Socket) {
-        val request = readRequest(socket)
+    private fun route(socket: Socket, input: InputStream, request: Request): Boolean {
         val path = request.path.trimEnd('/').ifEmpty { "/" }
 
         if (request.method == "OPTIONS") {
             safeWrite(socket, 204, null, null, corsHeaders())
-            return
+            return false
         }
 
         if (path == "/health" && request.method == "GET") {
             if (!loopbackBind && !isAuthorized(request)) {
-                safeWrite(
-                    socket,
-                    401,
-                    "text/plain; charset=utf-8",
-                    "Unauthorized".toByteArray(StandardCharsets.UTF_8),
-                    mapOf("WWW-Authenticate" to "Bearer"),
-                )
-                return
+                unauthorized(socket)
+                return false
             }
             val body =
                 JSONObject()
@@ -168,7 +200,7 @@ class McpServer(
                     .toString()
                     .toByteArray(StandardCharsets.UTF_8)
             safeWrite(socket, 200, "application/json; charset=utf-8", body)
-            return
+            return false
         }
 
         if (path != "/mcp") {
@@ -176,19 +208,13 @@ class McpServer(
         }
 
         if (!isAuthorized(request)) {
-            safeWrite(
-                socket,
-                401,
-                "text/plain; charset=utf-8",
-                "Unauthorized".toByteArray(StandardCharsets.UTF_8),
-                mapOf("WWW-Authenticate" to "Bearer"),
-            )
-            return
+            unauthorized(socket)
+            return false
         }
 
         when (request.method) {
-            "POST" -> handlePost(socket, request)
-            "GET" -> handleGet(socket, request)
+            "POST" -> handlePost(socket, input, request)
+            "GET" -> return handleGet(socket, request)
             "DELETE" -> safeWrite(socket, 204, null, null)
             else -> {
                 safeWrite(
@@ -200,12 +226,24 @@ class McpServer(
                 )
             }
         }
+        return false
     }
 
-    private fun handlePost(socket: Socket, request: Request) {
+    private fun unauthorized(socket: Socket) {
+        safeWrite(
+            socket,
+            401,
+            "text/plain; charset=utf-8",
+            "Unauthorized".toByteArray(StandardCharsets.UTF_8),
+            mapOf("WWW-Authenticate" to "Bearer"),
+        )
+    }
+
+    private fun handlePost(socket: Socket, input: InputStream, request: Request) {
+        val body = readBody(input, request.headers)
         val sessionId = request.headers["mcp-session-id"] ?: UUID.randomUUID().toString()
 
-        val payload = request.body.toString(StandardCharsets.UTF_8)
+        val payload = body.toString(StandardCharsets.UTF_8)
         if (payload.isBlank()) {
             throw HttpError(400, "Empty body")
         }
@@ -232,7 +270,7 @@ class McpServer(
         }
     }
 
-    private fun handleGet(socket: Socket, request: Request) {
+    private fun handleGet(socket: Socket, request: Request): Boolean {
         val accept = request.headers["accept"] ?: ""
         if (!accept.contains("text/event-stream")) {
             safeWrite(
@@ -244,33 +282,52 @@ class McpServer(
                 ),
                 mapOf("Allow" to "POST, DELETE, OPTIONS"),
             )
-            return
+            return false
         }
 
-        val sessionId = request.headers["mcp-session-id"] ?: UUID.randomUUID().toString()
-        socket.soTimeout = 0
-        val out = BufferedOutputStream(socket.getOutputStream())
-        out.write(
-            (
-                "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: text/event-stream\r\n" +
-                    "Cache-Control: no-cache\r\n" +
-                    "Connection: keep-alive\r\n" +
-                    "Mcp-Session-Id: $sessionId\r\n" +
-                    "\r\n"
-            ).toByteArray(StandardCharsets.US_ASCII)
-        )
-        out.write(": connected\n\n".toByteArray(StandardCharsets.UTF_8))
-        out.flush()
         try {
+            sseExecutor.execute(ClientTask(socket) { streamSse(it, request) })
+        } catch (_: RejectedExecutionException) {
+            safeWrite(
+                socket,
+                503,
+                "text/plain; charset=utf-8",
+                "Too many event streams".toByteArray(StandardCharsets.UTF_8),
+                mapOf("Retry-After" to "1"),
+            )
+            return false
+        }
+        return true
+    }
+
+    private fun streamSse(socket: Socket, request: Request) {
+        try {
+            socket.soTimeout = 0
+            val sessionId = request.headers["mcp-session-id"] ?: UUID.randomUUID().toString()
+            val out = BufferedOutputStream(socket.getOutputStream())
+            out.write(
+                (
+                    "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: text/event-stream\r\n" +
+                        "Cache-Control: no-cache\r\n" +
+                        "Connection: keep-alive\r\n" +
+                        "Mcp-Session-Id: $sessionId\r\n" +
+                        "\r\n"
+                ).toByteArray(StandardCharsets.US_ASCII)
+            )
+            out.write(": connected\n\n".toByteArray(StandardCharsets.UTF_8))
+            out.flush()
             while (running.get() && !socket.isClosed) {
-                Thread.sleep(15_000)
+                Thread.sleep(SSE_PING_INTERVAL_MS)
                 out.write(": ping\n\n".toByteArray(StandardCharsets.UTF_8))
                 out.flush()
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-        } catch (_: IOException) {}
+        } catch (_: IOException) {
+        } finally {
+            closeQuietly(socket)
+        }
     }
 
     private fun processPayload(payload: String): String? {
@@ -724,8 +781,7 @@ class McpServer(
         )
     }
 
-    private fun readRequest(socket: Socket): Request {
-        val input = BufferedInputStream(socket.getInputStream())
+    private fun readRequestHead(input: InputStream): Request {
         val requestLine = readLine(input) ?: throw HttpError(400, "Missing request line")
         val parts = requestLine.split(' ', limit = 3)
         if (parts.size < 2) throw HttpError(400, "Malformed request line")
@@ -747,22 +803,22 @@ class McpServer(
             headers[key] = headers[key]?.let { "$it, $value" } ?: value
         }
 
-        val body =
-            when {
-                headers["transfer-encoding"]?.contains("chunked", ignoreCase = true) == true ->
-                    readChunked(input)
-                else -> {
-                    val length = headers["content-length"]?.toIntOrNull() ?: 0
-                    if (length < 0) throw HttpError(400, "Invalid Content-Length")
-                    if (length > MAX_BODY_BYTES) throw HttpError(413, "Body too large")
-                    val bytes = ByteArray(length)
-                    readFully(input, bytes)
-                    bytes
-                }
-            }
-
-        return Request(method, path, headers, body)
+        return Request(method, path, headers)
     }
+
+    private fun readBody(input: InputStream, headers: Map<String, String>): ByteArray =
+        when {
+            headers["transfer-encoding"]?.contains("chunked", ignoreCase = true) == true ->
+                readChunked(input)
+            else -> {
+                val length = headers["content-length"]?.toIntOrNull() ?: 0
+                if (length < 0) throw HttpError(400, "Invalid Content-Length")
+                if (length > MAX_BODY_BYTES) throw HttpError(413, "Body too large")
+                val bytes = ByteArray(length)
+                readFully(input, bytes)
+                bytes
+            }
+        }
 
     private fun readChunked(input: InputStream): ByteArray {
         val output = ByteArrayOutputStream()
@@ -826,6 +882,27 @@ class McpServer(
         } catch (_: IOException) {}
     }
 
+    private fun rejectOverloaded(client: Socket) {
+        try {
+            client.soTimeout = REJECT_SOCKET_TIMEOUT_MS
+            safeWrite(
+                client,
+                503,
+                "text/plain; charset=utf-8",
+                "Server busy".toByteArray(StandardCharsets.UTF_8),
+                mapOf("Retry-After" to "1"),
+            )
+        } finally {
+            closeQuietly(client)
+        }
+    }
+
+    private fun closeQuietly(socket: Socket) {
+        try {
+            socket.close()
+        } catch (_: IOException) {}
+    }
+
     private fun writeResponse(
         socket: Socket,
         status: Int,
@@ -861,6 +938,7 @@ class McpServer(
             404 -> "Not Found"
             405 -> "Method Not Allowed"
             413 -> "Payload Too Large"
+            503 -> "Service Unavailable"
             else -> "Internal Server Error"
         }
 
@@ -875,15 +953,46 @@ class McpServer(
         val method: String,
         val path: String,
         val headers: Map<String, String>,
-        val body: ByteArray,
     )
 
     private class HttpError(val status: Int, override val message: String) : Exception(message)
+
+    private inner class ClientTask(
+        private val socket: Socket,
+        private val handler: (Socket) -> Unit,
+    ) : Runnable {
+        override fun run() {
+            handler(socket)
+        }
+
+        fun closePending() {
+            closeQuietly(socket)
+        }
+    }
 
     companion object {
         private const val TAG = "PhocidMcpServer"
         private const val MAX_HEADER_BYTES = 64 * 1024
         private const val MAX_LINE_BYTES = 8 * 1024
         private const val MAX_BODY_BYTES = 1024 * 1024
+        private const val SOCKET_TIMEOUT_MS = 15_000
+        private const val SSE_PING_INTERVAL_MS = 15_000L
+        private const val REJECT_SOCKET_TIMEOUT_MS = 3_000
+        private const val THREAD_KEEP_ALIVE_SECONDS = 30L
+        private const val REQUEST_CORE_POOL_SIZE = 2
+        private const val REQUEST_MAX_POOL_SIZE = 4
+        private const val REQUEST_QUEUE_CAPACITY = 16
+        private const val SSE_CORE_POOL_SIZE = 1
+        private const val SSE_MAX_POOL_SIZE = 2
+        private const val SSE_QUEUE_CAPACITY = 2
+
+        private fun daemonThreadFactory(prefix: String): ThreadFactory {
+            val counter = AtomicInteger(0)
+            return ThreadFactory { runnable ->
+                Thread(runnable, "$prefix-${counter.incrementAndGet()}").apply {
+                    isDaemon = true
+                }
+            }
+        }
     }
 }
