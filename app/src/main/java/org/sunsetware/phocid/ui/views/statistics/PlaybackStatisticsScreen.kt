@@ -120,25 +120,19 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                     LocalUriKey.of(it.uri.toString(), it.size)
                 }
             }
-        val tracksByTagKey =
+        val trackIdsByTagKey =
             remember(libraryIndex) {
-                val trackIdsByTagKey =
-                    tagCandidateIndex(
-                        libraryIndex.tracks.values.map { track ->
-                            track.id to
-                                TagKey.candidates(
-                                    track.artists.joinToString(", "),
-                                    track.album,
-                                    track.title ?: track.fileName.substringBeforeLast('.'),
-                                    track.duration.inWholeMilliseconds,
-                                )
-                        }
-                    )
-                // Ambiguous keys are already omitted by the index. Resolve the surviving ids to
-                // the same Track objects the rest of the screen uses.
-                trackIdsByTagKey
-                    .mapNotNull { (key, id) -> libraryIndex.tracks[id]?.let { key to it } }
-                    .toMap()
+                tagCandidateIndex(
+                    libraryIndex.tracks.values.map { track ->
+                        track.id to
+                            TagKey.candidates(
+                                track.artists.joinToString(", "),
+                                track.album,
+                                track.title ?: track.fileName.substringBeforeLast('.'),
+                                track.duration.inWholeMilliseconds,
+                            )
+                    }
+                )
             }
         val dateFormatter = remember { DateFormat.getInstance() }
 
@@ -312,13 +306,16 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                             val track =
                                 entry.localUriKey?.let { tracksByLocalUri[it] }
                                     ?: tracksByPath[entry.path]
-                                    ?: TagKey.candidates(
-                                            entry.artist,
-                                            entry.album,
-                                            entry.title,
-                                            entry.durationMillis,
+                                    ?: uniqueTagCandidateOwner(
+                                            TagKey.candidates(
+                                                entry.artist,
+                                                entry.album,
+                                                entry.title,
+                                                entry.durationMillis,
+                                            ),
+                                            trackIdsByTagKey,
                                         )
-                                        .firstNotNullOfOrNull { tracksByTagKey[it] }
+                                        ?.let { libraryIndex.tracks[it] }
                             PlaybackStatisticsListItem(
                                 entry = entry,
                                 track = track,

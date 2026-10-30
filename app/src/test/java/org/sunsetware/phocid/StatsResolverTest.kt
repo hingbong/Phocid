@@ -214,6 +214,46 @@ class StatsResolverTest {
         }
 
     @Test
+    fun sameUriSizeAndModifiedRecomputesFingerprint() =
+        runBlocking<Unit> {
+            var calls = 0
+            val resolver = resolver {
+                calls++
+                if (calls == 1) "old-hash" else "new-hash"
+            }
+            val uri = "content://media/external/audio/media/8"
+            val first =
+                resolver.resolve(
+                    meta(
+                        uri = uri,
+                        modified = 1,
+                        title = "Old Song",
+                        artist = "Old Artist",
+                        album = "Old Album",
+                    )
+                )
+            val second =
+                resolver.resolve(
+                    meta(
+                        uri = uri,
+                        modified = 1,
+                        title = "New Song",
+                        artist = "New Artist",
+                        album = "New Album",
+                    )
+                )
+
+            // The URI metadata is identical, but a MediaStore URI can be reused. The fingerprint
+            // must be recomputed for the current item instead of served from a stale cache.
+            assertThat(calls).isEqualTo(2)
+            assertThat(second).isNotEqualTo(first)
+            assertThat(db.trackDao().byRowId(first)).isNotNull()
+            assertThat(db.trackDao().byRowId(second)).isNotNull()
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "old-hash")).isEqualTo(first)
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "new-hash")).isEqualTo(second)
+        }
+
+    @Test
     fun ambiguousTagCandidatesCreateNewRowWithoutMerging() =
         runBlocking<Unit> {
             val keys = tagKeys()
@@ -235,6 +275,40 @@ class StatsResolverTest {
             assertThat(db.aliasDao().resolve(AliasKind.TAG_KEY, keys[1])).isEqualTo(b)
             assertThat(db.totalsDao().byRowId(a)!!.totalCount).isEqualTo(1)
             assertThat(db.totalsDao().byRowId(b)!!.totalCount).isEqualTo(2)
+        }
+
+    @Test
+    fun repeatedAmbiguousTagResolutionReusesTheSameRow() =
+        runBlocking<Unit> {
+            val keys = tagKeys()
+            assertThat(keys).hasSize(2)
+            val localKey = LocalUriKey.of("content://media/external/audio/media/1", 1024)
+            val a = insertTrack("A")
+            val b = insertTrack("B")
+            putAlias(AliasKind.TAG_KEY, keys[0], a)
+            putAlias(AliasKind.TAG_KEY, keys[1], b)
+            // A owns the local hint, so it cannot be used to select a row for this item.
+            putAlias(AliasKind.LOCAL_URI, localKey, a)
+            db.totalsDao().accumulate(a, 1, 100, 1)
+            db.totalsDao().accumulate(b, 2, 200, 2)
+
+            val resolver = resolver { null }
+            val first = resolver.resolve(meta())
+            val second = resolver.resolve(meta())
+
+            // The conflicting tag keys cannot be attached to the ambiguous row, so the resolver
+            // needs its own marker to return the same third row on every resolve.
+            assertThat(first).isNotEqualTo(a).isNotEqualTo(b)
+            assertThat(second).isEqualTo(first)
+            assertThat(db.trackDao().byRowId(a)).isNotNull()
+            assertThat(db.trackDao().byRowId(b)).isNotNull()
+            assertThat(db.aliasDao().resolve(AliasKind.TAG_KEY, keys[0])).isEqualTo(a)
+            assertThat(db.aliasDao().resolve(AliasKind.TAG_KEY, keys[1])).isEqualTo(b)
+            assertThat(db.aliasDao().resolve(AliasKind.LOCAL_URI, localKey)).isEqualTo(a)
+            assertThat(db.totalsDao().byRowId(a)!!.totalCount).isEqualTo(1)
+            assertThat(db.totalsDao().byRowId(b)!!.totalCount).isEqualTo(2)
+            assertThat(db.aliasDao().aliasesOf(first).map { it.kind })
+                .contains(AliasKind.AMBIGUOUS_TAG)
         }
 
     @Test

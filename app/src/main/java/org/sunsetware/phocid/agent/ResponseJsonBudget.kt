@@ -5,8 +5,8 @@ package org.sunsetware.phocid.agent
  *
  * Android Binder transactions are capped at roughly 1 MiB, and a JSON response crosses the boundary
  * as a UTF-16 string. This helper measures 2 bytes per UTF-16 code unit and defaults to 512 KiB,
- * leaving headroom for the rest of the transaction. Search pages are built one track at a time so a
- * page can stop before an item that would overflow instead of failing the whole call.
+ * leaving headroom for the rest of the transaction. Pages are built one item at a time so a page
+ * can stop before an item that would overflow instead of failing the whole call.
  */
 internal class ResponseJsonBudget(private val maxUtf16Bytes: Int = DEFAULT_MAX_UTF16_BYTES) {
     init {
@@ -30,6 +30,18 @@ internal class ResponseJsonBudget(private val maxUtf16Bytes: Int = DEFAULT_MAX_U
         data class TooLarge(val message: String) : TrackDetailResult
     }
 
+    /** Result of [boundedPage]: either a page that fits or a readable budget error. */
+    sealed interface PageResult {
+        data class Page(
+            val json: String,
+            val returnedItems: Int,
+            val nextOffset: Int,
+            val byteTruncated: Boolean,
+        ) : PageResult
+
+        data class TooLarge(val message: String) : PageResult
+    }
+
     /**
      * Serializes at most [limit] tracks and stops before the first track that would exceed the
      * budget. [byteTruncated] is set only when that budget stopped the page; reaching [limit] or
@@ -42,63 +54,83 @@ internal class ResponseJsonBudget(private val maxUtf16Bytes: Int = DEFAULT_MAX_U
         limit: Int,
         tracks: Sequence<String>,
     ): SearchPageResult {
-        val remaining = (total - offset).coerceAtLeast(0)
-        val maxTracks = minOf(limit, remaining)
-        val included = ArrayList<String>(minOf(maxTracks, 64))
-        for (track in tracks) {
-            if (included.size >= maxTracks) break
-            val candidateOffset = offset + included.size + 1
-            val candidate =
-                renderSearchPage(
+        val tooLargeMessage =
+            "A single search summary exceeds the " +
+                "${maxUtf16Bytes / 1024} KiB response budget; narrow the filters " +
+                "or use library_get_track"
+        return when (
+            val result =
+                boundedPage(
                     total = total,
                     offset = offset,
                     limit = limit,
-                    tracks = included,
-                    extra = track,
-                    nextOffset = candidateOffset,
-                    byteTruncated = false,
-                )
-            if (!fits(candidate)) {
-                if (included.isEmpty()) {
-                    return SearchPageResult.TooLarge(
-                        "A single search summary exceeds the " +
-                            "${maxUtf16Bytes / 1024} KiB response budget; narrow the filters " +
-                            "or use library_get_track"
+                    items = tracks,
+                    tooLargeMessage = tooLargeMessage,
+                ) { included, extra, nextOffset, byteTruncated ->
+                    renderSearchPage(
+                        total = total,
+                        offset = offset,
+                        limit = limit,
+                        tracks = included,
+                        extra = extra,
+                        nextOffset = nextOffset,
+                        byteTruncated = byteTruncated,
                     )
                 }
+        ) {
+            is PageResult.Page ->
+                SearchPageResult.Page(
+                    json = result.json,
+                    returnedTracks = result.returnedItems,
+                    nextOffset = result.nextOffset,
+                    byteTruncated = result.byteTruncated,
+                )
+            is PageResult.TooLarge -> SearchPageResult.TooLarge(result.message)
+        }
+    }
+
+    /**
+     * Serializes at most [limit] [items] starting at [offset] and stops before the first item that
+     * would exceed the budget. [render] builds the payload for the items accepted so far; it also
+     * receives the candidate item being measured, so each caller keeps its own response layout.
+     * [byteTruncated] is set only when the budget stopped the page; reaching [limit] or the end of
+     * the result set does not set it. [nextOffset] always points at the next item that was not
+     * returned.
+     */
+    fun <T> boundedPage(
+        total: Int,
+        offset: Int,
+        limit: Int,
+        items: Sequence<T>,
+        tooLargeMessage: String,
+        render: (items: List<T>, extra: T?, nextOffset: Int, byteTruncated: Boolean) -> String,
+    ): PageResult {
+        val remaining = (total - offset).coerceAtLeast(0)
+        val maxItems = minOf(limit, remaining)
+        val included = ArrayList<T>(minOf(maxItems, 64))
+        for (item in items) {
+            if (included.size >= maxItems) break
+            val candidateOffset = offset + included.size + 1
+            val candidate = render(included, item, candidateOffset, false)
+            if (!fits(candidate)) {
+                if (included.isEmpty()) {
+                    return PageResult.TooLarge(tooLargeMessage)
+                }
                 val nextOffset = offset + included.size
-                return SearchPageResult.Page(
-                    json =
-                        renderSearchPage(
-                            total = total,
-                            offset = offset,
-                            limit = limit,
-                            tracks = included,
-                            extra = null,
-                            nextOffset = nextOffset,
-                            byteTruncated = true,
-                        ),
-                    returnedTracks = included.size,
+                return PageResult.Page(
+                    json = render(included, null, nextOffset, true),
+                    returnedItems = included.size,
                     nextOffset = nextOffset,
                     byteTruncated = true,
                 )
             }
-            included.add(track)
+            included.add(item)
         }
 
         val nextOffset = offset + included.size
-        return SearchPageResult.Page(
-            json =
-                renderSearchPage(
-                    total = total,
-                    offset = offset,
-                    limit = limit,
-                    tracks = included,
-                    extra = null,
-                    nextOffset = nextOffset,
-                    byteTruncated = false,
-                ),
-            returnedTracks = included.size,
+        return PageResult.Page(
+            json = render(included, null, nextOffset, false),
+            returnedItems = included.size,
             nextOffset = nextOffset,
             byteTruncated = false,
         )
@@ -124,6 +156,20 @@ internal class ResponseJsonBudget(private val maxUtf16Bytes: Int = DEFAULT_MAX_U
         return TrackDetailResult.TooLarge(
             "The track detail response exceeds the ${maxUtf16Bytes / 1024} KiB response budget"
         )
+    }
+
+    /**
+     * Enforces the budget for a finished response. An oversized payload is replaced by a small
+     * `response_too_large` error built without the oversized input, so enforcing the fallback again
+     * cannot recurse or grow the response.
+     */
+    fun boundedResponse(json: String): String {
+        if (fits(json)) return json
+        val message = "The response exceeds the ${maxUtf16Bytes / 1024} KiB response budget"
+        val error = "{\"error\":{\"code\":\"response_too_large\",\"message\":${quote(message)}}}"
+        if (fits(error)) return error
+        // Keep the shortest readable error rather than echoing the oversized payload back.
+        return "{\"error\":{\"code\":\"response_too_large\"}}"
     }
 
     private fun fits(json: String): Boolean = json.length <= maxUtf16Bytes / 2
@@ -163,9 +209,7 @@ internal class ResponseJsonBudget(private val maxUtf16Bytes: Int = DEFAULT_MAX_U
         val body = json.substring(0, end)
         val separator = if (body.endsWith("{")) "" else ","
         val encoded =
-            fields.joinToString(separator = ",", prefix = "[", postfix = "]") {
-                quote(it)
-            }
+            fields.joinToString(separator = ",", prefix = "[", postfix = "]") { quote(it) }
         return body + separator + "\"truncatedFields\":" + encoded + "}"
     }
 

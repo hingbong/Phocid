@@ -69,6 +69,13 @@ object AliasKind {
      */
     const val LOCAL_URI = 4
 
+    /**
+     * Local-only marker for a row created because two TAG_KEY candidates pointed at different rows.
+     * It lets a repeated resolve reuse that row instead of creating a fresh one. It is not an
+     * identity clue and is never included in backups.
+     */
+    const val AMBIGUOUS_TAG = 5
+
     val PRIORITY = intArrayOf(AUDIO_HASH, TAG_KEY, LOCAL_URI, REL_PATH)
 
     /** Aliases that remain meaningful after moving to another device. */

@@ -157,9 +157,7 @@ class StatsBackupPortabilityTest {
     private fun storedActiveDays(): List<Int> =
         db.openHelper.readableDatabase
             .query("SELECT epochDay FROM active_days ORDER BY epochDay")
-            .use { cursor ->
-                buildList { while (cursor.moveToNext()) add(cursor.getInt(0)) }
-            }
+            .use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getInt(0)) } }
 
     /** A version 1 payload has no activeDays key; the CBOR encoder omits the default value. */
     @OptIn(ExperimentalSerializationApi::class)
@@ -540,63 +538,98 @@ class StatsBackupPortabilityTest {
         }
 
     @Test
-    fun futureDailyRelativeToSourceDateIsRejectedAndDatabaseUnchanged() =
+    fun futureDailyRelativeToExportDateIsAcceptedAndPreserved() =
         runBlocking<Unit> {
-            val row = seed(db)
+            // The export timestamp and zone describe the exporting device, not every day in the
+            // payload. A day after the export calendar day is legitimate historical data.
             val exportedAt = Instant.parse("2026-06-15T12:00:00Z").toEpochMilli()
-            val sourceToday = LocalDate.of(2026, 6, 15).toEpochDay().toInt()
+            val exportDay = LocalDate.of(2026, 6, 15).toEpochDay().toInt()
+            val futureDay = exportDay + 1
             val payload =
                 backup(
                     tracks = listOf(track("uuid-1")),
                     totals = listOf(total("uuid-1", 9, 900_000, 0, 9)),
-                    daily = listOf(day("uuid-1", sourceToday + 1, 1, 60_000, 9)),
+                    daily = listOf(day("uuid-1", futureDay, 1, 60_000, 9)),
                     exportedAt = exportedAt,
                 )
 
-            assertThatThrownBy {
-                    runBlocking { StatsBackupManager(db).restore(payload, replace = true) }
-                }
-                .isInstanceOf(IllegalArgumentException::class.java)
-                .hasMessageContaining("after the source export day")
+            StatsBackupManager(db).restore(payload, replace = true)
 
-            // Validation runs before replace clears anything, so the local database is intact.
-            assertThat(countRows("tracks")).isEqualTo(1)
-            assertThat(db.trackDao().rowIdOfUuid("uuid-1")).isEqualTo(row)
-            assertThat(db.totalsDao().byRowId(row)!!.totalCount).isEqualTo(2)
-            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "hash")).isEqualTo(row)
-            assertThat(countRows("track_daily")).isEqualTo(0)
+            val stored = db.dailyDao().since(futureDay).single()
+            assertThat(stored.epochDay).isEqualTo(futureDay)
+            assertThat(stored.playCount).isEqualTo(1)
+            assertThat(stored.playedMillis).isEqualTo(60_000)
         }
 
     @Test
-    fun futureActiveDayRelativeToSourceDateIsRejectedAndDatabaseUnchanged() =
+    fun futureActiveDayRelativeToExportDateIsAcceptedAndPreserved() =
         runBlocking<Unit> {
-            val row = seed(db)
             val exportedAt = Instant.parse("2026-06-15T12:00:00Z").toEpochMilli()
-            val sourceToday = LocalDate.of(2026, 6, 15).toEpochDay().toInt()
+            val exportDay = LocalDate.of(2026, 6, 15).toEpochDay().toInt()
+            val futureDay = exportDay + 1
             val payload =
                 backup(
                     tracks = listOf(track("uuid-1")),
-                    activeDays = listOf(sourceToday + 1),
+                    activeDays = listOf(futureDay),
                     exportedAt = exportedAt,
                 )
 
-            assertThatThrownBy {
-                    runBlocking { StatsBackupManager(db).restore(payload, replace = true) }
-                }
-                .isInstanceOf(IllegalArgumentException::class.java)
-                .hasMessageContaining("after the source export day")
+            StatsBackupManager(db).restore(payload, replace = true)
 
-            assertThat(countRows("tracks")).isEqualTo(1)
-            assertThat(db.trackDao().rowIdOfUuid("uuid-1")).isEqualTo(row)
-            assertThat(countRows("active_days")).isEqualTo(0)
+            assertThat(storedActiveDays()).containsExactly(futureDay)
+        }
+
+    @Test
+    fun crossTimezoneFutureDataSurvivesReExport() =
+        runBlocking<Unit> {
+            // A source device far ahead of the target leaves calendar days in the target's
+            // future. Importing, re-exporting on the target, and importing again must keep those
+            // days: the second export carries the target's zone and export timestamp.
+            val sourceZone = ZoneId.of("Pacific/Kiritimati")
+            val targetZone = ZoneId.of("Etc/GMT+12")
+            val targetToday = LocalDate.now(targetZone).toEpochDay().toInt()
+            val sourceDay = targetToday + 3
+            val sourceExportedAt =
+                LocalDate.ofEpochDay(sourceDay.toLong())
+                    .atStartOfDay(sourceZone)
+                    .toInstant()
+                    .toEpochMilli()
+            val source =
+                backup(
+                    tracks = listOf(track("uuid-future")),
+                    totals = listOf(total("uuid-future", 2, 120_000, 0, 2)),
+                    daily = listOf(day("uuid-future", sourceDay, 2, 120_000, 2)),
+                    activeDays = listOf(sourceDay),
+                    exportedAt = sourceExportedAt,
+                    zoneId = sourceZone.id,
+                )
+            val manager = StatsBackupManager(db, zoneId = { targetZone })
+
+            manager.restore(source, replace = true)
+            assertThat(db.dailyDao().since(sourceDay).single().epochDay).isEqualTo(sourceDay)
+            assertThat(storedActiveDays()).containsExactly(sourceDay)
+
+            val out = ByteArrayOutputStream()
+            manager.export(out)
+            val reExported = manager.read(ByteArrayInputStream(out.toByteArray()))
+
+            assertThat(reExported.zoneId).isEqualTo(targetZone.id)
+            assertThat(reExported.zoneId).isNotEqualTo(sourceZone.id)
+            assertThat(reExported.daily.map { it.epochDay }).containsExactly(sourceDay)
+            assertThat(reExported.activeDays).containsExactly(sourceDay)
+
+            manager.restore(reExported, replace = true)
+
+            assertThat(db.dailyDao().since(sourceDay).single().epochDay).isEqualTo(sourceDay)
+            assertThat(storedActiveDays()).containsExactly(sourceDay)
         }
 
     @Test
     fun sourceDayAheadOfTargetTodayIsAccepted() =
         runBlocking<Unit> {
             val targetToday = LocalDate.now(ZoneId.systemDefault()).toEpochDay()
-            // Two days after this device's calendar day, yet equal to the source export day.
-            // This is a legitimate cross-timezone restore and must not be remapped or rejected.
+            // Two days after this device's calendar day is legitimate cross-timezone data and
+            // must not be remapped.
             val sourceDate = LocalDate.now(ZoneId.systemDefault()).plusDays(2)
             val exportedAt = sourceDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
             val sourceDay = sourceDate.toEpochDay().toInt()
@@ -641,10 +674,10 @@ class StatsBackupPortabilityTest {
         }
 
     @Test
-    fun legacyPayloadWithoutExportTimestampSkipsSourceDateValidation() =
+    fun legacyPayloadWithoutExportTimestampIsAccepted() =
         runBlocking<Unit> {
-            // exportedAt == 0 has no source calendar day. Accept the row rather than inventing
-            // one from the target clock.
+            // exportedAt == 0 has no absolute timestamp. Historical days are still meaningful, so
+            // accept the row rather than inventing a bound from the target clock.
             val payload =
                 backup(
                     tracks = listOf(track("uuid-legacy")),

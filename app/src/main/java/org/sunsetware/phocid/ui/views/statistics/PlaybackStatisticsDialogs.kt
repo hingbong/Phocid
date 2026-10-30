@@ -40,10 +40,7 @@ class PlaybackStatisticsImportDialog(private val backup: StatsBackup) : Dialog()
             title = Strings[R.string.playback_statistics_import_title],
             onConfirm = {
                 viewModel.viewModelScope.launch {
-                    val result = runCatching {
-                        viewModel.statsManager.backupManager.restore(backup, replace)
-                        viewModel.statsManager.invalidateResolver()
-                    }
+                    val result = runCatching { viewModel.statsManager.restore(backup, replace) }
                     viewModel.uiManager.closeDialog()
                     result
                         .onSuccess {

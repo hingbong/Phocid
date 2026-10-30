@@ -240,6 +240,12 @@ is installed. The write tool is also hidden unless **Allow agent writes** is on.
 API 5 adds search summaries and byte-bounded search/detail responses; those tools
 still only require API 1, and sort keys still require API 4.
 
+`tools/list` describes the negotiated contract. With API 5 it advertises search
+summaries, the byte budget, `nextOffset`, `byteTruncated`, and
+`truncatedFields`. With an older main app, `library_search_tracks` and
+`library_get_track` stay available but are described as the legacy
+full-payload search and detail calls; the API 5 fields are not advertised.
+
 ## Out of scope
 
 Playback control, seek, queue mutation, playlist editing, lyrics, and file

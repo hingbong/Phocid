@@ -61,6 +61,7 @@ class PlaybackStatsRecorder(
         private const val FLUSH_INTERVAL_MILLIS = 30_000L
         private const val MIN_PLAY_MILLIS = 30_000L
         private const val SHUTDOWN_RESOLUTION_TIMEOUT_MILLIS = 1_000L
+        private const val MAX_RE_RESOLVE_ATTEMPTS = 2
     }
 
     private val lock = Any()
@@ -85,6 +86,7 @@ class PlaybackStatsRecorder(
 
     private class Session(
         val id: Long,
+        val meta: TrackMeta,
         val label: String,
         val durationMillis: Long,
         var segmentWall: Long,
@@ -92,6 +94,7 @@ class PlaybackStatsRecorder(
         var running: Boolean,
     ) {
         var trackRowId: Long? = null
+        var rowIdStale = false
         var resolutionFailed = false
         var accumulatedMillis = 0L
         var counted = false
@@ -139,6 +142,7 @@ class PlaybackStatsRecorder(
                 }
                 Session(
                         id = nextSessionId++,
+                        meta = meta,
                         label = meta.title ?: meta.file?.name ?: meta.uri,
                         durationMillis = meta.durationMillis,
                         segmentWall = wall,
@@ -501,9 +505,7 @@ class PlaybackStatsRecorder(
             }
             resolutionJobs[session.id] = job
         }
-        job.invokeOnCompletion {
-            synchronized(lock) { resolutionJobs.remove(session.id) }
-        }
+        job.invokeOnCompletion { synchronized(lock) { resolutionJobs.remove(session.id) } }
         job.start()
     }
 
@@ -539,6 +541,8 @@ class PlaybackStatsRecorder(
             synchronized(lock) {
                 if (session.cleared) return
                 session.trackRowId = rowId
+                // A store change can invalidate an id resolved while its fingerprint was running;
+                // keep the invalidation so the first write re-resolves instead of trusting it.
                 // Shutdown already accrued the current session at the capture instant. Let the
                 // resolution finish so its row id is not discarded, then settle from onShutdown.
                 if (session.running && !shuttingDown) accrueLocked(session, wall, elapsed)
@@ -547,96 +551,234 @@ class PlaybackStatsRecorder(
         if (shouldFlush) enqueueSettle(session)
     }
 
+    // Store-wide changes ----------------------------------------------
+
+    /**
+     * Called after the statistics store was cleared. Accrual that belonged to the cleared data must
+     * not be written back, but the current session keeps running from a fresh baseline.
+     */
+    suspend fun onStoreCleared() {
+        val wall = wallMillis()
+        val elapsed = elapsedRealtime()
+        writerMutex.withLock {
+            synchronized(lock) {
+                if (shuttingDown) return
+                current?.let { resetAccrualLocked(it, wall, elapsed) }
+                retired.values.toList().forEach { dropUnresolvedLocked(it) }
+                totalElapsedPlayed = 0L
+            }
+        }
+    }
+
+    /**
+     * Called after a backup was merged or replaced. A merge keeps pending time but the stored row
+     * may have moved or disappeared; a replacement drops pending because the aggregate set it
+     * belonged to was replaced wholesale.
+     */
+    suspend fun onStoreRestored(replace: Boolean) {
+        val wall = wallMillis()
+        val elapsed = elapsedRealtime()
+        writerMutex.withLock {
+            synchronized(lock) {
+                if (shuttingDown) return
+                if (replace) {
+                    current?.let { dropPendingLocked(it, wall, elapsed) }
+                    retired.values.toList().forEach { dropUnresolvedLocked(it) }
+                } else {
+                    current?.rowIdStale = true
+                    retired.values.forEach { it.rowIdStale = true }
+                }
+            }
+        }
+    }
+
+    /**
+     * Drop the unflushed accrual of [session] and restart its measurement baseline. The retained
+     * metadata stays available so the next flush can bind future time to a new row.
+     */
+    private fun resetAccrualLocked(session: Session, nowWall: Long, nowElapsed: Long) {
+        dropPendingLocked(session, nowWall, nowElapsed)
+        session.accumulatedMillis = 0L
+        session.counted = false
+        session.countWall = 0L
+        session.countPlayedMillis = 0L
+    }
+
+    /**
+     * Discard time that was not persisted yet and rebase the measurement interval at the change
+     * instant, so the discarded time cannot be accrued again.
+     */
+    private fun dropPendingLocked(session: Session, nowWall: Long, nowElapsed: Long) {
+        session.pending.clear()
+        session.rowIdStale = true
+        session.lastWall = maxOf(session.lastWall, nowWall)
+        if (session.running) {
+            session.segmentWall = nowWall
+            session.segmentElapsed = nowElapsed
+        }
+    }
+
     /** Returns true when the transaction committed. */
     private suspend fun writeSession(session: Session): Boolean {
-        val plan =
-            synchronized(lock) {
-                if (session.cleared) return false
-                val rowId = session.trackRowId ?: return false
-                val buckets =
-                    session.pending.entries.mapNotNull { (epochDay, pending) ->
-                        if (pending.millis <= 0L && pending.plays == 0) null
-                        else {
-                            FlushBucket(
-                                epochDay = epochDay,
-                                millis = pending.millis,
-                                plays = pending.plays,
-                                lastPlayedAt = pending.lastPlayedAt,
-                            )
-                        }
+        var resolveAttempts = 0
+        while (true) {
+            val rowId =
+                synchronized(lock) {
+                    if (session.cleared) return false
+                    if (session.pending.isEmpty()) {
+                        if (session.retired) removeRetiredLocked(session)
+                        return false
                     }
-                if (buckets.isEmpty()) {
-                    if (session.retired) removeRetiredLocked(session)
-                    return false
+                    session.trackRowId ?: return false
                 }
-                session.pending.clear()
-                FlushPlan(
-                    trackRowId = rowId,
-                    buckets = buckets,
-                    totalMillis = buckets.sumOf { it.millis },
-                    totalPlays = buckets.sumOf { it.plays },
-                    playedAt = maxOf(session.lastWall, buckets.maxOf { it.lastPlayedAt }),
-                    eventAt = if (session.countWall > 0L) session.countWall else session.lastWall,
-                    eventPlayedMillis =
-                        if (session.countPlayedMillis > 0L) session.countPlayedMillis
-                        else session.accumulatedMillis,
-                )
+            // A row id can go stale while the session keeps running: clear/restore can replace the
+            // aggregate set, and a resolver merge can delete the old row. Trust the database, not
+            // the cached id.
+            if (synchronized(lock) { session.rowIdStale } || !trackRowExists(rowId)) {
+                if (resolveAttempts >= MAX_RE_RESOLVE_ATTEMPTS) return false
+                resolveAttempts++
+                if (!reResolveSession(session, rowId)) return false
+                continue
             }
 
-        try {
-            db.withTransaction {
-                for (bucket in plan.buckets) {
-                    db.dailyDao()
+            val plan =
+                synchronized(lock) {
+                    if (session.cleared) return false
+                    val buckets =
+                        session.pending.entries.mapNotNull { (epochDay, pending) ->
+                            if (pending.millis <= 0L && pending.plays == 0) null
+                            else {
+                                FlushBucket(
+                                    epochDay = epochDay,
+                                    millis = pending.millis,
+                                    plays = pending.plays,
+                                    lastPlayedAt = pending.lastPlayedAt,
+                                )
+                            }
+                        }
+                    if (buckets.isEmpty()) {
+                        if (session.retired) removeRetiredLocked(session)
+                        return false
+                    }
+                    session.pending.clear()
+                    FlushPlan(
+                        trackRowId = rowId,
+                        buckets = buckets,
+                        totalMillis = buckets.sumOf { it.millis },
+                        totalPlays = buckets.sumOf { it.plays },
+                        playedAt = maxOf(session.lastWall, buckets.maxOf { it.lastPlayedAt }),
+                        eventAt =
+                            if (session.countWall > 0L) session.countWall else session.lastWall,
+                        eventPlayedMillis =
+                            if (session.countPlayedMillis > 0L) session.countPlayedMillis
+                            else session.accumulatedMillis,
+                    )
+                }
+
+            try {
+                db.withTransaction {
+                    for (bucket in plan.buckets) {
+                        db.dailyDao()
+                            .accumulate(
+                                trackRowId = plan.trackRowId,
+                                epochDay = bucket.epochDay,
+                                playCount = bucket.plays,
+                                playedMillis = bucket.millis,
+                                at = bucket.lastPlayedAt,
+                            )
+                        // Lifetime active days are never aged out, so they outlive track_daily.
+                        db.activeDayDao().insert(ActiveDayEntity(bucket.epochDay))
+                    }
+                    db.totalsDao()
                         .accumulate(
                             trackRowId = plan.trackRowId,
-                            epochDay = bucket.epochDay,
-                            playCount = bucket.plays,
-                            playedMillis = bucket.millis,
-                            at = bucket.lastPlayedAt,
+                            count = plan.totalPlays,
+                            millis = plan.totalMillis,
+                            at = plan.playedAt,
                         )
-                    // Lifetime active days are never aged out, so they outlive track_daily.
-                    db.activeDayDao().insert(ActiveDayEntity(bucket.epochDay))
-                }
-                db.totalsDao()
-                    .accumulate(
-                        trackRowId = plan.trackRowId,
-                        count = plan.totalPlays,
-                        millis = plan.totalMillis,
-                        at = plan.playedAt,
-                    )
-                if (plan.totalPlays > 0) {
-                    db.eventDao()
-                        .insert(
-                            PlayEventEntity(
-                                trackRowId = plan.trackRowId,
-                                playedAt = plan.eventAt,
-                                playedMillis = plan.eventPlayedMillis,
+                    if (plan.totalPlays > 0) {
+                        db.eventDao()
+                            .insert(
+                                PlayEventEntity(
+                                    trackRowId = plan.trackRowId,
+                                    playedAt = plan.eventAt,
+                                    playedMillis = plan.eventPlayedMillis,
+                                )
                             )
-                        )
-                }
-            }
-            synchronized(lock) {
-                // Only drop a retired session once everything it owed has been committed.
-                if (session.retired && session.pending.isEmpty()) removeRetiredLocked(session)
-            }
-            return true
-        } catch (ex: CancellationException) {
-            throw ex
-        } catch (ex: Exception) {
-            // Roll the whole plan back into pending so a later flush retries every bucket, the
-            // total, the count flag and the play event together.
-            synchronized(lock) {
-                if (!session.cleared) {
-                    for (bucket in plan.buckets) {
-                        val pending = session.pending.getOrPut(bucket.epochDay) { PendingDay() }
-                        pending.millis += bucket.millis
-                        pending.plays += bucket.plays
-                        pending.lastPlayedAt = maxOf(pending.lastPlayedAt, bucket.lastPlayedAt)
                     }
                 }
+                synchronized(lock) {
+                    // Only drop a retired session once everything it owed has been committed.
+                    if (session.retired && session.pending.isEmpty()) removeRetiredLocked(session)
+                }
+                return true
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                // Roll the whole plan back into pending so a later flush retries every bucket, the
+                // total, the count flag and the play event together.
+                synchronized(lock) {
+                    if (!session.cleared) {
+                        for (bucket in plan.buckets) {
+                            val pending = session.pending.getOrPut(bucket.epochDay) { PendingDay() }
+                            pending.millis += bucket.millis
+                            pending.plays += bucket.plays
+                            pending.lastPlayedAt = maxOf(pending.lastPlayedAt, bucket.lastPlayedAt)
+                        }
+                    }
+                }
+                Log.e("Phocid", "Unable to write playback statistics", ex)
+                // Generic database failures (locked file, trigger abort, ...) keep the same row and
+                // retry on the next flush. Only a row that no longer exists is stale.
+                if (
+                    resolveAttempts < MAX_RE_RESOLVE_ATTEMPTS &&
+                        !trackRowExists(plan.trackRowId) &&
+                        reResolveSession(session, plan.trackRowId)
+                ) {
+                    resolveAttempts++
+                    continue
+                }
+                return false
             }
-            Log.e("Phocid", "Unable to write playback statistics", ex)
-            return false
+        }
+    }
+
+    /**
+     * A missing row is the reliable staleness signal. If the check itself fails, keep the cached id
+     * and let the write decide, so a transient database problem never triggers re-resolution.
+     */
+    private suspend fun trackRowExists(rowId: Long): Boolean = runCatching {
+        db.trackDao().byRowId(rowId) != null
+    }.getOrElse { true }
+
+    /**
+     * Re-resolve a session whose cached row id no longer points at a stored track. [staleRowId]
+     * guards against overwriting an id that was refreshed through another path.
+     */
+    private suspend fun reResolveSession(session: Session, staleRowId: Long): Boolean {
+        val meta =
+            synchronized(lock) {
+                if (session.cleared) return false
+                if (session.trackRowId != staleRowId) return true
+                session.meta
+            }
+        val rowId =
+            try {
+                resolver.resolve(meta)
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                Log.e("Phocid", "Unable to re-identify track for statistics", ex)
+                null
+            } ?: return false
+        return synchronized(lock) {
+            if (session.cleared) false
+            else {
+                session.trackRowId = rowId
+                session.resolutionFailed = false
+                session.rowIdStale = false
+                true
+            }
         }
     }
 
@@ -656,6 +798,8 @@ class PlaybackStatsRecorder(
                 )
                 synchronized(lock) { session.cleared = true }
             } else {
+                // writeSession re-resolves from the retained metadata when the row disappeared
+                // while the session was alive, so shutdown does not drop pending time here.
                 writeSession(session)
                 val remaining = synchronized(lock) { session.pendingMillis() }
                 if (remaining > 0L) {

@@ -360,6 +360,69 @@ class PlaybackStatsRecorderTest {
         }
 
     @Test
+    fun deletedTrackRowIsReResolvedInsteadOfFailingForever() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val file = temporaryFolder.newFile("StaleRow.flac")
+            val uri = "content://stale-row/1"
+
+            recorder.onResumed()
+            recorder.onTrackStarted(meta(uri, file))
+            awaitSettled(recorder)
+            val oldRowId = db.trackDao().rowIdOfPath(file.absolutePath)!!
+
+            clock.advance(10_000L)
+            recorder.tick()
+            awaitSettled(recorder)
+            assertThat(db.totalsDao().byRowId(oldRowId)!!.totalMillis).isEqualTo(10_000L)
+
+            // A clear, a replace-style restore or a resolver merge can delete the row out from
+            // under a still-running session. The cascade removes its aggregates and aliases.
+            db.trackDao().delete(oldRowId)
+            assertThat(db.trackDao().byRowId(oldRowId)).isNull()
+            assertThat(db.totalsDao().byRowId(oldRowId)).isNull()
+
+            clock.advance(10_000L)
+            recorder.tick()
+            awaitSettled(recorder)
+
+            val newRowId = db.trackDao().rowIdOfPath(file.absolutePath)
+            assertThat(newRowId).isNotNull()
+            assertThat(newRowId).isNotEqualTo(oldRowId)
+            assertThat(db.totalsDao().byRowId(newRowId!!)!!.totalMillis).isEqualTo(10_000L)
+            assertThat(recorder.snapshotForTest().pendingMillis).isEqualTo(0L)
+        }
+
+    @Test
+    fun shutdownReResolvesADeletedRowInsteadOfDroppingPending() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val file = temporaryFolder.newFile("ShutdownStale.flac")
+            val uri = "content://shutdown-stale/1"
+
+            recorder.onResumed()
+            recorder.onTrackStarted(meta(uri, file))
+            awaitSettled(recorder)
+            val oldRowId = db.trackDao().rowIdOfPath(file.absolutePath)!!
+
+            clock.advance(10_000L)
+            db.trackDao().delete(oldRowId)
+            assertThat(db.trackDao().byRowId(oldRowId)).isNull()
+
+            // Shutdown accrues the final seconds, then must settle them on a fresh row: the
+            // retained metadata is enough to recover even though the cached id is gone.
+            recorder.onShutdown()
+
+            val newRowId = db.trackDao().rowIdOfPath(file.absolutePath)
+            assertThat(newRowId).isNotNull()
+            assertThat(newRowId).isNotEqualTo(oldRowId)
+            assertThat(db.totalsDao().byRowId(newRowId!!)!!.totalMillis).isEqualTo(10_000L)
+            assertThat(recorder.snapshotForTest().pendingMillis).isEqualTo(0L)
+        }
+
+    @Test
     fun shutdownSettlesRetiredAndCurrentResolvedSessions() =
         runBlocking<Unit> {
             val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)

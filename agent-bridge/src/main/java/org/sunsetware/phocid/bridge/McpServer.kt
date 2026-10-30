@@ -383,6 +383,11 @@ class McpServer(
     }
 
     private fun toolsList(): JSONObject {
+        val capabilities = capabilitiesJson()
+        val apiVersion = capabilities?.optInt("apiVersion", 1) ?: 1
+        val api5 = apiVersion >= 5
+        val sortKeysAvailable =
+            apiVersion >= 4 && capabilities?.optBoolean("writeSortKeys", false) == true
         val tools = JSONArray()
         tools.put(
             tool(
@@ -401,19 +406,27 @@ class McpServer(
         tools.put(
             tool(
                 "library_search_tracks",
-                "Search the Phocid library by tag fields (API 5). Returns a byte-bounded page of " +
-                    "track summaries without comment or unsyncedLyrics; call library_get_track " +
-                    "for full tags. Check byteTruncated and continue from nextOffset.",
-                searchSchema(),
+                if (api5) {
+                    "Search the Phocid library by tag fields (API 5). Returns a byte-bounded page of " +
+                        "track summaries without comment or unsyncedLyrics; call library_get_track " +
+                        "for full tags. Check byteTruncated and continue from nextOffset."
+                } else {
+                    "Search the Phocid library by tag fields. Returns a page of track metadata."
+                },
+                searchSchema(api5),
             )
         )
         tools.put(
             tool(
                 "library_get_track",
-                "Read every exposed tag field for one library track, including comment, " +
-                    "unsyncedLyrics, and its stats UUID when resolvable. If the detail exceeds " +
-                    "the 512 KiB response budget, heavy fields are omitted and listed in " +
-                    "truncatedFields.",
+                if (api5) {
+                    "Read every exposed tag field for one library track, including comment, " +
+                        "unsyncedLyrics, and its stats UUID when resolvable. If the detail exceeds " +
+                        "the 512 KiB response budget, heavy fields are omitted and listed in " +
+                        "truncatedFields."
+                } else {
+                    "Read every exposed tag field for one library track, including its stats UUID when resolvable."
+                },
                 libraryIdSchema(),
             )
         )
@@ -441,8 +454,13 @@ class McpServer(
         tools.put(
             tool(
                 "stats_top_tracks",
-                "Read the top played tracks for a range.",
-                topTracksSchema(),
+                if (api5) {
+                    "Read the top played tracks for a range. The response is byte-bounded; check " +
+                        "byteTruncated and continue from nextOffset."
+                } else {
+                    "Read the top played tracks for a range."
+                },
+                topTracksSchema(api5),
             )
         )
         tools.put(
@@ -459,7 +477,7 @@ class McpServer(
                 libraryIdSchema(),
             )
         )
-        if (canSortKeys()) {
+        if (sortKeysAvailable) {
             tools.put(
                 tool(
                     "library_validate_sort_keys",
@@ -468,7 +486,7 @@ class McpServer(
                 )
             )
         }
-        if (canWrite()) {
+        if (allowWrites && sortKeysAvailable) {
             tools.put(
                 tool(
                     "library_update_sort_keys",
@@ -526,6 +544,17 @@ class McpServer(
     }
 
     private fun canWrite(): Boolean = allowWrites && canSortKeys()
+
+    /** Reads the main app capabilities once, treating errors or a missing service as empty. */
+    private fun capabilitiesJson(): JSONObject? {
+        val capabilities =
+            try {
+                dataSource?.capabilities()
+            } catch (_: Exception) {
+                null
+            } ?: return null
+        return runCatching { JSONObject(capabilities) }.getOrNull()
+    }
 
     private fun dataResult(value: String?): JSONObject {
         if (value == null) {
@@ -621,17 +650,23 @@ class McpServer(
             )
             .put("additionalProperties", false)
 
-    private fun topTracksSchema(): JSONObject =
-        JSONObject()
-            .put("type", "object")
-            .put(
-                "properties",
-                JSONObject()
-                    .put("range", rangeProp())
-                    .put("sort", stringProp("plays or time"))
-                    .put("limit", integerProp("1..200, default 20")),
+    private fun topTracksSchema(api5: Boolean): JSONObject {
+        val properties =
+            JSONObject()
+                .put("range", rangeProp())
+                .put("sort", stringProp("plays or time"))
+                .put("limit", integerProp("1..200, default 20"))
+        if (api5) {
+            properties.put(
+                "offset",
+                integerProp("Pagination offset; continue from the response nextOffset"),
             )
+        }
+        return JSONObject()
+            .put("type", "object")
+            .put("properties", properties)
             .put("additionalProperties", false)
+    }
 
     private fun facetSchema(): JSONObject =
         JSONObject()
@@ -657,10 +692,10 @@ class McpServer(
             .put("required", JSONArray().put("kind"))
             .put("additionalProperties", false)
 
-    private fun searchSchema(): JSONObject =
-        JSONObject()
-            .put("type", "object")
-            .put(
+    private fun searchSchema(api5: Boolean): JSONObject {
+        val schema = JSONObject().put("type", "object")
+        if (api5) {
+            schema.put(
                 "description",
                 "API 5 search returns summaries with libraryId, fileName, title, artists, album, " +
                     "albumArtists, genres, year, originalYear, trackNumber, discNumber, " +
@@ -670,6 +705,8 @@ class McpServer(
                     "they are omitted. Search responses use a 512 KiB UTF-16 JSON budget and " +
                     "include byteTruncated and nextOffset.",
             )
+        }
+        schema
             .put(
                 "properties",
                 JSONObject()
@@ -713,16 +750,28 @@ class McpServer(
                     .put(
                         "limit",
                         integerProp(
-                            "1..200, default 50; the page stops early with byteTruncated when " +
-                                "the 512 KiB response budget is reached"
+                            if (api5) {
+                                "1..200, default 50; the page stops early with byteTruncated when " +
+                                    "the 512 KiB response budget is reached"
+                            } else {
+                                "1..200, default 50"
+                            }
                         ),
                     )
                     .put(
                         "offset",
-                        integerProp("Pagination offset; continue from the response nextOffset"),
+                        integerProp(
+                            if (api5) {
+                                "Pagination offset; continue from the response nextOffset"
+                            } else {
+                                "Pagination offset"
+                            }
+                        ),
                     ),
             )
             .put("additionalProperties", false)
+        return schema
+    }
 
     private fun rangeProp(): JSONObject =
         stringProp("7d, 30d, month, 90d, 365d, year, 3y, or all")
@@ -833,7 +882,9 @@ class McpServer(
                 }
                 break
             }
-            if (output.size() + size > MAX_BODY_BYTES) throw HttpError(413, "Body too large")
+            if (size > MAX_BODY_BYTES || size > MAX_BODY_BYTES - output.size()) {
+                throw HttpError(413, "Body too large")
+            }
             val chunk = ByteArray(size)
             readFully(input, chunk)
             output.write(chunk)

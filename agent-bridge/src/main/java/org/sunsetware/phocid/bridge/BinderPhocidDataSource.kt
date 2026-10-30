@@ -40,6 +40,12 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         PERMISSION,
     }
 
+    /** A connected service and the bind generation that produced it. */
+    private class QuerySession(val service: IPhocidQuery, val generation: Long)
+
+    /** The session a call ran on, if it reached the service, and its JSON result. */
+    private class CallResult(val session: QuerySession?, val result: String)
+
     private inner class BindAttempt(val generation: Long) : ServiceConnection {
         val latch = CountDownLatch(1)
 
@@ -60,14 +66,26 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         }
     }
 
-    private fun ensureQuery(): IPhocidQuery? {
-        query?.let {
+    private fun currentSession(): QuerySession? = synchronized(lock) { currentSessionLocked() }
+
+    private fun currentSessionLocked(): QuerySession? {
+        val service = query ?: return null
+        val current = attempt ?: return null
+        if (!retry.isCurrent(current.generation)) return null
+        return QuerySession(service, current.generation)
+    }
+
+    private fun isCurrentSessionLocked(session: QuerySession): Boolean =
+        isCurrentQuery(query, session.service, retry, session.generation)
+
+    private fun ensureQuery(): QuerySession? {
+        currentSession()?.let {
             return it
         }
         var selected: BindAttempt? = null
         var startBinding = false
         synchronized(lock) {
-            query?.let {
+            currentSessionLocked()?.let {
                 return it
             }
             if (retry.state == BinderConnectionState.CLOSED) return null
@@ -87,7 +105,7 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         if (startBinding) startBind(active)
 
         if (active.latch.await(BIND_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-            return query
+            return currentSession()
         }
         failAttempt(
             active,
@@ -95,7 +113,7 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
             unbind = true,
             onlyWhileBinding = true,
         )
-        return query
+        return currentSession()
     }
 
     private fun startBind(attempt: BindAttempt) {
@@ -207,11 +225,18 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
     }
 
     override fun capabilities(): String {
-        val result = call { it.capabilities() }
-        if (!hasError(result)) {
-            runCatching { apiVersion = JSONObject(result).optInt("apiVersion", 1) }
+        val call = callWithSession { it.service.capabilities() }
+        val session = call.session
+        if (!hasError(call.result) && session != null) {
+            val version =
+                runCatching { JSONObject(call.result).optInt("apiVersion", 1) }.getOrNull()
+            if (version != null) {
+                synchronized(lock) {
+                    if (isCurrentSessionLocked(session)) apiVersion = version
+                }
+            }
         }
-        return result
+        return call.result
     }
 
     override fun searchTracks(requestJson: String): String = call { it.searchTracks(requestJson) }
@@ -243,53 +268,68 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
                 apiVersion = null
             }
         }
-        val service = ensureQuery() ?: return false
+        val session = ensureQuery() ?: return false
         val version =
             try {
-                JSONObject(service.capabilities()).optInt("apiVersion", 1)
+                JSONObject(session.service.capabilities()).optInt("apiVersion", 1)
             } catch (_: RemoteException) {
-                invalidateQuery(service, BindFailure.REMOTE)
+                invalidateQuery(session.service, BindFailure.REMOTE)
                 return false
             } catch (_: SecurityException) {
-                invalidateQuery(service, BindFailure.PERMISSION)
+                invalidateQuery(session.service, BindFailure.PERMISSION)
                 return false
             } catch (_: Exception) {
                 return false
             }
         synchronized(lock) {
-            if (query === service) apiVersion = version
+            if (isCurrentSessionLocked(session)) apiVersion = version
         }
         return version >= requiredApi
     }
 
-    private fun call(requiredApi: Int = 1, block: (IPhocidQuery) -> String): String {
+    private fun call(requiredApi: Int = 1, block: (IPhocidQuery) -> String): String =
+        callWithSession(requiredApi) { block(it.service) }.result
+
+    private fun callWithSession(
+        requiredApi: Int = 1,
+        block: (QuerySession) -> String,
+    ): CallResult {
         if (requiredApi > 1 && !supports(requiredApi)) {
-            return errorJson(
-                "unsupported_api",
-                "Phocid main app is too old; update it to use this tool",
+            return CallResult(
+                null,
+                errorJson(
+                    "unsupported_api",
+                    "Phocid main app is too old; update it to use this tool",
+                ),
             )
         }
-        val service = ensureQuery()
-        if (service == null) {
-            return errorJson(
-                "phocid_unavailable",
-                if (lastFailure == BindFailure.BIND_REJECTED) {
-                    "Phocid data service is not installed or is too old"
-                } else {
-                    "Phocid data service did not connect"
-                },
+        val session = ensureQuery()
+        if (session == null) {
+            return CallResult(
+                null,
+                errorJson(
+                    "phocid_unavailable",
+                    if (lastFailure == BindFailure.BIND_REJECTED) {
+                        "Phocid data service is not installed or is too old"
+                    } else {
+                        "Phocid data service did not connect"
+                    },
+                ),
             )
         }
         return try {
-            block(service)
+            CallResult(session, block(session))
         } catch (e: RemoteException) {
-            invalidateQuery(service, BindFailure.REMOTE)
-            errorJson("phocid_error", e.message ?: e.javaClass.simpleName)
+            invalidateQuery(session.service, BindFailure.REMOTE)
+            CallResult(session, errorJson("phocid_error", e.message ?: e.javaClass.simpleName))
         } catch (e: SecurityException) {
-            invalidateQuery(service, BindFailure.PERMISSION)
-            errorJson("phocid_permission", e.message ?: "Signature permission rejected")
+            invalidateQuery(session.service, BindFailure.PERMISSION)
+            CallResult(
+                session,
+                errorJson("phocid_permission", e.message ?: "Signature permission rejected"),
+            )
         } catch (e: Exception) {
-            errorJson("phocid_error", e.message ?: e.javaClass.simpleName)
+            CallResult(session, errorJson("phocid_error", e.message ?: e.javaClass.simpleName))
         }
     }
 
@@ -321,3 +361,17 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         private const val BIND_COOLDOWN_MS = 1_000L
     }
 }
+
+/**
+ * Whether a result read through [service] from bind [generation] may still be cached. A service
+ * that was replaced, or a generation that a newer attempt superseded, must not write the cache.
+ */
+internal fun isCurrentQuery(
+    connected: IPhocidQuery?,
+    service: IPhocidQuery,
+    retry: BinderRetryState,
+    generation: Long,
+): Boolean =
+    connected === service &&
+        retry.state == BinderConnectionState.BOUND &&
+        retry.isCurrent(generation)

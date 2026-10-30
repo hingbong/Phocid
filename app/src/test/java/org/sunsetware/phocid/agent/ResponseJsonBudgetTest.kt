@@ -130,4 +130,159 @@ class ResponseJsonBudgetTest {
                 .contains("response budget")
         )
     }
+
+    private fun renderPage(
+        head: String,
+        items: List<String>,
+        extra: String?,
+        nextOffset: Int,
+        byteTruncated: Boolean,
+    ): String =
+        head +
+            (items + listOfNotNull(extra)).joinToString(",", prefix = "[", postfix = "]") +
+            ""","nextOffset":$nextOffset,"byteTruncated":$byteTruncated}"""
+
+    @Test
+    fun genericPageAdvancesNextOffsetFromRequestedOffset() {
+        val budget = ResponseJsonBudget(Int.MAX_VALUE)
+        val items = (1..5).map(::item)
+        val page =
+            budget.boundedPage(
+                total = 10,
+                offset = 3,
+                limit = 2,
+                items = items.asSequence(),
+                tooLargeMessage = "too large",
+            ) { included, extra, nextOffset, byteTruncated ->
+                renderPage(
+                    """{"offset":3,"items":""",
+                    included,
+                    extra,
+                    nextOffset,
+                    byteTruncated,
+                )
+            } as ResponseJsonBudget.PageResult.Page
+
+        assertEquals(2, page.returnedItems)
+        assertEquals(5, page.nextOffset)
+        assertFalse(page.byteTruncated)
+    }
+
+    @Test
+    fun genericPageTruncatesLongFacetItemsBeforeDefaultBudget() {
+        val budget = ResponseJsonBudget()
+        val limit = 200
+        val items =
+            (1..limit).map { index -> """{"name":"${"f".repeat(4_000)}","trackCount":$index}""" }
+        val page =
+            budget.boundedPage(
+                total = items.size,
+                offset = 0,
+                limit = limit,
+                items = items.asSequence(),
+                tooLargeMessage = "facet too large",
+            ) { included, extra, nextOffset, byteTruncated ->
+                renderPage(
+                    """{"kind":"artists","total":$limit,"offset":0,"limit":$limit,"items":""",
+                    included,
+                    extra,
+                    nextOffset,
+                    byteTruncated,
+                )
+            } as ResponseJsonBudget.PageResult.Page
+
+        assertTrue(page.byteTruncated)
+        assertTrue(page.returnedItems in 1 until limit)
+        assertEquals(page.returnedItems, page.nextOffset)
+        assertTrue(page.json.length * 2 <= ResponseJsonBudget.DEFAULT_MAX_UTF16_BYTES)
+        assertTrue(page.json.contains("\"byteTruncated\":true"))
+    }
+
+    @Test
+    fun genericPageRejectsSingleFacetLargerThanDefaultBudget() {
+        val budget = ResponseJsonBudget()
+        val huge =
+            """{"name":"${"x".repeat(ResponseJsonBudget.DEFAULT_MAX_UTF16_BYTES / 2)}","trackCount":1}"""
+        val result =
+            budget.boundedPage(
+                total = 1,
+                offset = 0,
+                limit = 1,
+                items = sequenceOf(huge),
+                tooLargeMessage = "facet too large",
+            ) { included, extra, nextOffset, byteTruncated ->
+                renderPage(
+                    """{"kind":"artists","total":1,"offset":0,"limit":1,"items":""",
+                    included,
+                    extra,
+                    nextOffset,
+                    byteTruncated,
+                )
+            }
+
+        assertTrue(result is ResponseJsonBudget.PageResult.TooLarge)
+        assertEquals(
+            "facet too large",
+            (result as ResponseJsonBudget.PageResult.TooLarge).message,
+        )
+    }
+
+    @Test
+    fun genericPageTruncatesLongAggregatesBeforeDefaultBudget() {
+        val budget = ResponseJsonBudget()
+        val limit = 200
+        val items =
+            (1..limit).map { index ->
+                """{"uuid":"u$index","title":"${"t".repeat(2_000)}","artist":"${"a".repeat(2_000)}","album":"${"b".repeat(2_000)}"}"""
+            }
+        val page =
+            budget.boundedPage(
+                total = items.size,
+                offset = 0,
+                limit = limit,
+                items = items.asSequence(),
+                tooLargeMessage = "aggregate too large",
+            ) { included, extra, nextOffset, byteTruncated ->
+                renderPage(
+                    """{"range":"30d","sort":"plays","offset":0,"limit":$limit,"tracks":""",
+                    included,
+                    extra,
+                    nextOffset,
+                    byteTruncated,
+                )
+            } as ResponseJsonBudget.PageResult.Page
+
+        assertTrue(page.byteTruncated)
+        assertTrue(page.returnedItems in 1 until limit)
+        assertTrue(page.json.length * 2 <= ResponseJsonBudget.DEFAULT_MAX_UTF16_BYTES)
+    }
+
+    @Test
+    fun oversizedFinalResponseBecomesBudgetError() {
+        val budget = ResponseJsonBudget()
+        val oversized = "x".repeat(ResponseJsonBudget.DEFAULT_MAX_UTF16_BYTES / 2 + 1)
+        val bounded = budget.boundedResponse(oversized)
+
+        assertTrue(bounded != oversized)
+        assertTrue(bounded.contains("\"code\":\"response_too_large\""))
+        assertTrue(bounded.length * 2 <= ResponseJsonBudget.DEFAULT_MAX_UTF16_BYTES)
+        assertEquals(bounded, budget.boundedResponse(bounded))
+    }
+
+    @Test
+    fun fittingResponseIsUnchanged() {
+        val budget = ResponseJsonBudget()
+        val response = """{"error":{"code":"not_found"}}"""
+
+        assertEquals(response, budget.boundedResponse(response))
+    }
+
+    @Test
+    fun budgetErrorItselfFitsTheBudget() {
+        val budget = ResponseJsonBudget(1_024)
+        val bounded = budget.boundedResponse("x".repeat(10_000))
+
+        assertTrue(bounded.contains("response_too_large"))
+        assertTrue(bounded.length * 2 <= 1_024)
+    }
 }

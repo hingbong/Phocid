@@ -6,8 +6,11 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -95,6 +98,62 @@ class McpServerTest {
             )
             val response = readResponse(socket, readBody = true)
             assertEquals(413, response.status)
+        }
+    }
+
+    @Test
+    fun oversizedChunkAfterSmallChunkIsRejectedWithoutAllocating() {
+        openSocket().use { socket ->
+            write(
+                socket,
+                "POST /mcp HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\n" +
+                    "Authorization: Bearer $TOKEN\r\n" +
+                    "Content-Type: application/json\r\n" +
+                    "Transfer-Encoding: chunked\r\n" +
+                    "\r\n" +
+                    "1\r\n" +
+                    "{\r\n" +
+                    "7fffffff\r\n",
+            )
+            val response = readResponse(socket, readBody = true)
+            assertEquals(413, response.status)
+        }
+    }
+
+    @Test
+    fun toolsListDescribesTheNegotiatedContract() {
+        val legacyServer = startServerWithApi(4)
+        val currentServer = startServerWithApi(5)
+        try {
+            val legacySearch = toolObject(legacyServer, "library_search_tracks")
+            val legacyTrack = toolObject(legacyServer, "library_get_track")
+            val legacyTop = toolObject(legacyServer, "stats_top_tracks")
+            val currentSearch = toolObject(currentServer, "library_search_tracks")
+            val currentTrack = toolObject(currentServer, "library_get_track")
+            val currentTop = toolObject(currentServer, "stats_top_tracks")
+
+            assertNotEquals(
+                legacySearch.getString("description"),
+                currentSearch.getString("description"),
+            )
+            assertNotEquals(
+                legacyTrack.getString("description"),
+                currentTrack.getString("description"),
+            )
+            assertNotEquals(
+                legacyTop.getString("description"),
+                currentTop.getString("description"),
+            )
+            assertLegacyContract(legacySearch)
+            assertLegacyContract(legacyTrack)
+            assertLegacyContract(legacyTop)
+            assertTrue(currentSearch.toString(), currentSearch.toString().contains("API 5"))
+            assertTrue(currentTrack.toString(), currentTrack.toString().contains("truncatedFields"))
+            assertTrue(currentTop.toString(), currentTop.toString().contains("byteTruncated"))
+        } finally {
+            legacyServer.stop()
+            currentServer.stop()
         }
     }
 
@@ -202,17 +261,58 @@ class McpServerTest {
         }
     }
 
-    private fun request(raw: String): Response =
-        openSocket().use { socket ->
+    private fun request(raw: String, target: McpServer = server): Response =
+        openSocket(target).use { socket ->
             write(socket, raw)
             readResponse(socket, readBody = true)
         }
 
-    private fun openSocket(): Socket =
+    private fun openSocket(target: McpServer = server): Socket =
         Socket().apply {
-            connect(InetSocketAddress("127.0.0.1", server.boundPort), CONNECT_TIMEOUT_MS)
+            connect(InetSocketAddress("127.0.0.1", target.boundPort), CONNECT_TIMEOUT_MS)
             soTimeout = READ_TIMEOUT_MS
         }
+
+    private fun startServerWithApi(apiVersion: Int): McpServer =
+        McpServer(
+                "127.0.0.1",
+                0,
+                tokenProvider = { TOKEN },
+                dataSource = FakeDataSource(apiVersion),
+            )
+            .apply { start() }
+
+    private fun toolObject(target: McpServer, name: String): JSONObject {
+        val payload = """{"jsonrpc":"2.0","id":1,"method":"tools/list"}"""
+        val response =
+            request(
+                "POST /mcp HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\n" +
+                    "Authorization: Bearer $TOKEN\r\n" +
+                    "Content-Type: application/json\r\n" +
+                    "Content-Length: ${payload.toByteArray(StandardCharsets.UTF_8).size}\r\n" +
+                    "\r\n" +
+                    payload,
+                target,
+            )
+        assertEquals(200, response.status)
+        val tools =
+            JSONObject(response.body.toString(StandardCharsets.UTF_8))
+                .getJSONObject("result")
+                .getJSONArray("tools")
+        for (i in 0 until tools.length()) {
+            val tool = tools.getJSONObject(i)
+            if (tool.optString("name") == name) return tool
+        }
+        error("tools/list did not include $name")
+    }
+
+    private fun assertLegacyContract(tool: JSONObject) {
+        val text = tool.toString()
+        for (promise in API5_PROMISES) {
+            assertFalse("legacy contract must not promise $promise: $text", text.contains(promise))
+        }
+    }
 
     private fun write(socket: Socket, request: String) {
         socket.getOutputStream().apply {
@@ -274,9 +374,41 @@ class McpServerTest {
         val body: ByteArray,
     )
 
+    private class FakeDataSource(private val apiVersion: Int) : PhocidDataSource {
+        override fun capabilities(): String = JSONObject().put("apiVersion", apiVersion).toString()
+
+        override fun searchTracks(requestJson: String): String = "{}"
+
+        override fun getTrack(libraryId: Long): String = "{}"
+
+        override fun statsSummary(range: String): String = "{}"
+
+        override fun statsTopTracks(requestJson: String): String = "{}"
+
+        override fun statsDaily(range: String): String = "{}"
+
+        override fun resolveStatsUuid(libraryId: Long): String = "{}"
+
+        override fun listFacets(requestJson: String): String = "{}"
+
+        override fun playerState(): String = "{}"
+
+        override fun updateSortKeys(requestJson: String): String = "{}"
+    }
+
     private companion object {
         private const val TOKEN = "test-token"
         private const val MAX_BODY_BYTES = 1024 * 1024
+        private val API5_PROMISES =
+            listOf(
+                "API 5",
+                "summaries",
+                "nextOffset",
+                "byteTruncated",
+                "truncatedFields",
+                "512 KiB",
+                "UTF-16 JSON budget",
+            )
         private const val MAX_SSE_STREAMS = 4
         private const val OVERLOAD_CONNECTIONS = 12
         private const val CONNECT_TIMEOUT_MS = 5_000

@@ -9,7 +9,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.sunsetware.phocid.stats.db.AliasKind
-import org.sunsetware.phocid.stats.db.FingerprintCacheEntity
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.TrackAliasEntity
 import org.sunsetware.phocid.stats.db.TrackEntity
@@ -35,8 +34,9 @@ data class TrackMeta(
  *
  * Lookup order: audio hash, tags, relative path. LOCAL_URI is only a local hint used to clean up
  * aliases; it never selects a row. Identity is resolved conservatively: when clues disagree the
- * resolver creates a new row and leaves a temporary split instead of risking a wrong merge. Aliases
- * are written with IGNORE so a weaker clue can never overwrite an existing identity.
+ * resolver creates a new row and leaves a temporary split instead of risking a wrong merge. A local
+ * marker makes a repeated resolve reuse that split row. Aliases are written with IGNORE so a weaker
+ * clue can never overwrite an existing identity.
  */
 class TrackResolver(
     private val db: StatsDatabase,
@@ -47,8 +47,10 @@ class TrackResolver(
 
     suspend fun resolve(meta: TrackMeta): Long {
         // Hashing can read the whole audio file. Do it before taking the write lock so slow
-        // media never serializes behind another track's database transaction.
-        val hash = withContext(Dispatchers.IO) { cachedHash(meta) }
+        // media never serializes behind another track's database transaction. The hash is always
+        // computed for the current resolve: a MediaStore URI can be reused, so uri, size, and
+        // modified time alone cannot prove that a cached hash still describes this audio.
+        val hash = withContext(Dispatchers.IO) { runCatching { fingerprint(meta) }.getOrNull() }
         val localUriKey = LocalUriKey.of(meta.uri, meta.size)
         val tagKeys = TagKey.candidates(meta.artist, meta.album, meta.title, meta.durationMillis)
         val relPath = meta.file?.let { RelPathKey.of(it.absolutePath, mediaRoots()) }
@@ -76,13 +78,16 @@ class TrackResolver(
         val tagHits = tagKeys.mapNotNull { aliases.resolve(AliasKind.TAG_KEY, it) }.distinct()
         val relHit = relPath?.let { aliases.resolve(AliasKind.REL_PATH, it) }
         var localHit = aliases.resolve(AliasKind.LOCAL_URI, localUriKey)
+        val ambiguousKey = if (tagHits.size > 1) ambiguousTagKey(tagKeys) else null
+        val ambiguousHit = ambiguousKey?.let { aliases.resolve(AliasKind.AMBIGUOUS_TAG, it) }
 
         val winner =
             when {
                 hashHit != null -> hashHit
                 tagHits.size == 1 -> tagHits.single()
-                // Ambiguous tags are safer as a new row than as a guess between rows.
-                tagHits.size > 1 -> null
+                // Ambiguous tags are safer as a dedicated row than as a guess between rows. Reuse
+                // that row when the same conflict is seen again instead of splitting every time.
+                tagHits.size > 1 -> ambiguousHit
                 relHit != null -> relHit
                 else -> null
             }
@@ -120,6 +125,13 @@ class TrackResolver(
         // another row's identity.
         hash?.let { aliases.insertIgnore(TrackAliasEntity(AliasKind.AUDIO_HASH, it, rowId)) }
         tagKeys.forEach { aliases.insertIgnore(TrackAliasEntity(AliasKind.TAG_KEY, it, rowId)) }
+
+        // Remember the row created for an unresolvable tag conflict so a repeated resolve reuses
+        // it. The marker never merges this row into the rows that own the conflicting tag keys,
+        // and a hash hit still wins over it.
+        if (ambiguousKey != null && hashHit == null) {
+            aliases.insertIgnore(TrackAliasEntity(AliasKind.AMBIGUOUS_TAG, ambiguousKey, rowId))
+        }
 
         // The local URI is a hint: replace the winner's old URI, but never repoint an alias that
         // still belongs to another row.
@@ -165,26 +177,9 @@ class TrackResolver(
             )
     }
 
-    private suspend fun cachedHash(meta: TrackMeta): String? {
-        val dao = db.fingerprintCacheDao()
-        val localKey = LocalUriKey.of(meta.uri, meta.size)
-        dao.hit(localKey, meta.size, meta.modified)?.let {
-            return it
-        }
-
-        // Keep reading the legacy path-keyed cache so upgrading does not re-hash the library.
-        meta.file?.let { file ->
-            if (file.isFile) {
-                dao.hit(file.absolutePath, file.length(), file.lastModified())?.let {
-                    return it
-                }
-            }
-        }
-
-        val hash = runCatching { fingerprint(meta) }.getOrNull() ?: return null
-        dao.put(FingerprintCacheEntity(localKey, meta.size, meta.modified, hash))
-        return hash
-    }
+    /** Stable local lookup key for a row created because TAG_KEY candidates conflicted. */
+    private fun ambiguousTagKey(tagKeys: List<String>): String =
+        "ambiguous\u0000" + tagKeys.sorted().joinToString("\u0000")
 }
 
 /** Convert a Phocid track into the small metadata record used by the resolver. */

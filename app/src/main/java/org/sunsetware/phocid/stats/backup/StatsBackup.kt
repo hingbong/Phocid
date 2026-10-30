@@ -4,7 +4,6 @@ import androidx.room.withTransaction
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.DateTimeException
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.zip.GZIPInputStream
@@ -223,46 +222,16 @@ class StatsBackupManager(
                 }
 
                 // Daily rows keep their source calendar days: a cross-timezone restore must not
-                // remap them. Validate them against the source zone's own "today" instead. A day
-                // that is still in the target device's future is legitimate, so target today is
-                // deliberately not used here.
-                val sourceZone =
-                    try {
-                        ZoneId.of(payload.zoneId)
-                    } catch (e: DateTimeException) {
-                        throw IllegalArgumentException(
-                            "Backup has an invalid time zone ID \"${payload.zoneId}\"",
-                            e,
-                        )
-                    }
-                // exportedAt == 0 marks a legacy/defensive payload with no absolute timestamp. The
-                // source calendar day cannot be reconstructed, so the upper bound is skipped
-                // rather than invented from the target device's clock.
-                val sourceToday =
-                    if (payload.exportedAt > 0) {
-                        try {
-                            Instant.ofEpochMilli(payload.exportedAt)
-                                .atZone(sourceZone)
-                                .toLocalDate()
-                                .toEpochDay()
-                        } catch (e: DateTimeException) {
-                            throw IllegalArgumentException(
-                                "Backup export timestamp ${payload.exportedAt} is out of range",
-                                e,
-                            )
-                        }
-                    } else null
-                if (sourceToday != null) {
-                    payload.daily.forEach { day ->
-                        require(day.epochDay.toLong() <= sourceToday) {
-                            "Backup daily row for track ${day.uuid} is dated ${day.epochDay}, after the source export day $sourceToday"
-                        }
-                    }
-                    payload.activeDays.forEach { day ->
-                        require(day.toLong() <= sourceToday) {
-                            "Backup active day $day is after the source export day $sourceToday"
-                        }
-                    }
+                // remap them. Their origins are mixed (an exported backup may itself contain
+                // days recorded on another device), so they cannot be validated against a single
+                // zone/export timestamp. Only the zone identifier's format is checked here.
+                try {
+                    ZoneId.of(payload.zoneId)
+                } catch (e: DateTimeException) {
+                    throw IllegalArgumentException(
+                        "Backup has an invalid time zone ID \"${payload.zoneId}\"",
+                        e,
+                    )
                 }
 
                 if (replace) {

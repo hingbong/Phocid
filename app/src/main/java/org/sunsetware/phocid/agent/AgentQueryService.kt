@@ -167,13 +167,12 @@ class AgentQueryService : Service() {
                         name = { it.name },
                         searchText = { it.name },
                     )
-                facetResponse("artists", page) { artist ->
-                        JSONObject()
-                            .put("name", artist.name)
-                            .put("trackCount", artist.tracks.size)
-                            .put("albumCount", artist.albumSlices.size)
-                    }
-                    .toString()
+                boundedFacetJson("artists", page) { artist ->
+                    JSONObject()
+                        .put("name", artist.name)
+                        .put("trackCount", artist.tracks.size)
+                        .put("albumCount", artist.albumSlices.size)
+                }
             }
             "albums",
             "album" -> {
@@ -187,15 +186,14 @@ class AgentQueryService : Service() {
                         name = { it.name },
                         searchText = { it.name + " " + it.albumArtists.joinToString(" ") },
                     )
-                facetResponse("albums", page) { album ->
-                        JSONObject()
-                            .put("name", album.name)
-                            .put("albumArtists", stringArray(album.albumArtists))
-                            .putNullable("year", album.year)
-                            .putNullable("originalYear", album.originalYear)
-                            .put("trackCount", album.tracks.size)
-                    }
-                    .toString()
+                boundedFacetJson("albums", page) { album ->
+                    JSONObject()
+                        .put("name", album.name)
+                        .put("albumArtists", stringArray(album.albumArtists))
+                        .putNullable("year", album.year)
+                        .putNullable("originalYear", album.originalYear)
+                        .put("trackCount", album.tracks.size)
+                }
             }
             "album_artists",
             "album_artist" -> {
@@ -209,13 +207,12 @@ class AgentQueryService : Service() {
                         name = { it.name },
                         searchText = { it.name },
                     )
-                facetResponse("album_artists", page) { albumArtist ->
-                        JSONObject()
-                            .put("name", albumArtist.name)
-                            .put("trackCount", albumArtist.tracks.size)
-                            .put("albumCount", albumArtist.albums.size)
-                    }
-                    .toString()
+                boundedFacetJson("album_artists", page) { albumArtist ->
+                    JSONObject()
+                        .put("name", albumArtist.name)
+                        .put("trackCount", albumArtist.tracks.size)
+                        .put("albumCount", albumArtist.albums.size)
+                }
             }
             "genres",
             "genre" -> {
@@ -229,26 +226,51 @@ class AgentQueryService : Service() {
                         name = { it.name },
                         searchText = { it.name },
                     )
-                facetResponse("genres", page) { genre ->
-                        JSONObject().put("name", genre.name).put("trackCount", genre.tracks.size)
-                    }
-                    .toString()
+                boundedFacetJson("genres", page) { genre ->
+                    JSONObject().put("name", genre.name).put("trackCount", genre.tracks.size)
+                }
             }
             else -> errorJson("invalid_kind", "Unknown facet kind: " + kind)
         }
     }
 
-    private fun <T> facetResponse(
+    private fun <T> boundedFacetJson(
         kind: String,
         page: FacetPage<T>,
         toJson: (T) -> JSONObject,
-    ): JSONObject =
-        JSONObject()
-            .put("kind", kind)
-            .put("total", page.total)
-            .put("offset", page.offset)
-            .put("limit", page.limit)
-            .put("items", JSONArray().apply { page.items.forEach { put(toJson(it)) } })
+    ): String {
+        val result =
+            responseBudget.boundedPage(
+                total = page.total,
+                offset = page.offset,
+                limit = page.limit,
+                items = page.items.asSequence(),
+                tooLargeMessage =
+                    "A single facet exceeds the response budget; narrow the query or " +
+                        "increase offset",
+            ) { items, extra, nextOffset, byteTruncated ->
+                JSONObject()
+                    .put("kind", kind)
+                    .put("total", page.total)
+                    .put("offset", page.offset)
+                    .put("limit", page.limit)
+                    .put(
+                        "items",
+                        JSONArray().apply {
+                            items.forEach { put(toJson(it)) }
+                            if (extra != null) put(toJson(extra))
+                        },
+                    )
+                    .put("nextOffset", nextOffset)
+                    .put("byteTruncated", byteTruncated)
+                    .toString()
+            }
+        return when (result) {
+            is ResponseJsonBudget.PageResult.Page -> result.json
+            is ResponseJsonBudget.PageResult.TooLarge ->
+                errorJson("response_too_large", result.message)
+        }
+    }
 
     private fun playerStateJson(): String {
         if (!PlaybackService.isRunning) {
@@ -428,7 +450,8 @@ class AgentQueryService : Service() {
 
     private fun statsTopTracksJson(requestJson: String): String {
         val request = JSONObject(requestJson)
-        val parsed = parseRange(request.optString("range", "30d"))
+        val range = request.optString("range", "30d")
+        val parsed = parseRange(range)
         if (parsed == null) {
             return errorJson("invalid_range", "Unknown range")
         }
@@ -439,14 +462,42 @@ class AgentQueryService : Service() {
                 StatsSort.PLAYS
             }
         val limit = request.optInt("limit", 20).coerceIn(1, MAX_LIMIT)
+        val offset = request.optInt("offset", 0).coerceAtLeast(0)
+        val fetchLimit =
+            (offset.toLong() + limit).coerceAtMost(MAX_TOP_TRACKS_WINDOW.toLong()).toInt()
         val rows = runBlocking {
-            GlobalData.statsManager.repository.topTracks(parsed, sort, limit).first()
+            GlobalData.statsManager.repository.topTracks(parsed, sort, fetchLimit).first()
         }
-        return JSONObject()
-            .put("range", request.optString("range", "30d"))
-            .put("sort", if (sort == StatsSort.TIME) "time" else "plays")
-            .put("tracks", JSONArray().apply { rows.forEach { put(aggregateJson(it)) } })
-            .toString()
+        val result =
+            responseBudget.boundedPage(
+                total = rows.size,
+                offset = offset,
+                limit = limit,
+                items = rows.asSequence().drop(offset),
+                tooLargeMessage =
+                    "A single stats aggregate exceeds the response budget; increase offset",
+            ) { items, extra, nextOffset, byteTruncated ->
+                JSONObject()
+                    .put("range", range)
+                    .put("sort", if (sort == StatsSort.TIME) "time" else "plays")
+                    .put("offset", offset)
+                    .put("limit", limit)
+                    .put(
+                        "tracks",
+                        JSONArray().apply {
+                            items.forEach { put(aggregateJson(it)) }
+                            if (extra != null) put(aggregateJson(extra))
+                        },
+                    )
+                    .put("nextOffset", nextOffset)
+                    .put("byteTruncated", byteTruncated)
+                    .toString()
+            }
+        return when (result) {
+            is ResponseJsonBudget.PageResult.Page -> result.json
+            is ResponseJsonBudget.PageResult.TooLarge ->
+                errorJson("response_too_large", result.message)
+        }
     }
 
     private fun statsDailyJson(range: String): String {
@@ -688,13 +739,17 @@ class AgentQueryService : Service() {
 
     private inline fun guarded(block: () -> String): String {
         return try {
-            if (!GlobalData.initialized.get()) {
-                errorJson("not_ready", "Phocid is still initializing")
-            } else {
-                block()
-            }
+            val response =
+                if (!GlobalData.initialized.get()) {
+                    errorJson("not_ready", "Phocid is still initializing")
+                } else {
+                    block()
+                }
+            responseBudget.boundedResponse(response)
         } catch (t: Throwable) {
-            errorJson("internal_error", t.message ?: t.javaClass.simpleName)
+            responseBudget.boundedResponse(
+                errorJson("internal_error", t.message ?: t.javaClass.simpleName)
+            )
         }
     }
 
@@ -764,6 +819,10 @@ class AgentQueryService : Service() {
         private const val API_VERSION = 5
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 200
+
+        // A budget-truncated page continues through offset. Caps the rows read for one request
+        // while still covering several pages when long aggregate strings stop a page early.
+        private const val MAX_TOP_TRACKS_WINDOW = MAX_LIMIT * 10
         private val HEAVY_TRACK_FIELDS = listOf("comment", "unsyncedLyrics")
         private val RANGES = listOf("7d", "30d", "month", "90d", "365d", "year", "3y", "all")
         private val FACET_KINDS = listOf("artists", "albums", "album_artists", "genres")
