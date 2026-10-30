@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithCache
@@ -92,11 +93,18 @@ object PlayerScreenLyricsViewDefault : PlayerScreenLyricsView() {
         var currentLineIndex by remember { mutableStateOf(null as Int?) }
 
         val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-        val isResumed = lifecycleState == Lifecycle.State.RESUMED
+        val isStarted = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
-        LaunchedEffect(lyrics, isPlaying, isVisible, isResumed) {
-            currentLineIndex = null
-            if (lyrics !is PlayerScreenLyrics.Synced || !isVisible || !isResumed) {
+        // Recompute the highlighted line whenever the lyrics change, even while the
+        // view is hidden, so that a new song never keeps the previous song's line.
+        // Visibility and lifecycle changes alone leave the line untouched, so it
+        // survives the player screen being paused or sent to the background.
+        LaunchedEffect(lyrics) {
+            currentLineIndex = if (lyrics is PlayerScreenLyrics.Synced) getLineIndex() else null
+        }
+
+        LaunchedEffect(lyrics, isPlaying, isVisible, isStarted) {
+            if (lyrics !is PlayerScreenLyrics.Synced || !isVisible || !isStarted) {
                 return@LaunchedEffect
             }
 
@@ -124,8 +132,7 @@ object PlayerScreenLyricsViewDefault : PlayerScreenLyricsView() {
             update()
             if (isPlaying) {
                 while (isActive) {
-                    delay(42.milliseconds) // 24 fps
-                    update()
+                    withFrameNanos { update() }
                 }
             } else {
                 while (isActive) {

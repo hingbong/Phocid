@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -84,42 +85,61 @@ object PlayerScreenLyricsOverlayDefault : PlayerScreenLyricsOverlay() {
         val alpha = animateFloatAsState(if (visibility) 1f else 0f)
 
         val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-        val isResumed = lifecycleState == Lifecycle.State.RESUMED
+        val isStarted = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
         val isVisible = overlayVisibility > 0.01f
+        val lyricsDisplay = preferences.lyricsDisplay
 
-        LaunchedEffect(lyrics, preferences, isVisible, isPlaying, isResumed) {
-            if (lyrics == null || preferences.lyricsDisplay == LyricsDisplayPreference.DISABLED) {
-                currentLineIndex = null
-                currentLine = ""
-                nextLine = ""
-                visibility = false
+        fun clearLine() {
+            currentLineIndex = null
+            currentLine = ""
+            nextLine = ""
+            visibility = false
+        }
+
+        fun updateLine() {
+            currentLineIndex = getLineIndex()
+            currentLine = getLine(currentLineIndex)
+            nextLine = getLine(currentLineIndex?.let { it + 1 })
+            visibility =
+                when (lyricsDisplay) {
+                    LyricsDisplayPreference.DISABLED -> false // unreachable
+                    LyricsDisplayPreference.DEFAULT -> currentLine.isNotEmpty()
+                    LyricsDisplayPreference.TWO_LINES ->
+                        currentLine.isNotEmpty() || nextLine.isNotEmpty()
+                }
+        }
+
+        // Clear or refresh the overlay as soon as the lyrics or display mode changes,
+        // even while it is hidden, so a stale line from the previous song is never
+        // kept. Visibility and lifecycle changes alone leave the line untouched, so
+        // it survives the overlay being hidden or the app leaving the foreground.
+        LaunchedEffect(lyrics, lyricsDisplay) {
+            if (lyrics == null || lyricsDisplay == LyricsDisplayPreference.DISABLED) {
+                clearLine()
+            } else {
+                updateLine()
+            }
+        }
+
+        LaunchedEffect(lyrics, lyricsDisplay, isVisible, isPlaying, isStarted) {
+            if (
+                lyrics == null ||
+                    lyricsDisplay == LyricsDisplayPreference.DISABLED ||
+                    !isVisible ||
+                    !isStarted
+            ) {
                 return@LaunchedEffect
             }
-            if (!isVisible || !isResumed) return@LaunchedEffect
 
-            fun update() {
-                currentLineIndex = getLineIndex()
-                currentLine = getLine(currentLineIndex)
-                nextLine = getLine(currentLineIndex?.let { it + 1 })
-                visibility =
-                    when (preferences.lyricsDisplay) {
-                        LyricsDisplayPreference.DISABLED -> false // unreachable
-                        LyricsDisplayPreference.DEFAULT -> currentLine.isNotEmpty()
-                        LyricsDisplayPreference.TWO_LINES ->
-                            currentLine.isNotEmpty() || nextLine.isNotEmpty()
-                    }
-            }
-
-            update()
+            updateLine()
             if (isPlaying) {
                 while (isActive) {
-                    delay(42.milliseconds) // 24 fps
-                    update()
+                    withFrameNanos { updateLine() }
                 }
             } else {
                 while (isActive) {
                     delay(1.seconds)
-                    update()
+                    updateLine()
                 }
             }
         }

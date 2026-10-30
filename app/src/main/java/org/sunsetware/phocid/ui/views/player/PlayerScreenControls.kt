@@ -261,13 +261,15 @@ class PlayerScreenControlsDefaultBase(
         var isDraggingProgressSlider by remember { mutableStateOf(false) }
 
         val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-        val isResumed = lifecycleState == Lifecycle.State.RESUMED
+        val isStarted = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
-        // Only poll while the player screen is visible. While playing, follow the
-        // frame clock so the loop stops together with the app's frames; while
-        // paused, a one-second poll keeps the slider correct without 120 Hz wakeups.
-        LaunchedEffect(currentTrack, isPlaying, isResumed) {
-            if (!isResumed) return@LaunchedEffect
+        // Only update while the player screen is at least started (visible), which
+        // keeps a multi-window or paused-but-visible player showing correct progress.
+        // While playing, follow the frame clock so the loop stops together with the
+        // app's frames; while paused, a one-second poll keeps the slider correct
+        // without 120 Hz wakeups. Progress is preserved while the screen is hidden.
+        LaunchedEffect(currentTrack, isPlaying, isStarted) {
+            if (!isStarted) return@LaunchedEffect
 
             fun updateProgress() {
                 val position = currentPosition()
