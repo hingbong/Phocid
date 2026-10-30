@@ -51,7 +51,9 @@ jobs:
 
       - name: Prepare signing keystore
         env:
-          PHOCID_KEYSTORE_BASE64: ${{ secrets.PHOCID_KEYSTORE_BASE64 }}
+          # Prefer encrypted Secrets; vars fallback supports repositories that keep
+          # these under Settings -> Secrets and variables -> Actions -> Variables.
+          PHOCID_KEYSTORE_BASE64: ${{ secrets.PHOCID_KEYSTORE_BASE64 || vars.PHOCID_KEYSTORE_BASE64 }}
         run: |
           set -euo pipefail
           if [ -n "${PHOCID_KEYSTORE_BASE64:-}" ]; then
@@ -65,9 +67,9 @@ jobs:
       - name: Validate stable release signing
         if: github.ref == 'refs/heads/main'
         env:
-          PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
-          PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
-          PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
+          PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD || vars.PHOCID_KEYSTORE_PASSWORD }}
+          PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS || vars.PHOCID_KEY_ALIAS }}
+          PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD || vars.PHOCID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$*"; exit 1; }
@@ -78,27 +80,40 @@ jobs:
             fail "PHOCID_KEYSTORE_PATH does not point to a regular file: $PHOCID_KEYSTORE_PATH"
           [ -r "$PHOCID_KEYSTORE_PATH" ] ||
             fail "PHOCID_KEYSTORE_PATH is not readable: $PHOCID_KEYSTORE_PATH"
-          [ -n "${PHOCID_KEYSTORE_PASSWORD:-}" ] || fail "PHOCID_KEYSTORE_PASSWORD is empty"
-          [ -n "${PHOCID_KEY_ALIAS:-}" ] || fail "PHOCID_KEY_ALIAS is empty"
-          [ -n "${PHOCID_KEY_PASSWORD:-}" ] || fail "PHOCID_KEY_PASSWORD is empty"
+
+          # Match the defaults in app/build.gradle.kts. The old release workflow used
+          # these defaults when the individual password/alias secrets were absent;
+          # validating the effective values avoids both a false failure and a false
+          # stable-signing claim.
+          storepass="${PHOCID_KEYSTORE_PASSWORD:-android}"
+          alias="${PHOCID_KEY_ALIAS:-androiddebugkey}"
+          keypass="${PHOCID_KEY_PASSWORD:-android}"
+          [ -n "$alias" ] || fail "PHOCID_KEY_ALIAS is empty"
 
           # Do not echo the password or keytool output: they can contain credential details.
           if ! keytool -list -keystore "$PHOCID_KEYSTORE_PATH" \
               -storetype PKCS12 \
-              -storepass "$PHOCID_KEYSTORE_PASSWORD" \
-              -alias "$PHOCID_KEY_ALIAS" > /dev/null 2>&1; then
-            fail "Unable to open keystore with keytool or alias '$PHOCID_KEY_ALIAS' is missing"
+              -storepass "$storepass" \
+              -alias "$alias" > /dev/null 2>&1; then
+            fail "Unable to open keystore with keytool or alias '$alias' is missing"
+          fi
+          if ! keytool -certreq -keystore "$PHOCID_KEYSTORE_PATH" \
+              -storetype PKCS12 \
+              -storepass "$storepass" \
+              -alias "$alias" \
+              -keypass "$keypass" > /dev/null 2>&1; then
+            fail "Unable to use the private key for alias '$alias'"
           fi
 
-          echo "Stable release signing keystore validated for alias '$PHOCID_KEY_ALIAS'."
+          echo "Stable release signing keystore validated for alias '$alias'."
 
       - name: Run unit tests
         id: unit_tests
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_unit_tests == true)
         env:
-          PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
-          PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
-          PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
+          PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD || vars.PHOCID_KEYSTORE_PASSWORD }}
+          PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS || vars.PHOCID_KEY_ALIAS }}
+          PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD || vars.PHOCID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           set +e
@@ -156,9 +171,9 @@ jobs:
 
       - name: Build release APK
         env:
-          PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
-          PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
-          PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
+          PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD || vars.PHOCID_KEYSTORE_PASSWORD }}
+          PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS || vars.PHOCID_KEY_ALIAS }}
+          PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD || vars.PHOCID_KEY_PASSWORD }}
           PHOCID_BUILD_COMMIT: ${{ github.sha }}
         run: |
           export PHOCID_BUILD_TIME="$(date -u '+%Y-%m-%d %H:%M UTC')"
@@ -169,7 +184,7 @@ jobs:
 
       - name: Verify APK signatures
         env:
-          PHOCID_CERT_SHA256: ${{ secrets.PHOCID_CERT_SHA256 }}
+          PHOCID_CERT_SHA256: ${{ secrets.PHOCID_CERT_SHA256 || vars.PHOCID_CERT_SHA256 }}
         run: |
           set -euo pipefail
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
