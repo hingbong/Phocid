@@ -615,7 +615,28 @@ class McpServer(
                     .put("hasSortKey", booleanProp("Filter by presence of a sort key"))
                     .put("minDurationMs", integerProp("Minimum duration in milliseconds"))
                     .put("maxDurationMs", integerProp("Maximum duration in milliseconds"))
-                    .put("sort", stringProp("title, artist, album, year, dateAdded, or duration"))
+                    .put(
+                        "sort",
+                        stringProp(
+                                "title, rawTitle, sortKey, artist, album, year, dateAdded, or duration"
+                            )
+                            .put(
+                                "enum",
+                                JSONArray().apply {
+                                    listOf(
+                                            "title",
+                                            "rawTitle",
+                                            "sortKey",
+                                            "artist",
+                                            "album",
+                                            "year",
+                                            "dateAdded",
+                                            "duration",
+                                        )
+                                        .forEach { put(it) }
+                                },
+                            ),
+                    )
                     .put("descending", booleanProp("Reverse the sort order"))
                     .put("limit", integerProp("1..200, default 50"))
                     .put("offset", integerProp("Pagination offset")),

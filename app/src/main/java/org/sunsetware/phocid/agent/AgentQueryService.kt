@@ -121,8 +121,13 @@ class AgentQueryService : Service() {
                 .asSequence()
                 .filter { filter.matches(it) }
                 .toList()
-        val comparator = comparatorFor(sort)
-        val sorted = matches.sortedWith(if (descending) comparator.reversed() else comparator)
+        val sorted =
+            if (sort == "sortkey") {
+                matches.sortedWith(sortKeyComparator(descending))
+            } else {
+                val comparator = comparatorFor(sort)
+                matches.sortedWith(if (descending) comparator.reversed() else comparator)
+            }
         val page = sorted.drop(offset).take(limit)
 
         return JSONObject()
@@ -582,6 +587,9 @@ class AgentQueryService : Service() {
             "year" -> compareBy { it.year ?: Int.MIN_VALUE }
             "dateadded", "date_added" -> compareBy { it.dateAdded }
             "duration" -> compareBy { it.duration.inWholeMilliseconds }
+            "rawtitle" ->
+                Comparator { a, b -> collator.compare(a.displayTitle, b.displayTitle) }
+            "sortkey" -> sortKeyComparator(descending = false)
             else ->
                 Comparator { a, b ->
                     collator.compare(
@@ -589,6 +597,28 @@ class AgentQueryService : Service() {
                         b.sortTitle ?: b.displayTitle,
                     )
                 }
+        }
+    }
+
+    private fun sortKeyComparator(descending: Boolean): Comparator<Track> {
+        val collator = GlobalData.preferences.value.sortCollator
+        return Comparator { a, b ->
+            val aKey = a.sortKey
+            val bKey = b.sortKey
+            when {
+                aKey == null && bKey == null ->
+                    collator.compare(a.displayTitle, b.displayTitle)
+                aKey == null -> 1
+                bKey == null -> -1
+                else -> {
+                    val result = collator.compare(aKey, bKey)
+                    if (result != 0) {
+                        if (descending) -result else result
+                    } else {
+                        collator.compare(a.displayTitle, b.displayTitle)
+                    }
+                }
+            }
         }
     }
 

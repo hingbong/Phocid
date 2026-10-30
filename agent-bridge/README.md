@@ -71,6 +71,14 @@ The main app reports `apiVersion: 4`. `library_list_facets` requires API 2;
 and the current `sortKey` value. `library_search_tracks` also accepts a
 `hasSortKey` boolean filter.
 
+`sort` accepts three title modes:
+
+- `title`: `sortKey ?: rawTitle`; matches the app UI.
+- `rawTitle`: raw title only.
+- `sortKey`: keyed tracks by `sortKey`; tracks without a key are placed last,
+  ordered by raw title. `descending` reverses only the keyed part; nulls stay
+  last.
+
 Set or clear values with `library_update_sort_keys`:
 
 ```json
