@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import org.sunsetware.phocid.data.Track
 import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.DayBucket
@@ -53,6 +54,8 @@ enum class StatsSort {
     PLAYS,
     TIME,
 }
+
+private const val HOURS_IN_DAY = 24
 
 class StatsRepository(
     private val db: StatsDatabase,
@@ -108,10 +111,26 @@ class StatsRepository(
         return db.dailyDao().dailyTrend(sinceDay(window, today), today.toEpochDay().toInt())
     }
 
-    /** Reads play_events, so it starts from zero after restoring a backup. */
+    /**
+     * Reads play_events, so it starts from zero after restoring a backup.
+     *
+     * The bucket is the event's own local hour in [zoneId], not a single current offset applied to
+     * every event. Both occurrences of a repeated fall-back hour therefore share hour 1, while a
+     * spring-forward gap simply has no events (and so no bucket beyond the ordinary zero-filled
+     * 0..23 output).
+     */
     fun hourlyDistribution(range: StatsRange): Flow<List<HourBucket>> {
-        val offset = zoneId().rules.getOffset(Instant.now()).totalSeconds
-        return db.eventDao().hourlyDistribution(sinceMillis(range), offset)
+        val zone = zoneId()
+        return db.eventDao().hourlyEvents(sinceMillis(range)).map { events ->
+            val plays = IntArray(HOURS_IN_DAY)
+            val millis = LongArray(HOURS_IN_DAY)
+            for (event in events) {
+                val hour = Instant.ofEpochMilli(event.playedAt).atZone(zone).hour
+                plays[hour]++
+                millis[hour] += event.playedMillis
+            }
+            List(HOURS_IN_DAY) { hour -> HourBucket(hour, plays[hour], millis[hour]) }
+        }
     }
 
     fun history(limit: Int, offset: Int): Flow<List<PlayHistoryItem>> =

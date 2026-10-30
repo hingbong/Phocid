@@ -24,6 +24,15 @@ data class TrackAggregate(
 
 data class HourBucket(val hour: Int, val plays: Int, val millis: Long)
 
+/**
+ * Minimal play-event projection for [PlayEventDao.hourlyEvents].
+ *
+ * Local-hour bucketing cannot happen in SQLite: a fixed UTC offset is wrong for events on the other
+ * side of a DST transition, and SQLite has no zone rules. The caller groups by the zone's local
+ * hour instead.
+ */
+data class PlayEventTime(val playedAt: Long, val playedMillis: Long)
+
 data class DayBucket(val epochDay: Int, val plays: Int, val millis: Long)
 
 data class PlayHistoryItem(
@@ -116,16 +125,13 @@ interface PlayEventDao {
 
     @Query(
         """
-        SELECT CAST(strftime('%H', playedAt / 1000 + :offsetSeconds, 'unixepoch') AS INTEGER) AS hour,
-               COUNT(*) AS plays,
-               SUM(playedMillis) AS millis
+        SELECT playedAt AS playedAt,
+               playedMillis AS playedMillis
         FROM play_events
         WHERE playedAt >= :sinceMillis
-        GROUP BY hour
-        ORDER BY hour
         """
     )
-    fun hourlyDistribution(sinceMillis: Long, offsetSeconds: Int): Flow<List<HourBucket>>
+    fun hourlyEvents(sinceMillis: Long): Flow<List<PlayEventTime>>
 
     @Query(
         """
