@@ -581,7 +581,7 @@ class AgentQueryService : Service() {
             "year" -> compareBy { it.year ?: Int.MIN_VALUE }
             "dateadded", "date_added" -> compareBy { it.dateAdded }
             "duration" -> compareBy { it.duration.inWholeMilliseconds }
-            else -> compareBy { (it.title ?: it.fileName).lowercase() }
+            else -> compareBy { (it.sortTitle ?: it.displayTitle).lowercase() }
         }
 
     private fun parseRange(raw: String): StatsRange? =
