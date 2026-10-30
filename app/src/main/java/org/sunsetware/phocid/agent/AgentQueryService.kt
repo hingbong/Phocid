@@ -72,6 +72,8 @@ class AgentQueryService : Service() {
 
     override fun onBind(intent: Intent?): IBinder = binder
 
+    private val responseBudget = ResponseJsonBudget()
+
     private fun capabilitiesJson(): String {
         val index = GlobalData.libraryIndex.value
         return JSONObject()
@@ -132,14 +134,15 @@ class AgentQueryService : Service() {
                 val comparator = comparatorFor(sort)
                 matches.sortedWith(if (descending) comparator.reversed() else comparator)
             }
-        val page = sorted.drop(offset).take(limit)
-
-        return JSONObject()
-            .put("total", sorted.size)
-            .put("offset", offset)
-            .put("limit", limit)
-            .put("tracks", JSONArray().apply { page.forEach { put(trackJson(it)) } })
-            .toString()
+        val summaries =
+            sorted.asSequence().drop(offset).take(limit).map { trackSummaryJson(it).toString() }
+        return when (
+            val result = responseBudget.searchPage(sorted.size, offset, limit, summaries)
+        ) {
+            is ResponseJsonBudget.SearchPageResult.Page -> result.json
+            is ResponseJsonBudget.SearchPageResult.TooLarge ->
+                errorJson("response_too_large", result.message)
+        }
     }
 
     private fun listFacetsJson(requestJson: String): String {
@@ -300,7 +303,7 @@ class AgentQueryService : Service() {
                 )
                 .put("sampledAtElapsedRealtimeMs", snapshot.sampledAtElapsedRealtimeMs)
                 .putNullable("currentMediaId", snapshot.mediaId)
-                .putNullable("currentTrack", track?.let { trackSummaryJson(it) })
+                .putNullable("currentTrack", track?.let { playerTrackSummaryJson(it) })
                 .put("queueLength", snapshot.queueLength)
                 .putNullable(
                     "currentIndex",
@@ -372,7 +375,7 @@ class AgentQueryService : Service() {
             .put("playbackState", "idle")
             .toString()
 
-    private fun trackSummaryJson(track: Track): JSONObject =
+    private fun playerTrackSummaryJson(track: Track): JSONObject =
         JSONObject()
             .put("libraryId", track.id)
             .putNullable("title", track.title)
@@ -402,7 +405,16 @@ class AgentQueryService : Service() {
             return errorJson("not_found", "No library track with id " + libraryId)
         }
         val statsUuid = statsUuidFor(track)
-        return trackJson(track).put("statsUuid", statsUuid ?: JSONObject.NULL).toString()
+        val full = trackJson(track).put("statsUuid", statsUuid ?: JSONObject.NULL).toString()
+        val compact =
+            trackJson(track, includeHeavyFields = false)
+                .put("statsUuid", statsUuid ?: JSONObject.NULL)
+                .toString()
+        return when (val result = responseBudget.trackDetail(full, compact, HEAVY_TRACK_FIELDS)) {
+            is ResponseJsonBudget.TrackDetailResult.Ok -> result.json
+            is ResponseJsonBudget.TrackDetailResult.TooLarge ->
+                errorJson("response_too_large", result.message)
+        }
     }
 
     private fun statsSummaryJson(range: String): String {
@@ -561,7 +573,10 @@ class AgentQueryService : Service() {
             .put("plays", day.plays)
             .put("millis", day.millis)
 
-    private fun trackJson(track: Track): JSONObject =
+    private fun trackSummaryJson(track: Track): JSONObject =
+        trackJson(track, includeHeavyFields = false)
+
+    private fun trackJson(track: Track, includeHeavyFields: Boolean = true): JSONObject =
         JSONObject()
             .put("libraryId", track.id)
             .put("fileName", track.fileName)
@@ -583,8 +598,12 @@ class AgentQueryService : Service() {
             .put("hasArtwork", track.hasArtwork)
             .put("hasSortKey", track.sortKey != null)
             .putNullable("sortKey", track.sortKey)
-            .putNullable("comment", track.comment)
-            .putNullable("unsyncedLyrics", track.unsyncedLyrics)
+            .apply {
+                if (includeHeavyFields) {
+                    putNullable("comment", track.comment)
+                    putNullable("unsyncedLyrics", track.unsyncedLyrics)
+                }
+            }
             .put("dateAdded", track.dateAdded)
 
     private fun comparatorFor(sort: String): Comparator<Track> {
@@ -742,9 +761,10 @@ class AgentQueryService : Service() {
     }
 
     companion object {
-        private const val API_VERSION = 4
+        private const val API_VERSION = 5
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 200
+        private val HEAVY_TRACK_FIELDS = listOf("comment", "unsyncedLyrics")
         private val RANGES = listOf("7d", "30d", "month", "90d", "365d", "year", "3y", "all")
         private val FACET_KINDS = listOf("artists", "albums", "album_artists", "genres")
         private val TRACK_FIELDS =

@@ -60,10 +60,31 @@ or any queue mutation.
 sleep. It is not a Unix timestamp and not bridge process uptime; clients should
 use elapsed-time differences for interpolation.
 
-The main app reports `apiVersion: 4`. `library_list_facets` requires API 2;
+The main app reports `apiVersion: 5`. `library_list_facets` requires API 2;
 `player_state` requires API 3; `library_validate_sort_keys` and
-`library_update_sort_keys` require API 4. Older main APKs return
-`unsupported_api`.
+`library_update_sort_keys` require API 4. Search and track detail require API 1.
+Older main APKs return `unsupported_api`.
+
+## Search and detail payloads (API 5)
+
+`library_search_tracks` returns lightweight summaries with these fields:
+`libraryId`, `fileName`, `title`, `artists`, `album`, `albumArtists`,
+`genres`, `year`, `originalYear`, `trackNumber`, `discNumber`, `durationMs`,
+`size`, `format`, `sampleRate`, `bitRate`, `bitDepth`, `hasArtwork`,
+`hasSortKey`, `sortKey`, and `dateAdded`. `comment` and `unsyncedLyrics` are
+not included in search results.
+
+`library_get_track` keeps the full track payload, including `comment` and
+`unsyncedLyrics`. If that payload would exceed the 512 KiB UTF-16 JSON budget,
+the heavy fields are omitted and the response gains
+`truncatedFields: ["comment", "unsyncedLyrics"]` instead of failing the Binder
+call.
+
+Search responses are bounded to a conservative 512 KiB UTF-16 JSON budget. The
+page stops before the first track that would exceed it. `nextOffset` points at
+the next unreturned track, and `byteTruncated` is true only when the budget (not
+the requested `limit`) stopped the page. A single summary that cannot fit
+returns a readable `response_too_large` error.
 
 ## Sort keys
 
@@ -212,10 +233,12 @@ frozen client from a frozen server.
 
 ## API version
 
-The main app currently reports `apiVersion: 4`. The bridge caches this value
+The main app currently reports `apiVersion: 5`. The bridge caches this value
 and rejects `library_list_facets` (API 2), `player_state` (API 3), and
 `library_update_sort_keys` (API 4) with `unsupported_api` when an older main APK
 is installed. The write tool is also hidden unless **Allow agent writes** is on.
+API 5 adds search summaries and byte-bounded search/detail responses; those tools
+still only require API 1, and sort keys still require API 4.
 
 ## Out of scope
 

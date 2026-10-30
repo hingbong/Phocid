@@ -344,14 +344,19 @@ class McpServer(
         tools.put(
             tool(
                 "library_search_tracks",
-                "Search the Phocid library by tag fields. Returns a page of track metadata.",
+                "Search the Phocid library by tag fields (API 5). Returns a byte-bounded page of " +
+                    "track summaries without comment or unsyncedLyrics; call library_get_track " +
+                    "for full tags. Check byteTruncated and continue from nextOffset.",
                 searchSchema(),
             )
         )
         tools.put(
             tool(
                 "library_get_track",
-                "Read every exposed tag field for one library track, including its stats UUID when resolvable.",
+                "Read every exposed tag field for one library track, including comment, " +
+                    "unsyncedLyrics, and its stats UUID when resolvable. If the detail exceeds " +
+                    "the 512 KiB response budget, heavy fields are omitted and listed in " +
+                    "truncatedFields.",
                 libraryIdSchema(),
             )
         )
@@ -599,6 +604,16 @@ class McpServer(
         JSONObject()
             .put("type", "object")
             .put(
+                "description",
+                "API 5 search returns summaries with libraryId, fileName, title, artists, album, " +
+                    "albumArtists, genres, year, originalYear, trackNumber, discNumber, " +
+                    "durationMs, size, format, sampleRate, bitRate, bitDepth, hasArtwork, " +
+                    "hasSortKey, sortKey, and dateAdded. comment and unsyncedLyrics are only " +
+                    "returned by library_get_track, which lists them in truncatedFields when " +
+                    "they are omitted. Search responses use a 512 KiB UTF-16 JSON budget and " +
+                    "include byteTruncated and nextOffset.",
+            )
+            .put(
                 "properties",
                 JSONObject()
                     .put("query", stringProp("Full-text match across title, artist, album, genre, and file name"))
@@ -638,8 +653,17 @@ class McpServer(
                             ),
                     )
                     .put("descending", booleanProp("Reverse the sort order"))
-                    .put("limit", integerProp("1..200, default 50"))
-                    .put("offset", integerProp("Pagination offset")),
+                    .put(
+                        "limit",
+                        integerProp(
+                            "1..200, default 50; the page stops early with byteTruncated when " +
+                                "the 512 KiB response budget is reached"
+                        ),
+                    )
+                    .put(
+                        "offset",
+                        integerProp("Pagination offset; continue from the response nextOffset"),
+                    ),
             )
             .put("additionalProperties", false)
 
