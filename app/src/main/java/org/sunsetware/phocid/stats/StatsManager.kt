@@ -3,8 +3,10 @@ package org.sunsetware.phocid.stats
 import android.content.Context
 import android.net.Uri
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.sunsetware.phocid.stats.backup.StatsBackup
 import org.sunsetware.phocid.stats.backup.StatsBackupManager
 import org.sunsetware.phocid.stats.db.StatsDatabase
@@ -50,16 +52,17 @@ class StatsManager(context: Context) {
             it.startOutboxRecovery()
         }
 
-    suspend fun clear() {
-        storeMutex.withLock {
-            // clear() also deletes pending outbox rows in the same transaction, so discarded work
-            // cannot be recovered after the user deleted it.
-            backupManager.clear()
-            resolver.invalidate()
-            // Recorders may still hold accrual or row ids that referred to the cleared data.
-            for (recorder in recorders) recorder.onStoreClearedLocked()
+    suspend fun clear() =
+        withContext(Dispatchers.IO) {
+            storeMutex.withLock {
+                // clear() also deletes pending outbox rows in the same transaction, so discarded
+                // work cannot be recovered after the user deleted it.
+                backupManager.clear()
+                resolver.invalidate()
+                // Recorders may still hold accrual or row ids that referred to the cleared data.
+                for (recorder in recorders) recorder.onStoreClearedLocked()
+            }
         }
-    }
 
     /**
      * Restores [payload]. Its identities are matched against local rows, which can create new rows
@@ -68,13 +71,14 @@ class StatsManager(context: Context) {
      * A replace restore clears the outbox with the aggregate set; a merge keeps it because the
      * local aggregates it will apply to are still there.
      */
-    suspend fun restore(payload: StatsBackup, replace: Boolean) {
-        storeMutex.withLock {
-            backupManager.restore(payload, replace)
-            resolver.invalidate()
-            for (recorder in recorders) recorder.onStoreRestoredLocked(replace)
+    suspend fun restore(payload: StatsBackup, replace: Boolean) =
+        withContext(Dispatchers.IO) {
+            storeMutex.withLock {
+                backupManager.restore(payload, replace)
+                resolver.invalidate()
+                for (recorder in recorders) recorder.onStoreRestoredLocked(replace)
+            }
         }
-    }
 
     fun invalidateResolver() {
         resolver.invalidate()
