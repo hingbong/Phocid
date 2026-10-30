@@ -574,15 +574,23 @@ class AgentQueryService : Service() {
             .putNullable("unsyncedLyrics", track.unsyncedLyrics)
             .put("dateAdded", track.dateAdded)
 
-    private fun comparatorFor(sort: String): Comparator<Track> =
-        when (sort) {
+    private fun comparatorFor(sort: String): Comparator<Track> {
+        val collator = GlobalData.preferences.value.sortCollator
+        return when (sort) {
             "artist" -> compareBy { it.artists.joinToString(", ").lowercase() }
             "album" -> compareBy { (it.album ?: "").lowercase() }
             "year" -> compareBy { it.year ?: Int.MIN_VALUE }
             "dateadded", "date_added" -> compareBy { it.dateAdded }
             "duration" -> compareBy { it.duration.inWholeMilliseconds }
-            else -> compareBy { (it.sortTitle ?: it.displayTitle).lowercase() }
+            else ->
+                Comparator { a, b ->
+                    collator.compare(
+                        a.sortTitle ?: a.displayTitle,
+                        b.sortTitle ?: b.displayTitle,
+                    )
+                }
         }
+    }
 
     private fun parseRange(raw: String): StatsRange? =
         when (raw.trim().lowercase()) {
