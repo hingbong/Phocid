@@ -103,6 +103,7 @@
     <string name="playback_statistics_listening_time">Listening time</string>
     <string name="playback_statistics_not_in_library">Not in library</string>
     <string name="playback_statistics_play_count">{0, plural, one {# play} other {# plays}}</string>
+    <string name="playback_statistics_range_today">Today</string>
     <string name="playback_statistics_range_7d">7 days</string>
     <string name="playback_statistics_range_30d">30 days</string>
     <string name="playback_statistics_range_month">This month</string>

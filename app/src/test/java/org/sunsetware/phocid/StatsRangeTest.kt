@@ -25,6 +25,11 @@ class StatsRangeTest {
     }
 
     @Test
+    fun todayStartsOnToday() {
+        assertThat(StatsRange.TODAY.startDate(today)).isEqualTo(today)
+    }
+
+    @Test
     fun dayRangesIncludeToday() {
         assertThat(StatsRange.DAYS_7.startDate(today)).isEqualTo(LocalDate.of(2026, 6, 9))
         assertThat(StatsRange.DAYS_30.startDate(today)).isEqualTo(LocalDate.of(2026, 5, 17))

@@ -92,6 +92,7 @@
     <string name="playback_statistics_listening_time">收听时长</string>
     <string name="playback_statistics_not_in_library">不在曲库中</string>
     <string name="playback_statistics_play_count">{0, plural, other {# 次}}</string>
+    <string name="playback_statistics_range_today">今天</string>
     <string name="playback_statistics_range_7d">7 天</string>
     <string name="playback_statistics_range_30d">30 天</string>
     <string name="playback_statistics_range_month">本月</string>

@@ -75,8 +75,25 @@ import org.sunsetware.phocid.ui.components.OverflowMenu
 import org.sunsetware.phocid.ui.views.MenuItem
 import org.sunsetware.phocid.utils.icuFormat
 
+/**
+ * Ranges shown as tabs. [StatsRange.YEARS_3] stays available internally as the bounded window for
+ * the all-time trend, but is no longer a user-visible range.
+ */
+private val playbackStatisticsRanges =
+    listOf(
+        StatsRange.TODAY,
+        StatsRange.DAYS_7,
+        StatsRange.DAYS_30,
+        StatsRange.CALENDAR_MONTH,
+        StatsRange.DAYS_90,
+        StatsRange.DAYS_365,
+        StatsRange.CALENDAR_YEAR,
+        StatsRange.ALL,
+    )
+
 private fun StatsRange.labelRes(): Int =
     when (this) {
+        StatsRange.TODAY -> R.string.playback_statistics_range_today
         StatsRange.DAYS_7 -> R.string.playback_statistics_range_7d
         StatsRange.DAYS_30 -> R.string.playback_statistics_range_30d
         StatsRange.CALENDAR_MONTH -> R.string.playback_statistics_range_month
@@ -103,7 +120,8 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
         val statsManager = viewModel.statsManager
         var rangeIndex by rememberSaveable { mutableIntStateOf(0) }
         var sortIndex by rememberSaveable { mutableIntStateOf(0) }
-        val range = StatsRange.entries[rangeIndex]
+        val range =
+            playbackStatisticsRanges[rangeIndex.coerceIn(0, playbackStatisticsRanges.lastIndex)]
         val sort = StatsSort.entries[sortIndex]
 
         val entries by
@@ -260,7 +278,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            itemsIndexed(StatsRange.entries) { index, item ->
+                            itemsIndexed(playbackStatisticsRanges) { index, item ->
                                 FilterChip(
                                     selected = range == item,
                                     onClick = { rangeIndex = index },

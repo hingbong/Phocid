@@ -19,6 +19,7 @@ import org.sunsetware.phocid.stats.fingerprint.TagKey
 
 /** Range choices. The longest range matches StatsRetention.DAILY_RETENTION_DAYS. */
 enum class StatsRange(val days: Int?) {
+    TODAY(1),
     DAYS_7(7),
     DAYS_30(30),
     CALENDAR_MONTH(null),
@@ -42,6 +43,7 @@ enum class StatsRange(val days: Int?) {
             CALENDAR_MONTH -> today.withDayOfMonth(1)
             CALENDAR_YEAR -> today.withDayOfYear(1)
             ALL -> null
+            TODAY,
             DAYS_7,
             DAYS_30,
             DAYS_90,
