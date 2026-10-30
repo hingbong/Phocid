@@ -792,8 +792,7 @@ private fun BottomBar(
         }
 
         fun updateProgress() {
-            progress =
-                playerManager.currentPosition.toFloat() / track.duration.inWholeMilliseconds
+            progress = playerManager.currentPosition.toFloat() / track.duration.inWholeMilliseconds
         }
 
         updateProgress()

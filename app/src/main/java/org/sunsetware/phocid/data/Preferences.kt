@@ -1,5 +1,7 @@
 package org.sunsetware.phocid.data
 
+import android.icu.text.Collator
+import android.icu.text.RuleBasedCollator
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Immutable
@@ -7,8 +9,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
-import android.icu.text.Collator
-import android.icu.text.RuleBasedCollator
 import java.util.UUID
 import kotlin.math.PI
 import kotlinx.serialization.Serializable
@@ -146,24 +146,22 @@ data class Preferences(
     }
 
     @Transient
-    val blacklistRegexes =
-        blacklist.mapNotNull {
-            try {
-                Regex(it, RegexOption.IGNORE_CASE)
-            } catch (_: Exception) {
-                null
-            }
+    val blacklistRegexes = blacklist.mapNotNull {
+        try {
+            Regex(it, RegexOption.IGNORE_CASE)
+        } catch (_: Exception) {
+            null
         }
+    }
 
     @Transient
-    val whitelistRegexes =
-        whitelist.mapNotNull {
-            try {
-                Regex(it, RegexOption.IGNORE_CASE)
-            } catch (_: Exception) {
-                null
-            }
+    val whitelistRegexes = whitelist.mapNotNull {
+        try {
+            Regex(it, RegexOption.IGNORE_CASE)
+        } catch (_: Exception) {
+            null
         }
+    }
 
     @Transient
     val tabs =
@@ -187,9 +185,8 @@ data class Preferences(
 
     @Transient
     val searchCollator =
-        Collator.getInstance(SystemLocale)
-            .apply { this.strength = Collator.PRIMARY }
-            .freeze() as RuleBasedCollator
+        Collator.getInstance(SystemLocale).apply { this.strength = Collator.PRIMARY }.freeze()
+            as RuleBasedCollator
 }
 
 @Serializable

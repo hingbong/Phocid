@@ -37,17 +37,17 @@ class SortKeyManager(
     private val database: SortKeyDatabase,
     scope: CoroutineScope,
 ) {
-    constructor(context: Context, scope: CoroutineScope) :
-        this(SortKeyDatabase.get(context.applicationContext), scope)
+    constructor(
+        context: Context,
+        scope: CoroutineScope,
+    ) : this(SortKeyDatabase.get(context.applicationContext), scope)
 
     private val dao = database.sortKeyDao()
     private val _keys = MutableStateFlow(SortKeyLookup.EMPTY)
     val keys: StateFlow<SortKeyLookup> = _keys.asStateFlow()
 
     init {
-        scope.launch {
-            dao.observeAll().collect { _keys.value = SortKeyLookup.from(it) }
-        }
+        scope.launch { dao.observeAll().collect { _keys.value = SortKeyLookup.from(it) } }
     }
 
     /** Loads a snapshot before the first LibraryIndex build, then Room keeps it fresh. */

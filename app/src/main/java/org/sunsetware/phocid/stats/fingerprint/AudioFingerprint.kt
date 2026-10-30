@@ -15,12 +15,12 @@ import java.security.MessageDigest
 /**
  * Hash the audio payload only, stripping container tags.
  *
- * This keeps the identity stable when ID3v2 / FLAC / MP4 / WAV / APEv2 / ID3v1 tags are
- * edited. The file length, the first 256 KB, and the last 256 KB of the audio payload are
- * hashed; a full-file hash would be needlessly slow on large libraries.
+ * This keeps the identity stable when ID3v2 / FLAC / MP4 / WAV / APEv2 / ID3v1 tags are edited. The
+ * file length, the first 256 KB, and the last 256 KB of the audio payload are hashed; a full-file
+ * hash would be needlessly slow on large libraries.
  *
- * OGG/Opus is intentionally not special-cased: tag edits change page sequence numbers and
- * CRCs there, so [TagKey] and [RelPathKey] are better fallbacks.
+ * OGG/Opus is intentionally not special-cased: tag edits change page sequence numbers and CRCs
+ * there, so [TagKey] and [RelPathKey] are better fallbacks.
  */
 object AudioFingerprint {
     private const val WINDOW = 256 * 1024
@@ -29,7 +29,8 @@ object AudioFingerprint {
     fun compute(file: File): String? = runCatching {
         if (!file.isFile || file.length() < 1024) return null
         FileSource(file).use { source -> compute(source) }
-    }.getOrNull()
+    }
+        .getOrNull()
 
     fun compute(resolver: ContentResolver, uri: Uri): String? = runCatching {
         resolver.openFileDescriptor(uri, "r")?.let { descriptor ->
@@ -37,7 +38,8 @@ object AudioFingerprint {
                 FileChannelSource(stream.channel).use { source -> compute(source) }
             }
         }
-    }.getOrNull()
+    }
+        .getOrNull()
 
     fun compute(source: RandomAccessSource): String? = runCatching {
         if (source.size < 1024) return null
@@ -60,7 +62,8 @@ object AudioFingerprint {
         }
 
         md.digest().joinToString("") { "%02x".format(it) }.substring(0, HASH_HEX_LEN)
-    }.getOrNull()
+    }
+        .getOrNull()
 
     /** Returns [audio start, audio end), with container tags removed. */
     private fun audioRange(source: RandomAccessSource, size: Long): Pair<Long, Long> {
@@ -88,8 +91,7 @@ object AudioFingerprint {
                 val block = ByteArray(4)
                 while (position + 4 <= size) {
                     source.readFully(position, block)
-                    val blockLength =
-                        (block[1].u() shl 16) or (block[2].u() shl 8) or block[3].u()
+                    val blockLength = (block[1].u() shl 16) or (block[2].u() shl 8) or block[3].u()
                     val last = block[0].toInt() and 0x80 != 0
                     position += 4 + blockLength
                     if (last) break
@@ -99,12 +101,16 @@ object AudioFingerprint {
 
             // MP4/M4A: mdat is the audio payload
             head.ascii(4, 4) == "ftyp" -> {
-                findMdat(source, size)?.let { return it }
+                findMdat(source, size)?.let {
+                    return it
+                }
             }
 
             // WAV: data chunk
             head.ascii(0, 4) == "RIFF" && head.ascii(8, 4) == "WAVE" -> {
-                findWavData(source, size)?.let { return it }
+                findWavData(source, size)?.let {
+                    return it
+                }
             }
         }
 

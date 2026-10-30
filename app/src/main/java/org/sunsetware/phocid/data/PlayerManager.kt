@@ -174,18 +174,16 @@ class PlayerManager(
                         }
                     val currentIndex = mediaController.currentMediaItemIndex
                     val currentUnshuffledIndex = mediaItems[currentIndex].getUnshuffledIndex()!!
-                    val offsetOriginal =
-                        mediaItems.map {
-                            it.setUnshuffledIndex(
-                                it.getUnshuffledIndex()!!.let {
-                                    if (it > currentUnshuffledIndex) it + tracks.size else it
-                                }
-                            )
-                        }
-                    val new =
-                        tracks.mapIndexed { i, track ->
-                            track.getMediaItem(currentUnshuffledIndex + 1 + i)
-                        }
+                    val offsetOriginal = mediaItems.map {
+                        it.setUnshuffledIndex(
+                            it.getUnshuffledIndex()!!.let {
+                                if (it > currentUnshuffledIndex) it + tracks.size else it
+                            }
+                        )
+                    }
+                    val new = tracks.mapIndexed { i, track ->
+                        track.getMediaItem(currentUnshuffledIndex + 1 + i)
+                    }
                     mediaController.replaceMediaItems(
                         currentIndex + 1,
                         Int.MAX_VALUE,

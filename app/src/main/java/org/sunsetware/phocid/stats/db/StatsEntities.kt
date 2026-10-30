@@ -9,11 +9,11 @@ import androidx.room.PrimaryKey
 /**
  * A track in the statistics database.
  *
- * [id] is the compact internal key used by every statistics table. [uuid] is the portable
- * identity used by backups, so it must never be derived from a file path or a MediaStore id.
+ * [id] is the compact internal key used by every statistics table. [uuid] is the portable identity
+ * used by backups, so it must never be derived from a file path or a MediaStore id.
  *
- * [path] is only a local display hint for looking up artwork and metadata. It is deliberately
- * not part of the identity and is not included in backups.
+ * [path] is only a local display hint for looking up artwork and metadata. It is deliberately not
+ * part of the identity and is not included in backups.
  */
 @Entity(tableName = "tracks", indices = [Index(value = ["uuid"], unique = true), Index("path")])
 data class TrackEntity(
@@ -30,21 +30,22 @@ data class TrackEntity(
 /**
  * Recognition clue -> track. A track may have multiple rows, one per kind.
  *
- * (kind, value) is the primary key, so one clue can only point at one track. [AliasKind]
- * defines the lookup priority.
+ * (kind, value) is the primary key, so one clue can only point at one track. [AliasKind] defines
+ * the lookup priority.
  */
 @Entity(
     tableName = "track_aliases",
     primaryKeys = ["kind", "value"],
     indices = [Index("trackRowId")],
-    foreignKeys = [
-        ForeignKey(
-            entity = TrackEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["trackRowId"],
-            onDelete = ForeignKey.CASCADE,
-        )
-    ],
+    foreignKeys =
+        [
+            ForeignKey(
+                entity = TrackEntity::class,
+                parentColumns = ["id"],
+                childColumns = ["trackRowId"],
+                onDelete = ForeignKey.CASCADE,
+            )
+        ],
 )
 data class TrackAliasEntity(
     val kind: Int,
@@ -63,8 +64,8 @@ object AliasKind {
     const val REL_PATH = 3
 
     /**
-     * Content URI plus size. Local-only fast lookup; never treat it as portable identity and
-     * never include it in backups.
+     * Content URI plus size. Local-only fast lookup; never treat it as portable identity and never
+     * include it in backups.
      */
     const val LOCAL_URI = 4
 
@@ -75,20 +76,21 @@ object AliasKind {
 }
 
 /**
- * Raw play events. They are intentionally not part of backups: the aggregate tables are
- * enough to restore every range, while the raw log is large and machine-specific.
+ * Raw play events. They are intentionally not part of backups: the aggregate tables are enough to
+ * restore every range, while the raw log is large and machine-specific.
  */
 @Entity(
     tableName = "play_events",
     indices = [Index("playedAt"), Index("trackRowId", "playedAt")],
-    foreignKeys = [
-        ForeignKey(
-            entity = TrackEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["trackRowId"],
-            onDelete = ForeignKey.CASCADE,
-        )
-    ],
+    foreignKeys =
+        [
+            ForeignKey(
+                entity = TrackEntity::class,
+                parentColumns = ["id"],
+                childColumns = ["trackRowId"],
+                onDelete = ForeignKey.CASCADE,
+            )
+        ],
 )
 data class PlayEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -101,21 +103,22 @@ data class PlayEventEntity(
 /**
  * Per-day aggregate. Every range query reads this table instead of scanning play_events.
  *
- * [epochDay] is the local date at write time (LocalDate.toEpochDay()). [lastPlayedAt] is
- * retained so the "recently played" sort also works inside a date range.
+ * [epochDay] is the local date at write time (LocalDate.toEpochDay()). [lastPlayedAt] is retained
+ * so the "recently played" sort also works inside a date range.
  */
 @Entity(
     tableName = "track_daily",
     primaryKeys = ["trackRowId", "epochDay"],
     indices = [Index("epochDay")],
-    foreignKeys = [
-        ForeignKey(
-            entity = TrackEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["trackRowId"],
-            onDelete = ForeignKey.CASCADE,
-        )
-    ],
+    foreignKeys =
+        [
+            ForeignKey(
+                entity = TrackEntity::class,
+                parentColumns = ["id"],
+                childColumns = ["trackRowId"],
+                onDelete = ForeignKey.CASCADE,
+            )
+        ],
 )
 data class TrackDailyEntity(
     val trackRowId: Long,
@@ -126,19 +129,20 @@ data class TrackDailyEntity(
 )
 
 /**
- * Lifetime totals. They are incremented while writing, never rebuilt during retention.
- * Retention can therefore be a pure DELETE with no double-counting risk.
+ * Lifetime totals. They are incremented while writing, never rebuilt during retention. Retention
+ * can therefore be a pure DELETE with no double-counting risk.
  */
 @Entity(
     tableName = "track_totals",
-    foreignKeys = [
-        ForeignKey(
-            entity = TrackEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["trackRowId"],
-            onDelete = ForeignKey.CASCADE,
-        )
-    ],
+    foreignKeys =
+        [
+            ForeignKey(
+                entity = TrackEntity::class,
+                parentColumns = ["id"],
+                childColumns = ["trackRowId"],
+                onDelete = ForeignKey.CASCADE,
+            )
+        ],
 )
 data class TrackTotalsEntity(
     @PrimaryKey val trackRowId: Long,

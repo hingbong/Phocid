@@ -111,8 +111,7 @@ object SortKeyRequest {
                 is SortKeyValue.Value -> items += SortKeyItem(libraryId, parsed.text)
                 SortKeyValue.Clear -> items += SortKeyItem(libraryId, null)
                 is SortKeyValue.Invalid ->
-                    errors +=
-                        SortKeyItemError(libraryId, "invalid_sort_key", parsed.message)
+                    errors += SortKeyItemError(libraryId, "invalid_sort_key", parsed.message)
             }
         }
 

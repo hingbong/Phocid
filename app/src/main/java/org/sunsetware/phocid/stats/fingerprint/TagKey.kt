@@ -6,8 +6,8 @@ import java.util.Locale
 /**
  * Second identity layer: normalized tags plus a duration bucket.
  *
- * It survives re-encoding and format changes, where the audio hash necessarily changes.
- * Duration is bucketed because different encoders disagree by tens of milliseconds.
+ * It survives re-encoding and format changes, where the audio hash necessarily changes. Duration is
+ * bucketed because different encoders disagree by tens of milliseconds.
  */
 object TagKey {
     private const val BUCKET_MILLIS = 2000L
@@ -57,8 +57,7 @@ object TagKey {
 
     private fun normalize(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
-        var value =
-            Normalizer.normalize(raw.trim(), Normalizer.Form.NFKC).lowercase(Locale.ROOT)
+        var value = Normalizer.normalize(raw.trim(), Normalizer.Form.NFKC).lowercase(Locale.ROOT)
         value = FEAT.replace(value, "")
         value = BRACKETS.replace(value, " ")
         value = NON_ALNUM.replace(value, " ").trim()

@@ -16,11 +16,13 @@ plugins {
 val buildCommit =
     System.getenv("PHOCID_BUILD_COMMIT")?.takeIf { it.isNotBlank() }
         ?: runCatching {
-                providers
-                    .exec { commandLine("git", "rev-parse", "--short=12", "HEAD") }
-                    .standardOutput.asText.get()
-                    .trim()
-            }
+            providers
+                .exec { commandLine("git", "rev-parse", "--short=12", "HEAD") }
+                .standardOutput
+                .asText
+                .get()
+                .trim()
+        }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
         ?: "unknown"
@@ -57,8 +59,7 @@ android {
             storePassword =
                 System.getenv("PHOCID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
             keyAlias =
-                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() }
-                    ?: "androiddebugkey"
+                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "androiddebugkey"
             keyPassword =
                 System.getenv("PHOCID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
             storeType = "PKCS12"
@@ -74,11 +75,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug").apply {
-                // Disable v2 signing and force enable v3 signing for modern Android (9+)
-                enableV2Signing = false
-                enableV3Signing = true
-            }
+            signingConfig =
+                signingConfigs.getByName("debug").apply {
+                    // Disable v2 signing and force enable v3 signing for modern Android (9+)
+                    enableV2Signing = false
+                    enableV3Signing = true
+                }
         }
     }
     compileOptions {
@@ -107,9 +109,7 @@ android {
 
 kotlin {
     jvmToolchain(21)
-    compilerOptions {
-        jvmTarget = JvmTarget.JVM_21
-    }
+    compilerOptions { jvmTarget = JvmTarget.JVM_21 }
 }
 
 dependencies {

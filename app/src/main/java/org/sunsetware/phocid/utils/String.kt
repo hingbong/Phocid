@@ -1,14 +1,13 @@
 package org.sunsetware.phocid.utils
 
-import android.util.Log
 import android.icu.lang.UCharacter
 import android.icu.number.NumberFormatter
 import android.icu.text.MessageFormat
 import android.icu.text.Normalizer2
+import android.util.Log
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.util.Locale
-import org.mozilla.universalchardet.UniversalDetector
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
@@ -16,6 +15,7 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import org.mozilla.universalchardet.UniversalDetector
 
 /** Project-wide ICU NFKC casefold, shared by every case-insensitive identity. */
 internal val casefolder = Normalizer2.getNFKCCasefoldInstance()
@@ -40,8 +40,8 @@ fun String.firstCharacter(): String? {
 fun ByteArray.decodeWithCharsetName(charsetName: String?): String {
     if (!charsetName.isNullOrBlank() && Charset.isSupported(charsetName)) {
         return runCatching {
-                Charset.forName(charsetName).decode(ByteBuffer.wrap(this)).toString()
-            }
+            Charset.forName(charsetName).decode(ByteBuffer.wrap(this)).toString()
+        }
             .getOrElse { decodeDetected() }
     }
     return decodeDetected()

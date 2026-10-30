@@ -215,7 +215,8 @@ class MainAppWidget : GlanceAppWidget() {
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier =
-                                    GlanceModifier.padding(start = 24.dp, end = 12.dp).fillMaxSize(),
+                                    GlanceModifier.padding(start = 24.dp, end = 12.dp)
+                                        .fillMaxSize(),
                             ) {
                                 Box(modifier = GlanceModifier.defaultWeight()) {
                                     TrackInfo(track, contentColor, contentColorVariant)
@@ -286,7 +287,8 @@ class MainAppWidget : GlanceAppWidget() {
                                         contentColor,
                                         spread = true,
                                         modifier =
-                                            GlanceModifier.fillMaxWidth().padding(bottom = (-14).dp),
+                                            GlanceModifier.fillMaxWidth()
+                                                .padding(bottom = (-14).dp),
                                     )
                                 }
                             }
@@ -317,7 +319,8 @@ class MainAppWidget : GlanceAppWidget() {
                                         contentColor,
                                         spread = true,
                                         modifier =
-                                            GlanceModifier.fillMaxWidth().padding(bottom = (-14).dp),
+                                            GlanceModifier.fillMaxWidth()
+                                                .padding(bottom = (-14).dp),
                                     )
                                 }
                             }
@@ -441,7 +444,9 @@ class MainAppWidget : GlanceAppWidget() {
                     GlanceModifier.background(
                             ImageProvider(resId),
                             colorFilter =
-                                ColorFilter.tint(@SuppressLint("RestrictedApi") ColorProvider(tint)),
+                                ColorFilter.tint(
+                                    @SuppressLint("RestrictedApi") ColorProvider(tint)
+                                ),
                         )
                         .size(24.dp)
             ) {}

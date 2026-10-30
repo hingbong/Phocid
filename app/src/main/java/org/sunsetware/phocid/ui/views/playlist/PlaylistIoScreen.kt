@@ -4,6 +4,7 @@ package org.sunsetware.phocid.ui.views.playlist
 
 import android.content.Context
 import android.content.Intent
+import android.icu.text.Collator
 import android.net.Uri
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
@@ -65,7 +66,6 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MimeTypes
-import android.icu.text.Collator
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers

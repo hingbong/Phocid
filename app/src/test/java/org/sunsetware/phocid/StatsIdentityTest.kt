@@ -16,10 +16,8 @@ class StatsIdentityTest {
 
     @Test
     fun tagKeyUsesDurationBuckets() {
-        assertThat(TagKey.of("A", "B", "C", 60_000))
-            .isEqualTo(TagKey.of("A", "B", "C", 61_500))
-        assertThat(TagKey.of("A", "B", "C", 60_000))
-            .isNotEqualTo(TagKey.of("A", "B", "C", 63_000))
+        assertThat(TagKey.of("A", "B", "C", 60_000)).isEqualTo(TagKey.of("A", "B", "C", 61_500))
+        assertThat(TagKey.of("A", "B", "C", 60_000)).isNotEqualTo(TagKey.of("A", "B", "C", 63_000))
     }
 
     @Test

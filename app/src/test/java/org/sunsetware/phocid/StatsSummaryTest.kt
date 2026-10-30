@@ -38,60 +38,58 @@ class StatsSummaryTest {
     }
 
     @Test
-    fun allTimeSummaryCountsActiveDaysFromDailyRows() = runBlocking<Unit> {
-        val trackRowId =
-            db.trackDao()
-                .insert(
-                    TrackEntity(
-                        uuid = "track-uuid",
-                        title = "Song",
-                        artist = "Artist",
-                        album = "Album",
-                        durationMillis = 180_000,
-                        path = "",
-                        createdAt = 1,
+    fun allTimeSummaryCountsActiveDaysFromDailyRows() =
+        runBlocking<Unit> {
+            val trackRowId =
+                db.trackDao()
+                    .insert(
+                        TrackEntity(
+                            uuid = "track-uuid",
+                            title = "Song",
+                            artist = "Artist",
+                            album = "Album",
+                            durationMillis = 180_000,
+                            path = "",
+                            createdAt = 1,
+                        )
+                    )
+            db.totalsDao()
+                .insertAll(
+                    listOf(
+                        TrackTotalsEntity(
+                            trackRowId = trackRowId,
+                            totalCount = 3,
+                            totalMillis = 540_000,
+                            firstPlayedAt = 1_000,
+                            lastPlayedAt = 3_000,
+                        )
                     )
                 )
-        db.totalsDao()
-            .insertAll(
-                listOf(
-                    TrackTotalsEntity(
-                        trackRowId = trackRowId,
-                        totalCount = 3,
-                        totalMillis = 540_000,
-                        firstPlayedAt = 1_000,
-                        lastPlayedAt = 3_000,
+            db.dailyDao()
+                .insertAll(
+                    listOf(
+                        TrackDailyEntity(
+                            trackRowId = trackRowId,
+                            epochDay = 20_000,
+                            playCount = 2,
+                            playedMillis = 360_000,
+                            lastPlayedAt = 2_000,
+                        ),
+                        TrackDailyEntity(
+                            trackRowId = trackRowId,
+                            epochDay = 20_001,
+                            playCount = 1,
+                            playedMillis = 180_000,
+                            lastPlayedAt = 3_000,
+                        ),
                     )
                 )
-            )
-        db.dailyDao()
-            .insertAll(
-                listOf(
-                    TrackDailyEntity(
-                        trackRowId = trackRowId,
-                        epochDay = 20_000,
-                        playCount = 2,
-                        playedMillis = 360_000,
-                        lastPlayedAt = 2_000,
-                    ),
-                    TrackDailyEntity(
-                        trackRowId = trackRowId,
-                        epochDay = 20_001,
-                        playCount = 1,
-                        playedMillis = 180_000,
-                        lastPlayedAt = 3_000,
-                    ),
-                )
-            )
 
-        val summary =
-            StatsRepository(db)
-                .summary(StatsRange.ALL)
-                .first()
+            val summary = StatsRepository(db).summary(StatsRange.ALL).first()
 
-        assertThat(summary.plays).isEqualTo(3)
-        assertThat(summary.millis).isEqualTo(540_000)
-        assertThat(summary.uniqueTracks).isEqualTo(1)
-        assertThat(summary.activeDays).isEqualTo(2)
-    }
+            assertThat(summary.plays).isEqualTo(3)
+            assertThat(summary.millis).isEqualTo(540_000)
+            assertThat(summary.uniqueTracks).isEqualTo(1)
+            assertThat(summary.activeDays).isEqualTo(2)
+        }
 }

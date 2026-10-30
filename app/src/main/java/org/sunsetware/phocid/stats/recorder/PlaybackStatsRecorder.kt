@@ -22,11 +22,11 @@ import org.sunsetware.phocid.stats.resolver.TrackMeta
 import org.sunsetware.phocid.stats.resolver.TrackResolver
 
 /**
- * Writes playback statistics with a debounce. It never touches the database from a
- * per-second playback callback.
+ * Writes playback statistics with a debounce. It never touches the database from a per-second
+ * playback callback.
  *
- * A play is counted once the session reaches min(30 s, half the track duration), with a
- * one-second floor. Listening time below that threshold is still added to [playedMillis].
+ * A play is counted once the session reaches min(30 s, half the track duration), with a one-second
+ * floor. Listening time below that threshold is still added to [playedMillis].
  *
  * Flush points: track transition, pause, seek, every 30 seconds while playing, and service
  * shutdown. Seeking settles the elapsed wall-clock time first so time does not distort.
@@ -183,9 +183,7 @@ class PlaybackStatsRecorder(
     }
 
     private fun playCountThresholdMillis(durationMillis: Long): Long {
-        return (durationMillis / 2)
-            .coerceAtMost(MIN_PLAY_MILLIS)
-            .coerceAtLeast(1_000L)
+        return (durationMillis / 2).coerceAtMost(MIN_PLAY_MILLIS).coerceAtLeast(1_000L)
     }
 
     private fun shouldCount(current: Session): Boolean {
@@ -205,33 +203,35 @@ class PlaybackStatsRecorder(
         if (countsNow) current.countedThisSession = true
         if (delta <= 0 && !countsNow) return
 
-        val epochDay =
-            Instant.ofEpochMilli(now).atZone(zoneId()).toLocalDate().toEpochDay().toInt()
+        val epochDay = Instant.ofEpochMilli(now).atZone(zoneId()).toLocalDate().toEpochDay().toInt()
         val increment = if (countsNow) 1 else 0
 
         try {
             db.withTransaction {
-                db.dailyDao().accumulate(
-                    trackRowId = current.trackRowId,
-                    epochDay = epochDay,
-                    playCount = increment,
-                    playedMillis = delta,
-                    at = now,
-                )
-                db.totalsDao().accumulate(
-                    trackRowId = current.trackRowId,
-                    count = increment,
-                    millis = delta,
-                    at = now,
-                )
-                if (countsNow) {
-                    db.eventDao().insert(
-                        PlayEventEntity(
-                            trackRowId = current.trackRowId,
-                            playedAt = now,
-                            playedMillis = current.accumulatedMillis,
-                        )
+                db.dailyDao()
+                    .accumulate(
+                        trackRowId = current.trackRowId,
+                        epochDay = epochDay,
+                        playCount = increment,
+                        playedMillis = delta,
+                        at = now,
                     )
+                db.totalsDao()
+                    .accumulate(
+                        trackRowId = current.trackRowId,
+                        count = increment,
+                        millis = delta,
+                        at = now,
+                    )
+                if (countsNow) {
+                    db.eventDao()
+                        .insert(
+                            PlayEventEntity(
+                                trackRowId = current.trackRowId,
+                                playedAt = now,
+                                playedMillis = current.accumulatedMillis,
+                            )
+                        )
                 }
             }
         } catch (ex: Exception) {

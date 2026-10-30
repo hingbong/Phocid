@@ -6,6 +6,7 @@ import android.app.ActivityManager
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
+import android.icu.text.Collator
 import android.provider.MediaStore
 import android.provider.MediaStore.Audio.Media
 import android.util.Log
@@ -18,8 +19,6 @@ import androidx.core.database.getLongOrNull
 import androidx.core.database.getStringOrNull
 import androidx.palette.graphics.Palette
 import androidx.palette.graphics.Target
-import android.icu.text.Collator
-import org.sunsetware.phocid.utils.CaseInsensitiveString
 import java.io.File
 import java.io.FileInputStream
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -60,14 +59,15 @@ import org.sunsetware.phocid.R
 import org.sunsetware.phocid.READ_PERMISSION
 import org.sunsetware.phocid.UNKNOWN
 import org.sunsetware.phocid.globals.Strings
+import org.sunsetware.phocid.sortkey.SortKeyLookup
 import org.sunsetware.phocid.utils.CaseInsensitiveMap
+import org.sunsetware.phocid.utils.CaseInsensitiveString
 import org.sunsetware.phocid.utils.ColorSerializer
 import org.sunsetware.phocid.utils.coerceInOrMin
 import org.sunsetware.phocid.utils.distinctCaseInsensitive
 import org.sunsetware.phocid.utils.icuFormat
 import org.sunsetware.phocid.utils.mode
 import org.sunsetware.phocid.utils.modeOrNull
-import org.sunsetware.phocid.sortkey.SortKeyLookup
 import org.sunsetware.phocid.utils.trimAndNormalize
 
 @Immutable

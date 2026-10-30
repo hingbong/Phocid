@@ -2,6 +2,7 @@
 
 package org.sunsetware.phocid.ui.views.statistics
 
+import android.icu.text.DateFormat
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,7 +48,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import android.icu.text.DateFormat
 import java.time.LocalDate
 import java.util.Date
 import kotlin.time.Duration.Companion.milliseconds
@@ -65,9 +65,9 @@ import org.sunsetware.phocid.globals.format
 import org.sunsetware.phocid.stats.db.RangeSummary
 import org.sunsetware.phocid.stats.db.TrackAggregate
 import org.sunsetware.phocid.stats.domain.StatsRange
+import org.sunsetware.phocid.stats.domain.StatsSort
 import org.sunsetware.phocid.stats.fingerprint.LocalUriKey
 import org.sunsetware.phocid.stats.fingerprint.TagKey
-import org.sunsetware.phocid.stats.domain.StatsSort
 import org.sunsetware.phocid.ui.components.Artwork
 import org.sunsetware.phocid.ui.components.ArtworkImage
 import org.sunsetware.phocid.ui.components.LibraryListItemHorizontal
@@ -107,9 +107,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
         val sort = StatsSort.entries[sortIndex]
 
         val entries by
-            remember(statsManager, range, sort) {
-                    statsManager.repository.topTracks(range, sort)
-                }
+            remember(statsManager, range, sort) { statsManager.repository.topTracks(range, sort) }
                 .collectAsStateWithLifecycle(emptyList<TrackAggregate>())
         val summary by
             remember(statsManager, range) { statsManager.repository.summary(range) }
@@ -213,8 +211,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                         IconButton(onClick = { exportStatistics() }) {
                             Icon(
                                 Icons.Filled.Save,
-                                contentDescription =
-                                    Strings[R.string.playback_statistics_export],
+                                contentDescription = Strings[R.string.playback_statistics_export],
                             )
                         }
                         OverflowMenu(
@@ -235,9 +232,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                                             Icons.Filled.DeleteSweep,
                                             dangerous = true,
                                         ) {
-                                            uiManager.openDialog(
-                                                PlaybackStatisticsClearDialog()
-                                            )
+                                            uiManager.openDialog(PlaybackStatisticsClearDialog())
                                         }
                                     )
                                 }

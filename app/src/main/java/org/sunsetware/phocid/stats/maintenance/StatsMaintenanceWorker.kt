@@ -14,8 +14,8 @@ import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.StatsRetention
 
 /**
- * Weekly aging and space reclamation. Lifetime totals are written incrementally, so aging is
- * a pure DELETE and never needs to rebuild totals.
+ * Weekly aging and space reclamation. Lifetime totals are written incrementally, so aging is a pure
+ * DELETE and never needs to rebuild totals.
  */
 class StatsMaintenanceWorker(
     context: Context,
@@ -29,7 +29,8 @@ class StatsMaintenanceWorker(
         val cutoffDay =
             today.minusDays(StatsRetention.DAILY_RETENTION_DAYS.toLong()).toEpochDay().toInt()
         val cutoffMillis =
-            today.minusDays(StatsRetention.EVENT_RETENTION_DAYS.toLong())
+            today
+                .minusDays(StatsRetention.EVENT_RETENTION_DAYS.toLong())
                 .atStartOfDay(zone)
                 .toInstant()
                 .toEpochMilli()
@@ -42,7 +43,8 @@ class StatsMaintenanceWorker(
         }
         db.openHelper.writableDatabase.execSQL("PRAGMA optimize")
         Result.success()
-    }.getOrElse { Result.retry() }
+    }
+        .getOrElse { Result.retry() }
 
     companion object {
         private const val UNIQUE_NAME = "stats-maintenance"

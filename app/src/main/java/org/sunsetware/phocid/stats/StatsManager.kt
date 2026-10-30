@@ -26,8 +26,7 @@ class StatsManager(context: Context) {
     val repository: StatsRepository = StatsRepository(database)
     val backupManager: StatsBackupManager = StatsBackupManager(database)
 
-    fun createRecorder(): PlaybackStatsRecorder =
-        PlaybackStatsRecorder(database, resolver)
+    fun createRecorder(): PlaybackStatsRecorder = PlaybackStatsRecorder(database, resolver)
 
     suspend fun clear() {
         backupManager.clear()

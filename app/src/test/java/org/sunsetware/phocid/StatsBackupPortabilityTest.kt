@@ -76,37 +76,36 @@ class StatsBackupPortabilityTest {
     }
 
     @Test
-    fun exportOmitsLocalUriAlias() = runBlocking<Unit> {
-        seed(db)
-        val out = ByteArrayOutputStream()
-        StatsBackupManager(db).export(out)
-        val payload = StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray()))
+    fun exportOmitsLocalUriAlias() =
+        runBlocking<Unit> {
+            seed(db)
+            val out = ByteArrayOutputStream()
+            StatsBackupManager(db).export(out)
+            val payload = StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray()))
 
-        assertThat(payload.aliases.none { it.kind == AliasKind.LOCAL_URI }).isTrue()
-        assertThat(payload.aliases.any { it.kind == AliasKind.AUDIO_HASH }).isTrue()
-    }
+            assertThat(payload.aliases.none { it.kind == AliasKind.LOCAL_URI }).isTrue()
+            assertThat(payload.aliases.any { it.kind == AliasKind.AUDIO_HASH }).isTrue()
+        }
 
     @Test
-    fun restoreIgnoresLocalUriAlias() = runBlocking<Unit> {
-        seed(db)
-        val out = ByteArrayOutputStream()
-        StatsBackupManager(db).export(out)
-        val payload = StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray()))
-        val withLocal =
-            payload.copy(
-                aliases =
-                    payload.aliases +
-                        BackupAlias(AliasKind.LOCAL_URI, "content://media/other|2048", "uuid-1")
-            )
+    fun restoreIgnoresLocalUriAlias() =
+        runBlocking<Unit> {
+            seed(db)
+            val out = ByteArrayOutputStream()
+            StatsBackupManager(db).export(out)
+            val payload = StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray()))
+            val withLocal =
+                payload.copy(
+                    aliases =
+                        payload.aliases +
+                            BackupAlias(AliasKind.LOCAL_URI, "content://media/other|2048", "uuid-1")
+                )
 
-        StatsBackupManager(db).restore(withLocal, replace = true)
+            StatsBackupManager(db).restore(withLocal, replace = true)
 
-        assertThat(
-                db.aliasDao()
-                    .resolve(AliasKind.LOCAL_URI, "content://media/other|2048")
-            )
-            .isNull()
-        assertThat(db.totalsDao().byRowId(db.trackDao().rowIdOfUuid("uuid-1")!!)!!.totalCount)
-            .isEqualTo(2)
-    }
+            assertThat(db.aliasDao().resolve(AliasKind.LOCAL_URI, "content://media/other|2048"))
+                .isNull()
+            assertThat(db.totalsDao().byRowId(db.trackDao().rowIdOfUuid("uuid-1")!!)!!.totalCount)
+                .isEqualTo(2)
+        }
 }

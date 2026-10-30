@@ -40,11 +40,10 @@ class PlaybackStatisticsImportDialog(private val backup: StatsBackup) : Dialog()
             title = Strings[R.string.playback_statistics_import_title],
             onConfirm = {
                 viewModel.viewModelScope.launch {
-                    val result =
-                        runCatching {
-                            viewModel.statsManager.backupManager.restore(backup, replace)
-                            viewModel.statsManager.invalidateResolver()
-                        }
+                    val result = runCatching {
+                        viewModel.statsManager.backupManager.restore(backup, replace)
+                        viewModel.statsManager.invalidateResolver()
+                    }
                     viewModel.uiManager.closeDialog()
                     result
                         .onSuccess {
@@ -74,15 +73,13 @@ class PlaybackStatisticsImportDialog(private val backup: StatsBackup) : Dialog()
                 ImportModeOption(
                     selected = !replace,
                     title = Strings[R.string.playback_statistics_import_merge],
-                    description =
-                        Strings[R.string.playback_statistics_import_merge_description],
+                    description = Strings[R.string.playback_statistics_import_merge_description],
                     onSelect = { replace = false },
                 )
                 ImportModeOption(
                     selected = replace,
                     title = Strings[R.string.playback_statistics_import_replace],
-                    description =
-                        Strings[R.string.playback_statistics_import_replace_description],
+                    description = Strings[R.string.playback_statistics_import_replace_description],
                     onSelect = { replace = true },
                 )
             }

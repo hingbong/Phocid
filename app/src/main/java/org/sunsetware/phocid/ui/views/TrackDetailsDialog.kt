@@ -1,5 +1,11 @@
 package org.sunsetware.phocid.ui.views
 
+import android.icu.number.LocalizedNumberFormatter
+import android.icu.number.Notation
+import android.icu.number.NumberFormatter
+import android.icu.number.Precision
+import android.icu.text.DateFormat
+import android.icu.util.MeasureUnit
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,12 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import android.icu.number.LocalizedNumberFormatter
-import android.icu.number.Notation
-import android.icu.number.NumberFormatter
-import android.icu.number.Precision
-import android.icu.text.DateFormat
-import android.icu.util.MeasureUnit
 import java.util.Date
 import java.util.Locale
 import kotlin.math.max
@@ -94,10 +94,12 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
                     listOfNotNull(
                         Strings[R.string.track_details_play_count] to
                             statistics.totalCount.toString(),
-                        statistics.lastPlayedAt.takeIf { it > 0 }?.let {
-                            Strings[R.string.track_details_last_played] to
-                                DateFormat.getInstance().format(Date(it))
-                        },
+                        statistics.lastPlayedAt
+                            .takeIf { it > 0 }
+                            ?.let {
+                                Strings[R.string.track_details_last_played] to
+                                    DateFormat.getInstance().format(Date(it))
+                            },
                     )
                 } ?: emptyList()
             }
@@ -118,17 +120,14 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
                 val horizontalSpacing = 16.dp.roundToPx()
                 val verticalSpacing = 4.dp.roundToPx()
                 val pairs = measurables.chunked(2)
-                val keys =
-                    pairs.map {
-                        it[0].measure(
-                            Constraints(
-                                maxWidth =
-                                    ((constraints.maxWidth - horizontalSpacing) / 2).coerceAtLeast(
-                                        0
-                                    )
-                            )
+                val keys = pairs.map {
+                    it[0].measure(
+                        Constraints(
+                            maxWidth =
+                                ((constraints.maxWidth - horizontalSpacing) / 2).coerceAtLeast(0)
                         )
-                    }
+                    )
+                }
                 val keyWidth = keys.maxOf { it.width }
                 val valueWidth =
                     (constraints.maxWidth - keyWidth - horizontalSpacing).coerceAtLeast(0)

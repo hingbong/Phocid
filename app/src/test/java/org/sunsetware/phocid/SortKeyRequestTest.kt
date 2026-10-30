@@ -20,16 +20,14 @@ class SortKeyRequestTest {
 
     @Test
     fun parse_validBatch() {
-        val parsed =
-            SortKeyRequest.parse(
-                request(item(1, "  Ａ   b  "), item(2, null))
-            )
+        val parsed = SortKeyRequest.parse(request(item(1, "  Ａ   b  "), item(2, null)))
         assertThat(parsed).isInstanceOf(SortKeyRequestResult.Ok::class.java)
         val batch = (parsed as SortKeyRequestResult.Ok).batch
-        assertThat(batch.items).containsExactly(
-            org.sunsetware.phocid.agent.SortKeyItem(1, "A b"),
-            org.sunsetware.phocid.agent.SortKeyItem(2, null),
-        )
+        assertThat(batch.items)
+            .containsExactly(
+                org.sunsetware.phocid.agent.SortKeyItem(1, "A b"),
+                org.sunsetware.phocid.agent.SortKeyItem(2, null),
+            )
         assertThat(batch.errors).isEmpty()
     }
 
@@ -68,10 +66,7 @@ class SortKeyRequestTest {
 
     @Test
     fun parse_missingSortKey_isPerItemError() {
-        val parsed =
-            SortKeyRequest.parse(
-                request(JSONObject().put("libraryId", 1))
-            )
+        val parsed = SortKeyRequest.parse(request(JSONObject().put("libraryId", 1)))
         val batch = (parsed as SortKeyRequestResult.Ok).batch
         assertThat(batch.errors.single().code).isEqualTo("invalid_sort_key")
     }

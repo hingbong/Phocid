@@ -22,7 +22,8 @@ data class SortKeyLookup(
         fun from(rows: List<SortKeyEntity>): SortKeyLookup {
             val byLocalUri = rows.associate { it.localUriKey to it.sortKey }
             val byTag =
-                rows.mapNotNull { row -> row.tagKey?.let { it to row.sortKey } }
+                rows
+                    .mapNotNull { row -> row.tagKey?.let { it to row.sortKey } }
                     .groupBy({ it.first }, { it.second })
                     .mapNotNull { (key, values) ->
                         if (values.size == 1) key to values.single() else null

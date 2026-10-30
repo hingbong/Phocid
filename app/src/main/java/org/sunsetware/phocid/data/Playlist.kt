@@ -5,6 +5,7 @@ package org.sunsetware.phocid.data
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.icu.text.DateFormat
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -19,7 +20,6 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.os.bundleOf
-import android.icu.text.DateFormat
 import java.util.Date
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -126,69 +126,66 @@ class PlaylistManager(
                 PLAYLISTS_FILE_NAME,
                 false,
             )
-        syncJob =
-            coroutineScope.launch {
-                _playlists.onEach { if (syncPending.get()) syncPlaylists() }.collect()
-            }
-        shortcutJob =
-            coroutineScope.launch {
-                playlists
-                    .combine(
-                        preferences.map { it.sortCollator to it.tabSettings }.distinctUntilChanged()
-                    ) { playlists, (sortCollator, tabSettings) ->
-                        val tabSettings = tabSettings[LibraryScreenTabType.PLAYLISTS]!!
-                        val uuids =
-                            playlists
-                                .asIterable()
-                                .sortedBy(
-                                    sortCollator,
-                                    tabSettings.sortingKeys,
-                                    tabSettings.sortAscending,
-                                ) {
-                                    it.value
-                                }
-                                .take(ShortcutManagerCompat.getMaxShortcutCountPerActivity(context))
-                                .map { it.key }
-                                .toSet()
-
-                        // Remove extra shortcuts
-                        val invalidShortcuts =
-                            ShortcutManagerCompat.getDynamicShortcuts(context)
-                                .filter { shortcut ->
-                                    shortcut.intent.action == SHORTCUT_PLAYLIST &&
-                                        !uuids.contains(
-                                            shortcut.intent.extras
-                                                ?.getString(SHORTCUT_PLAYLIST_EXTRA_KEY)
-                                                ?.let {
-                                                    try {
-                                                        UUID.fromString(it)
-                                                    } catch (_: Exception) {
-                                                        null
-                                                    }
-                                                }
-                                        )
-                                }
-                                .map { it.id }
-                        ShortcutManagerCompat.removeDynamicShortcuts(context, invalidShortcuts)
-
-                        // Push shortcuts
-                        val shortcuts =
-                            uuids.mapIndexed { i, uuid ->
-                                playlistShortcut(
-                                    context,
-                                    "playlist",
-                                    uuid,
-                                    checkNotNull(playlists[uuid]).displayName,
-                                    i + 1,
-                                )
+        syncJob = coroutineScope.launch {
+            _playlists.onEach { if (syncPending.get()) syncPlaylists() }.collect()
+        }
+        shortcutJob = coroutineScope.launch {
+            playlists
+                .combine(
+                    preferences.map { it.sortCollator to it.tabSettings }.distinctUntilChanged()
+                ) { playlists, (sortCollator, tabSettings) ->
+                    val tabSettings = tabSettings[LibraryScreenTabType.PLAYLISTS]!!
+                    val uuids =
+                        playlists
+                            .asIterable()
+                            .sortedBy(
+                                sortCollator,
+                                tabSettings.sortingKeys,
+                                tabSettings.sortAscending,
+                            ) {
+                                it.value
                             }
-                        if (!ShortcutManagerCompat.addDynamicShortcuts(context, shortcuts)) {
-                            Log.e("Phocid", "Shortcut update is rate limited")
-                        }
+                            .take(ShortcutManagerCompat.getMaxShortcutCountPerActivity(context))
+                            .map { it.key }
+                            .toSet()
+
+                    // Remove extra shortcuts
+                    val invalidShortcuts =
+                        ShortcutManagerCompat.getDynamicShortcuts(context)
+                            .filter { shortcut ->
+                                shortcut.intent.action == SHORTCUT_PLAYLIST &&
+                                    !uuids.contains(
+                                        shortcut.intent.extras
+                                            ?.getString(SHORTCUT_PLAYLIST_EXTRA_KEY)
+                                            ?.let {
+                                                try {
+                                                    UUID.fromString(it)
+                                                } catch (_: Exception) {
+                                                    null
+                                                }
+                                            }
+                                    )
+                            }
+                            .map { it.id }
+                    ShortcutManagerCompat.removeDynamicShortcuts(context, invalidShortcuts)
+
+                    // Push shortcuts
+                    val shortcuts = uuids.mapIndexed { i, uuid ->
+                        playlistShortcut(
+                            context,
+                            "playlist",
+                            uuid,
+                            checkNotNull(playlists[uuid]).displayName,
+                            i + 1,
+                        )
                     }
-                    .catch { Log.e("Phocid", "Error updating playlist shortcuts", it) }
-                    .collect()
-            }
+                    if (!ShortcutManagerCompat.addDynamicShortcuts(context, shortcuts)) {
+                        Log.e("Phocid", "Shortcut update is rate limited")
+                    }
+                }
+                .catch { Log.e("Phocid", "Error updating playlist shortcuts", it) }
+                .collect()
+        }
     }
 
     override fun close() {
@@ -584,14 +581,14 @@ fun parseM3u(
                     CaseInsensitiveMap(map) { duplicates -> duplicates.flatMap { it } }
                 else map
             }
-    val paths =
-        lines.mapNotNull { line ->
-            val candidates =
-                indexLookup[if (settings.ignoreLocation) FilenameUtils.getName(line) else line]
-            val bestMatch =
-                candidates?.maxByOrNull { line.commonSuffixWith(it, settings.ignoreCase).length }
-            bestMatch ?: if (settings.removeInvalid) null else line
+    val paths = lines.mapNotNull { line ->
+        val candidates =
+            indexLookup[if (settings.ignoreLocation) FilenameUtils.getName(line) else line]
+        val bestMatch = candidates?.maxByOrNull {
+            line.commonSuffixWith(it, settings.ignoreCase).length
         }
+        bestMatch ?: if (settings.removeInvalid) null else line
+    }
     return Playlist(name, lastModified = lastModified).addPaths(paths)
 }
 

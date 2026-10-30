@@ -9,6 +9,11 @@ package org.sunsetware.phocid.ui.views.preferences
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.icu.number.Notation
+import android.icu.number.NumberFormatter
+import android.icu.number.Precision
+import android.icu.text.ListFormatter
+import android.icu.util.MeasureUnit
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -106,11 +111,6 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import android.icu.number.Notation
-import android.icu.number.NumberFormatter
-import android.icu.number.Precision
-import android.icu.text.ListFormatter
-import android.icu.util.MeasureUnit
 import java.io.File
 import java.nio.charset.Charset
 import java.time.LocalDateTime
@@ -231,8 +231,7 @@ private class PreferencesSubscreen(private val page: Page) : TopLevelScreen() {
         val logcatDumpPath = remember {
             context.getExternalFilesDir(null)?.let { FilenameUtils.concat(it.path, "logcat.txt") }
         }
-        val imagesPermissionState =
-            rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
+        val imagesPermissionState = rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
         val partialImagesPermissionState =
             rememberPermissionState(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
         val preferencesScreenContext =
@@ -300,7 +299,8 @@ private class PreferencesSubscreen(private val page: Page) : TopLevelScreen() {
                                                             preferencesScreenContext.third()
                                                         }
                                                     },
-                                                    modifier = Modifier.negativePadding(end = 12.dp),
+                                                    modifier =
+                                                        Modifier.negativePadding(end = 12.dp),
                                                 ) {
                                                     Icon(item.action.second, item.action.first())
                                                 }
@@ -626,7 +626,9 @@ private val HomeScreen =
                 icon = Icons.Filled.AdsClick,
                 options = LibraryTrackClickAction.entries,
                 value = { it.libraryTrackClickAction },
-                onSetValue = { preferences, new -> preferences.copy(libraryTrackClickAction = new) },
+                onSetValue = { preferences, new ->
+                    preferences.copy(libraryTrackClickAction = new)
+                },
             ),
         ),
     )
@@ -729,7 +731,9 @@ private val Playback =
                 icon = Icons.Filled.ShuffleOn,
                 options = DefaultShuffleMode.entries,
                 value = { it.defaultShuffleModeTrack },
-                onSetValue = { preferences, new -> preferences.copy(defaultShuffleModeTrack = new) },
+                onSetValue = { preferences, new ->
+                    preferences.copy(defaultShuffleModeTrack = new)
+                },
             ),
             Item.SingleChoice(
                 title = { Strings[R.string.preferences_default_shuffle_mode_list] },

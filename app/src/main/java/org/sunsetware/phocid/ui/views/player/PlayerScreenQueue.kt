@@ -216,7 +216,9 @@ class PlayerScreenQueueDefaultBase(
                                             AnimatedContent(
                                                 targetState =
                                                     (index - currentTrackIndex).toLocalizedString(),
-                                                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                                transitionSpec = {
+                                                    fadeIn() togetherWith fadeOut()
+                                                },
                                             ) {
                                                 Text(
                                                     text = it,
@@ -249,7 +251,8 @@ class PlayerScreenQueueDefaultBase(
                                                     onDragStarted = {
                                                         ViewCompat.performHapticFeedback(
                                                             view,
-                                                            HapticFeedbackConstantsCompat.DRAG_START,
+                                                            HapticFeedbackConstantsCompat
+                                                                .DRAG_START,
                                                         )
                                                         reorderInfo = null
                                                         reorderingQueue = playQueue

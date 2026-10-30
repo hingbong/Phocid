@@ -28,15 +28,14 @@ class AsyncCache<TKey : Any, TValue : Any>(
         get() = entries.size
 
     suspend fun getOrPut(key: TKey, create: (TKey) -> TValue): TValue {
-        val existing =
-            mutex.withLock {
-                entries
-                    .indexOfFirst { it.first == key }
-                    .takeIf { it >= 0 }
-                    ?.let { entries.removeAt(it) }
-                    ?.apply { entries += this }
-                    ?.second
-            }
+        val existing = mutex.withLock {
+            entries
+                .indexOfFirst { it.first == key }
+                .takeIf { it >= 0 }
+                ?.let { entries.removeAt(it) }
+                ?.apply { entries += this }
+                ?.second
+        }
         if (existing != null) {
             return existing
         }

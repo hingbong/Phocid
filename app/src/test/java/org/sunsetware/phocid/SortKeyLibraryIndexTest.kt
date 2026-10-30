@@ -1,8 +1,8 @@
 package org.sunsetware.phocid
 
 import android.icu.text.Collator
-import kotlin.time.Duration.Companion.seconds
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,10 +38,7 @@ class SortKeyLibraryIndexTest {
 
     @Test
     fun index_appliesSortKey() {
-        val lookup =
-            SortKeyLookup(
-                byLocalUri = mapOf(SortKeyKeys.localUriKey(track) to "よる"),
-            )
+        val lookup = SortKeyLookup(byLocalUri = mapOf(SortKeyKeys.localUriKey(track) to "よる"))
         val indexed = index(lookup).tracks.getValue(track.id)
         assertThat(indexed.sortTitle).isEqualTo("よる")
     }

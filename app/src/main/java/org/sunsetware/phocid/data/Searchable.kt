@@ -1,8 +1,8 @@
 package org.sunsetware.phocid.data
 
-import androidx.compose.runtime.Stable
 import android.icu.text.RuleBasedCollator
 import android.icu.text.StringSearch
+import androidx.compose.runtime.Stable
 import java.text.StringCharacterIterator
 
 interface Searchable {
@@ -55,17 +55,17 @@ fun <T> Iterable<T>.searchIndices(
         emptySet()
     } else {
         mapIndexedNotNull { index, item ->
-                if (
-                    selector(item).searchableStrings.any {
-                        if (it.isEmpty()) false
-                        else
-                            StringSearch(query, StringCharacterIterator(it), collator).first() !=
-                                StringSearch.DONE
-                    }
-                )
-                    index
-                else null
-            }
+            if (
+                selector(item).searchableStrings.any {
+                    if (it.isEmpty()) false
+                    else
+                        StringSearch(query, StringCharacterIterator(it), collator).first() !=
+                            StringSearch.DONE
+                }
+            )
+                index
+            else null
+        }
             .toSet()
     }
 }

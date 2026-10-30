@@ -89,8 +89,7 @@ class SortKeyDatabaseTest {
             assertThat(first.updated).isEqualTo(1)
             assertThat(db.sortKeyDao().findByLocalUriKey("a")?.sortKey).isEqualTo("one")
 
-            val skipped =
-                manager.apply(listOf(target("a", "tag", "two", overwrite = false)), 2)
+            val skipped = manager.apply(listOf(target("a", "tag", "two", overwrite = false)), 2)
             assertThat(skipped.skipped).isEqualTo(1)
             assertThat(db.sortKeyDao().findByLocalUriKey("a")?.sortKey).isEqualTo("one")
 

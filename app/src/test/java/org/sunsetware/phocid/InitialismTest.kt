@@ -32,10 +32,11 @@ class InitialismTest {
         assertThat("漢字".initialLetter(Locale.JAPANESE)).isEqualTo("漢")
 
         val kana =
-            "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわゐゑをん"
-                .codePoints()
-                .toList()
-                .joinToString("") { UCharacter.toString(it).initialLetter(Locale.ROOT) }
+            "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわゐゑをん".codePoints().toList().joinToString(
+                ""
+            ) {
+                UCharacter.toString(it).initialLetter(Locale.ROOT)
+            }
         assertThat(kana).isNotEmpty()
         assertThat(kana).doesNotContain("#")
     }

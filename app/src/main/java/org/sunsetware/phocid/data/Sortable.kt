@@ -1,9 +1,9 @@
 package org.sunsetware.phocid.data
 
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.Stable
 import android.icu.text.Collator
 import android.icu.text.DateFormat
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import java.util.Date
 import java.util.Locale
 import kotlinx.serialization.Serializable

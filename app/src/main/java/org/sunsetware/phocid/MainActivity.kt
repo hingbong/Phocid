@@ -133,20 +133,19 @@ class MainActivity : ComponentActivity(), IntentLauncher {
 
                 val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
-                val currentTrackColor by
-                    remember {
-                            viewModel.playerManager.state.combine(
-                                coroutineScope,
-                                viewModel.libraryIndex,
-                                viewModel.preferences,
-                            ) { state, library, preferences ->
-                                if (state.actualPlayQueue.isEmpty()) null
-                                else
-                                    library.tracks[state.actualPlayQueue[state.currentIndex]]
-                                        ?.getArtworkColor(preferences.artworkColorPreference)
-                            }
-                        }
-                        .collectAsStateWithLifecycle()
+                val currentTrackColor by remember {
+                    viewModel.playerManager.state.combine(
+                        coroutineScope,
+                        viewModel.libraryIndex,
+                        viewModel.preferences,
+                    ) { state, library, preferences ->
+                        if (state.actualPlayQueue.isEmpty()) null
+                        else
+                            library.tracks[state.actualPlayQueue[state.currentIndex]]
+                                ?.getArtworkColor(preferences.artworkColorPreference)
+                    }
+                }
+                    .collectAsStateWithLifecycle()
 
                 LaunchedEffect(coroutineScope) {
                     playerScreenDragState.coroutineScope = WeakReference(coroutineScope)
@@ -274,7 +273,8 @@ class MainActivity : ComponentActivity(), IntentLauncher {
         }
     private val createBinaryDocumentContinuation = AtomicReference(null as ((Uri?) -> Unit)?)
     private val createBinaryDocumentIntent =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("application/gzip")) { uri ->
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/gzip")) { uri
+            ->
             createBinaryDocumentContinuation.get()?.invoke(uri)
         }
     private val openBinaryDocumentContinuation = AtomicReference(null as ((Uri?) -> Unit)?)

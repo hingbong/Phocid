@@ -49,8 +49,18 @@ class SortKeyLookupTest {
     fun lookup_ambiguousTag_ignored() {
         val rows =
             listOf(
-                SortKeyEntity(localUriKey = "one", tagKey = SortKeyKeys.tagKey(track), sortKey = "one", updatedAt = 0),
-                SortKeyEntity(localUriKey = "two", tagKey = SortKeyKeys.tagKey(track), sortKey = "two", updatedAt = 0),
+                SortKeyEntity(
+                    localUriKey = "one",
+                    tagKey = SortKeyKeys.tagKey(track),
+                    sortKey = "one",
+                    updatedAt = 0,
+                ),
+                SortKeyEntity(
+                    localUriKey = "two",
+                    tagKey = SortKeyKeys.tagKey(track),
+                    sortKey = "two",
+                    updatedAt = 0,
+                ),
             )
         assertThat(SortKeyLookup.from(rows).keyFor(track)).isNull()
     }

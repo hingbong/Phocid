@@ -3,6 +3,10 @@ package org.sunsetware.phocid
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.graphics.Color
+import android.icu.number.Notation
+import android.icu.number.NumberFormatter
+import android.icu.number.Precision
+import android.icu.util.MeasureUnit
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -48,10 +52,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.icu.number.Notation
-import android.icu.number.NumberFormatter
-import android.icu.number.Precision
-import android.icu.util.MeasureUnit
 import java.util.Locale
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
@@ -210,7 +210,11 @@ class WidgetConfigureActivity : ComponentActivity() {
                                             .preferences_widget_artwork_resolution_limit_subtitle],
                                     style = Typography.labelSmall,
                                     modifier =
-                                        Modifier.padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
+                                        Modifier.padding(
+                                            start = 24.dp,
+                                            end = 24.dp,
+                                            bottom = 16.dp,
+                                        ),
                                 )
 
                                 UtilityListHeader(Strings[R.string.preferences_widget_layout])

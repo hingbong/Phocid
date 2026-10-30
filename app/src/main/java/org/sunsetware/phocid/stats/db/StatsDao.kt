@@ -185,8 +185,7 @@ interface TrackDailyDao {
     )
     suspend fun mergeInto(loser: Long, winner: Long)
 
-    @Query("DELETE FROM track_daily WHERE trackRowId = :rowId")
-    suspend fun deleteTrack(rowId: Long)
+    @Query("DELETE FROM track_daily WHERE trackRowId = :rowId") suspend fun deleteTrack(rowId: Long)
 
     @Query(
         """
@@ -271,7 +270,9 @@ interface TrackDailyDao {
     )
     fun summarySince(sinceDay: Int): Flow<RangeSummary>
 
-    @Query("SELECT DISTINCT epochDay FROM track_daily WHERE epochDay >= :sinceDay ORDER BY epochDay")
+    @Query(
+        "SELECT DISTINCT epochDay FROM track_daily WHERE epochDay >= :sinceDay ORDER BY epochDay"
+    )
     suspend fun activeDays(sinceDay: Int): List<Int>
 
     @Query("SELECT * FROM track_daily WHERE epochDay >= :sinceDay")
@@ -409,11 +410,12 @@ interface TrackTotalsDao {
 
 @Dao
 interface FingerprintCacheDao {
-    @Query("SELECT audioHash FROM fingerprint_cache WHERE path = :path AND size = :size AND mtime = :mtime")
+    @Query(
+        "SELECT audioHash FROM fingerprint_cache WHERE path = :path AND size = :size AND mtime = :mtime"
+    )
     suspend fun hit(path: String, size: Long, mtime: Long): String?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun put(entry: FingerprintCacheEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(entry: FingerprintCacheEntity)
 
     @Query("DELETE FROM fingerprint_cache") suspend fun clear()
 }

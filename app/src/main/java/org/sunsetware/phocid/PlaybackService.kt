@@ -65,7 +65,8 @@ import org.sunsetware.phocid.utils.Random
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
     companion object {
-        @Volatile var isRunning = false
+        @Volatile
+        var isRunning = false
             private set
     }
 
@@ -115,8 +116,7 @@ class PlaybackService : MediaLibraryService() {
         trackForMediaItem(player.currentMediaItem)?.let {
             statisticsRecorder.onTrackStarted(it.toTrackMeta())
         }
-        if (player.isPlaying) statisticsRecorder.onResumed()
-        else statisticsRecorder.onPaused()
+        if (player.isPlaying) statisticsRecorder.onResumed() else statisticsRecorder.onPaused()
         mainScope.launch {
             GlobalData.preferences
                 .onEach { preferences ->

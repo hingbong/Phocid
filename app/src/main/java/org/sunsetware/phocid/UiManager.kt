@@ -107,21 +107,20 @@ class UiManager(
         MutableStateFlow(emptyList<LibraryScreenCollectionViewState>())
     val libraryScreenCollectionViewStack = _libraryScreenCollectionViewStack.asStateFlow()
 
-    val libraryScreenCollectionViewPurgeJob =
-        coroutineScope.launch {
-            _libraryScreenCollectionViewStack
-                .flatMapLatest { stack ->
-                    val last = stack.lastOrNull()
-                    last?.info?.map { if (it == null) last else null } ?: MutableStateFlow(null)
-                }
-                .onEach { purgeTarget ->
-                    if (purgeTarget != null)
-                        _libraryScreenCollectionViewStack.update { stack ->
-                            stack.filter { it !== purgeTarget }
-                        }
-                }
-                .collect()
-        }
+    val libraryScreenCollectionViewPurgeJob = coroutineScope.launch {
+        _libraryScreenCollectionViewStack
+            .flatMapLatest { stack ->
+                val last = stack.lastOrNull()
+                last?.info?.map { if (it == null) last else null } ?: MutableStateFlow(null)
+            }
+            .onEach { purgeTarget ->
+                if (purgeTarget != null)
+                    _libraryScreenCollectionViewStack.update { stack ->
+                        stack.filter { it !== purgeTarget }
+                    }
+            }
+            .collect()
+    }
 
     val playerScreenDragState = BinaryDragState({ DEFAULT_SWIPE_THRESHOLD })
 
@@ -190,19 +189,19 @@ class UiManager(
             context,
             coroutineScope,
             flow {
-                    while (currentCoroutineContext().isActive) {
-                        emit(
-                            PersistentUiState(
-                                libraryScreenHomeViewState.pagerState.currentPage,
-                                playerScreenUseLyricsView.value,
-                                playerScreenUseCountdown.value,
-                                playerTimerSettings.get(),
-                                playlistIoSyncHelpShown.get(),
-                            )
+                while (currentCoroutineContext().isActive) {
+                    emit(
+                        PersistentUiState(
+                            libraryScreenHomeViewState.pagerState.currentPage,
+                            playerScreenUseLyricsView.value,
+                            playerScreenUseCountdown.value,
+                            playerTimerSettings.get(),
+                            playlistIoSyncHelpShown.get(),
                         )
-                        delay(1.seconds)
-                    }
+                    )
+                    delay(1.seconds)
                 }
+            }
                 .distinctUntilChanged(),
             UI_STATE_FILE_NAME,
             false,

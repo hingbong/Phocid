@@ -33,37 +33,41 @@ import org.sunsetware.phocid.stats.domain.StatsSort
 /**
  * Read-only query surface for the companion agent bridge.
  *
- * The service is exported with a signature permission. It exposes read methods plus one
- * opt-in method for writing local sort keys. It never exposes the filesystem path by default.
+ * The service is exported with a signature permission. It exposes read methods plus one opt-in
+ * method for writing local sort keys. It never exposes the filesystem path by default.
  */
 class AgentQueryService : Service() {
     private val binder =
         object : IPhocidQuery.Stub() {
             override fun capabilities(): String = guarded { capabilitiesJson() }
 
-            override fun searchTracks(requestJson: String): String =
-                guarded { searchTracksJson(requestJson) }
+            override fun searchTracks(requestJson: String): String = guarded {
+                searchTracksJson(requestJson)
+            }
 
             override fun getTrack(libraryId: Long): String = guarded { getTrackJson(libraryId) }
 
-            override fun statsSummary(range: String): String =
-                guarded { statsSummaryJson(range) }
+            override fun statsSummary(range: String): String = guarded { statsSummaryJson(range) }
 
-            override fun statsTopTracks(requestJson: String): String =
-                guarded { statsTopTracksJson(requestJson) }
+            override fun statsTopTracks(requestJson: String): String = guarded {
+                statsTopTracksJson(requestJson)
+            }
 
             override fun statsDaily(range: String): String = guarded { statsDailyJson(range) }
 
-            override fun resolveStatsUuid(libraryId: Long): String =
-                guarded { resolveStatsUuidJson(libraryId) }
+            override fun resolveStatsUuid(libraryId: Long): String = guarded {
+                resolveStatsUuidJson(libraryId)
+            }
 
-            override fun listFacets(requestJson: String): String =
-                guarded { listFacetsJson(requestJson) }
+            override fun listFacets(requestJson: String): String = guarded {
+                listFacetsJson(requestJson)
+            }
 
             override fun playerState(): String = guarded { playerStateJson() }
 
-            override fun updateSortKeys(requestJson: String): String =
-                guarded { updateSortKeysJson(requestJson) }
+            override fun updateSortKeys(requestJson: String): String = guarded {
+                updateSortKeysJson(requestJson)
+            }
         }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -148,7 +152,8 @@ class AgentQueryService : Service() {
         val collator = GlobalData.preferences.value.sortCollator
 
         return when (kind) {
-            "artists", "artist" -> {
+            "artists",
+            "artist" -> {
                 val page =
                     pageFacets(
                         items = index.artists.values.toList(),
@@ -160,13 +165,15 @@ class AgentQueryService : Service() {
                         searchText = { it.name },
                     )
                 facetResponse("artists", page) { artist ->
-                    JSONObject()
-                        .put("name", artist.name)
-                        .put("trackCount", artist.tracks.size)
-                        .put("albumCount", artist.albumSlices.size)
-                }.toString()
+                        JSONObject()
+                            .put("name", artist.name)
+                            .put("trackCount", artist.tracks.size)
+                            .put("albumCount", artist.albumSlices.size)
+                    }
+                    .toString()
             }
-            "albums", "album" -> {
+            "albums",
+            "album" -> {
                 val page =
                     pageFacets(
                         items = index.albums.values.toList(),
@@ -178,15 +185,17 @@ class AgentQueryService : Service() {
                         searchText = { it.name + " " + it.albumArtists.joinToString(" ") },
                     )
                 facetResponse("albums", page) { album ->
-                    JSONObject()
-                        .put("name", album.name)
-                        .put("albumArtists", stringArray(album.albumArtists))
-                        .putNullable("year", album.year)
-                        .putNullable("originalYear", album.originalYear)
-                        .put("trackCount", album.tracks.size)
-                }.toString()
+                        JSONObject()
+                            .put("name", album.name)
+                            .put("albumArtists", stringArray(album.albumArtists))
+                            .putNullable("year", album.year)
+                            .putNullable("originalYear", album.originalYear)
+                            .put("trackCount", album.tracks.size)
+                    }
+                    .toString()
             }
-            "album_artists", "album_artist" -> {
+            "album_artists",
+            "album_artist" -> {
                 val page =
                     pageFacets(
                         items = index.albumArtists.values.toList(),
@@ -198,13 +207,15 @@ class AgentQueryService : Service() {
                         searchText = { it.name },
                     )
                 facetResponse("album_artists", page) { albumArtist ->
-                    JSONObject()
-                        .put("name", albumArtist.name)
-                        .put("trackCount", albumArtist.tracks.size)
-                        .put("albumCount", albumArtist.albums.size)
-                }.toString()
+                        JSONObject()
+                            .put("name", albumArtist.name)
+                            .put("trackCount", albumArtist.tracks.size)
+                            .put("albumCount", albumArtist.albums.size)
+                    }
+                    .toString()
             }
-            "genres", "genre" -> {
+            "genres",
+            "genre" -> {
                 val page =
                     pageFacets(
                         items = index.genres.values.toList(),
@@ -216,10 +227,9 @@ class AgentQueryService : Service() {
                         searchText = { it.name },
                     )
                 facetResponse("genres", page) { genre ->
-                    JSONObject()
-                        .put("name", genre.name)
-                        .put("trackCount", genre.tracks.size)
-                }.toString()
+                        JSONObject().put("name", genre.name).put("trackCount", genre.tracks.size)
+                    }
+                    .toString()
             }
             else -> errorJson("invalid_kind", "Unknown facet kind: " + kind)
         }
@@ -242,8 +252,7 @@ class AgentQueryService : Service() {
             return inactivePlayerJson()
         }
 
-        val sessionToken =
-            SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val controller =
             try {
                 MediaController.Builder(this, sessionToken)
@@ -279,9 +288,7 @@ class AgentQueryService : Service() {
                     )
                 }
             val track =
-                snapshot.mediaId
-                    ?.toLongOrNull()
-                    ?.let { GlobalData.libraryIndex.value.tracks[it] }
+                snapshot.mediaId?.toLongOrNull()?.let { GlobalData.libraryIndex.value.tracks[it] }
             return JSONObject()
                 .put("active", true)
                 .put("isPlaying", snapshot.isPlaying)
@@ -413,13 +420,16 @@ class AgentQueryService : Service() {
         if (parsed == null) {
             return errorJson("invalid_range", "Unknown range")
         }
-        val sort = if (request.optString("sort", "plays").equals("time", true)) {
-            StatsSort.TIME
-        } else {
-            StatsSort.PLAYS
-        }
+        val sort =
+            if (request.optString("sort", "plays").equals("time", true)) {
+                StatsSort.TIME
+            } else {
+                StatsSort.PLAYS
+            }
         val limit = request.optInt("limit", 20).coerceIn(1, MAX_LIMIT)
-        val rows = runBlocking { GlobalData.statsManager.repository.topTracks(parsed, sort, limit).first() }
+        val rows = runBlocking {
+            GlobalData.statsManager.repository.topTracks(parsed, sort, limit).first()
+        }
         return JSONObject()
             .put("range", request.optString("range", "30d"))
             .put("sort", if (sort == StatsSort.TIME) "time" else "plays")
@@ -517,13 +527,11 @@ class AgentQueryService : Service() {
             .toString()
     }
 
-    private fun statsUuidFor(track: Track): String? =
-        runBlocking {
-            val totals =
-                GlobalData.statsManager.repository.lifetimeForTrack(track)
-                    ?: return@runBlocking null
-            GlobalData.statsManager.database.trackDao().byRowId(totals.trackRowId)?.uuid
-        }
+    private fun statsUuidFor(track: Track): String? = runBlocking {
+        val totals =
+            GlobalData.statsManager.repository.lifetimeForTrack(track) ?: return@runBlocking null
+        GlobalData.statsManager.database.trackDao().byRowId(totals.trackRowId)?.uuid
+    }
 
     private fun summaryJson(range: String, summary: RangeSummary): String =
         JSONObject()
@@ -585,10 +593,10 @@ class AgentQueryService : Service() {
             "artist" -> compareBy { it.artists.joinToString(", ").lowercase() }
             "album" -> compareBy { (it.album ?: "").lowercase() }
             "year" -> compareBy { it.year ?: Int.MIN_VALUE }
-            "dateadded", "date_added" -> compareBy { it.dateAdded }
+            "dateadded",
+            "date_added" -> compareBy { it.dateAdded }
             "duration" -> compareBy { it.duration.inWholeMilliseconds }
-            "rawtitle" ->
-                Comparator { a, b -> collator.compare(a.displayTitle, b.displayTitle) }
+            "rawtitle" -> Comparator { a, b -> collator.compare(a.displayTitle, b.displayTitle) }
             "sortkey" -> sortKeyComparator(descending = false)
             else ->
                 Comparator { a, b ->
@@ -606,8 +614,7 @@ class AgentQueryService : Service() {
             val aKey = a.sortKey
             val bKey = b.sortKey
             when {
-                aKey == null && bKey == null ->
-                    collator.compare(a.displayTitle, b.displayTitle)
+                aKey == null && bKey == null -> collator.compare(a.displayTitle, b.displayTitle)
                 aKey == null -> 1
                 bKey == null -> -1
                 else -> {
@@ -624,13 +631,20 @@ class AgentQueryService : Service() {
 
     private fun parseRange(raw: String): StatsRange? =
         when (raw.trim().lowercase()) {
-            "7d", "days_7" -> StatsRange.DAYS_7
-            "30d", "days_30" -> StatsRange.DAYS_30
-            "month", "calendar_month" -> StatsRange.CALENDAR_MONTH
-            "90d", "days_90" -> StatsRange.DAYS_90
-            "365d", "days_365" -> StatsRange.DAYS_365
-            "year", "calendar_year" -> StatsRange.CALENDAR_YEAR
-            "3y", "years_3" -> StatsRange.YEARS_3
+            "7d",
+            "days_7" -> StatsRange.DAYS_7
+            "30d",
+            "days_30" -> StatsRange.DAYS_30
+            "month",
+            "calendar_month" -> StatsRange.CALENDAR_MONTH
+            "90d",
+            "days_90" -> StatsRange.DAYS_90
+            "365d",
+            "days_365" -> StatsRange.DAYS_365
+            "year",
+            "calendar_year" -> StatsRange.CALENDAR_YEAR
+            "3y",
+            "years_3" -> StatsRange.YEARS_3
             "all" -> StatsRange.ALL
             else -> null
         }
@@ -651,9 +665,7 @@ class AgentQueryService : Service() {
         JSONArray().apply { values.forEach { put(it) } }
 
     private fun errorJson(code: String, message: String): String =
-        JSONObject()
-            .put("error", JSONObject().put("code", code).put("message", message))
-            .toString()
+        JSONObject().put("error", JSONObject().put("code", code).put("message", message)).toString()
 
     private inline fun guarded(block: () -> String): String {
         return try {
@@ -694,29 +706,24 @@ class AgentQueryService : Service() {
                 haystack.addAll(track.genres)
                 if (haystack.none { it.contains(query, ignoreCase = true) }) return false
             }
-            if (title.isNotBlank() &&
-                track.title?.contains(title, ignoreCase = true) != true
+            if (title.isNotBlank() && track.title?.contains(title, ignoreCase = true) != true) {
+                return false
+            }
+            if (
+                artist.isNotBlank() && track.artists.none { it.contains(artist, ignoreCase = true) }
             ) {
                 return false
             }
-            if (artist.isNotBlank() &&
-                track.artists.none { it.contains(artist, ignoreCase = true) }
+            if (album.isNotBlank() && track.album?.contains(album, ignoreCase = true) != true) {
+                return false
+            }
+            if (
+                albumArtist.isNotBlank() &&
+                    track.albumArtists.none { it.contains(albumArtist, ignoreCase = true) }
             ) {
                 return false
             }
-            if (album.isNotBlank() &&
-                track.album?.contains(album, ignoreCase = true) != true
-            ) {
-                return false
-            }
-            if (albumArtist.isNotBlank() &&
-                track.albumArtists.none { it.contains(albumArtist, ignoreCase = true) }
-            ) {
-                return false
-            }
-            if (genre.isNotBlank() &&
-                track.genres.none { it.contains(genre, ignoreCase = true) }
-            ) {
+            if (genre.isNotBlank() && track.genres.none { it.contains(genre, ignoreCase = true) }) {
                 return false
             }
             if (year != null && track.year != year) return false
@@ -738,10 +745,8 @@ class AgentQueryService : Service() {
         private const val API_VERSION = 4
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 200
-        private val RANGES =
-            listOf("7d", "30d", "month", "90d", "365d", "year", "3y", "all")
-        private val FACET_KINDS =
-            listOf("artists", "albums", "album_artists", "genres")
+        private val RANGES = listOf("7d", "30d", "month", "90d", "365d", "year", "3y", "all")
+        private val FACET_KINDS = listOf("artists", "albums", "album_artists", "genres")
         private val TRACK_FIELDS =
             listOf(
                 "libraryId",

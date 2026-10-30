@@ -52,85 +52,92 @@ class StatsResolverTest {
         size: Long = 1024,
         file: File? = null,
         title: String? = "Song",
-    ) = TrackMeta(
-        uri = uri,
-        file = file,
-        size = size,
-        modified = 1,
-        title = title,
-        artist = "Artist",
-        album = "Album",
-        durationMillis = 180_000,
-    )
+    ) =
+        TrackMeta(
+            uri = uri,
+            file = file,
+            size = size,
+            modified = 1,
+            title = title,
+            artist = "Artist",
+            album = "Album",
+            durationMillis = 180_000,
+        )
 
     @Test
-    fun sameHashDifferentUriUsesSameRow() = runBlocking<Unit> {
-        val resolver = resolver { "hash" }
-        val first = resolver.resolve(meta(uri = "content://media/external/audio/media/1"))
-        val second = resolver.resolve(meta(uri = "content://media/external/audio/media/2"))
+    fun sameHashDifferentUriUsesSameRow() =
+        runBlocking<Unit> {
+            val resolver = resolver { "hash" }
+            val first = resolver.resolve(meta(uri = "content://media/external/audio/media/1"))
+            val second = resolver.resolve(meta(uri = "content://media/external/audio/media/2"))
 
-        assertThat(second).isEqualTo(first)
-        assertThat(db.trackDao().byRowId(first)!!.uuid).isNotBlank()
-        assertThat(
-                db.aliasDao()
-                    .resolve(
-                        AliasKind.LOCAL_URI,
-                        LocalUriKey.of("content://media/external/audio/media/1", 1024),
-                    )
-            )
-            .isNull()
-        assertThat(
-                db.aliasDao()
-                    .resolve(
-                        AliasKind.LOCAL_URI,
-                        LocalUriKey.of("content://media/external/audio/media/2", 1024),
-                    )
-            )
-            .isEqualTo(first)
-    }
-
-    @Test
-    fun tagKeyMatchesWhenHashIsUnavailable() = runBlocking<Unit> {
-        val resolver = resolver { null }
-        val first = resolver.resolve(meta(uri = "content://media/external/audio/media/1"))
-        val second = resolver.resolve(meta(uri = "content://media/external/audio/media/2"))
-
-        assertThat(second).isEqualTo(first)
-    }
+            assertThat(second).isEqualTo(first)
+            assertThat(db.trackDao().byRowId(first)!!.uuid).isNotBlank()
+            assertThat(
+                    db.aliasDao()
+                        .resolve(
+                            AliasKind.LOCAL_URI,
+                            LocalUriKey.of("content://media/external/audio/media/1", 1024),
+                        )
+                )
+                .isNull()
+            assertThat(
+                    db.aliasDao()
+                        .resolve(
+                            AliasKind.LOCAL_URI,
+                            LocalUriKey.of("content://media/external/audio/media/2", 1024),
+                        )
+                )
+                .isEqualTo(first)
+        }
 
     @Test
-    fun localUriMatchesWhenFileAndTagsAreUnavailable() = runBlocking<Unit> {
-        val resolver = resolver { null }
-        val localMeta = meta(uri = "content://media/external/audio/media/9", title = null)
-        val localMetaNoTags = localMeta.copy(artist = null, album = null)
-        val first = resolver.resolve(localMetaNoTags)
-        resolver.invalidate()
-        val second = resolver.resolve(localMetaNoTags.copy(title = null))
+    fun tagKeyMatchesWhenHashIsUnavailable() =
+        runBlocking<Unit> {
+            val resolver = resolver { null }
+            val first = resolver.resolve(meta(uri = "content://media/external/audio/media/1"))
+            val second = resolver.resolve(meta(uri = "content://media/external/audio/media/2"))
 
-        assertThat(second).isEqualTo(first)
-    }
+            assertThat(second).isEqualTo(first)
+        }
 
     @Test
-    fun relativePathFallbackStillWorksWithoutHashOrTags() = runBlocking<Unit> {
-        val file = temporaryFolder.newFile("Song.flac")
-        val resolver = resolver { null }
-        val first =
-            resolver.resolve(
-                meta(
-                    uri = "content://media/external/audio/media/1",
-                    file = file,
-                    title = null,
-                ).copy(artist = null, album = null)
-            )
-        val second =
-            resolver.resolve(
-                meta(
-                    uri = "content://media/external/audio/media/2",
-                    file = file,
-                    title = null,
-                ).copy(artist = null, album = null)
-            )
+    fun localUriMatchesWhenFileAndTagsAreUnavailable() =
+        runBlocking<Unit> {
+            val resolver = resolver { null }
+            val localMeta = meta(uri = "content://media/external/audio/media/9", title = null)
+            val localMetaNoTags = localMeta.copy(artist = null, album = null)
+            val first = resolver.resolve(localMetaNoTags)
+            resolver.invalidate()
+            val second = resolver.resolve(localMetaNoTags.copy(title = null))
 
-        assertThat(second).isEqualTo(first)
-    }
+            assertThat(second).isEqualTo(first)
+        }
+
+    @Test
+    fun relativePathFallbackStillWorksWithoutHashOrTags() =
+        runBlocking<Unit> {
+            val file = temporaryFolder.newFile("Song.flac")
+            val resolver = resolver { null }
+            val first =
+                resolver.resolve(
+                    meta(
+                            uri = "content://media/external/audio/media/1",
+                            file = file,
+                            title = null,
+                        )
+                        .copy(artist = null, album = null)
+                )
+            val second =
+                resolver.resolve(
+                    meta(
+                            uri = "content://media/external/audio/media/2",
+                            file = file,
+                            title = null,
+                        )
+                        .copy(artist = null, album = null)
+                )
+
+            assertThat(second).isEqualTo(first)
+        }
 }

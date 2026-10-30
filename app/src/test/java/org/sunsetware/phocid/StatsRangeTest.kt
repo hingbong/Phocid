@@ -10,14 +10,12 @@ class StatsRangeTest {
 
     @Test
     fun calendarMonthStartsOnFirstDay() {
-        assertThat(StatsRange.CALENDAR_MONTH.startDate(today))
-            .isEqualTo(LocalDate.of(2026, 6, 1))
+        assertThat(StatsRange.CALENDAR_MONTH.startDate(today)).isEqualTo(LocalDate.of(2026, 6, 1))
     }
 
     @Test
     fun calendarYearStartsOnJanuaryFirst() {
-        assertThat(StatsRange.CALENDAR_YEAR.startDate(today))
-            .isEqualTo(LocalDate.of(2026, 1, 1))
+        assertThat(StatsRange.CALENDAR_YEAR.startDate(today)).isEqualTo(LocalDate.of(2026, 1, 1))
     }
 
     @Test

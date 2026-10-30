@@ -28,7 +28,9 @@ class PreferencesSingleChoiceDialog<T>(
                     UtilityRadioButtonListItem(
                         text = name,
                         selected = activeOption(preferences) == option,
-                        onSelect = { viewModel.updatePreferences { updatePreferences(it, option) } },
+                        onSelect = {
+                            viewModel.updatePreferences { updatePreferences(it, option) }
+                        },
                     )
                 }
             }

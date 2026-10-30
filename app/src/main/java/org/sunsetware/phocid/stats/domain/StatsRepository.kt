@@ -75,17 +75,14 @@ class StatsRepository(
     ): Flow<List<TrackAggregate>> =
         if (range.isAll) {
             when (sort) {
-                StatsSort.PLAYS ->
-                    db.totalsDao().topTracksByPlays(limit, AliasKind.LOCAL_URI)
+                StatsSort.PLAYS -> db.totalsDao().topTracksByPlays(limit, AliasKind.LOCAL_URI)
                 StatsSort.TIME -> db.totalsDao().topTracksByTime(limit, AliasKind.LOCAL_URI)
             }
         } else {
             val since = sinceDay(range)
             when (sort) {
-                StatsSort.PLAYS ->
-                    db.dailyDao().topTracksByPlays(since, limit, AliasKind.LOCAL_URI)
-                StatsSort.TIME ->
-                    db.dailyDao().topTracksByTime(since, limit, AliasKind.LOCAL_URI)
+                StatsSort.PLAYS -> db.dailyDao().topTracksByPlays(since, limit, AliasKind.LOCAL_URI)
+                StatsSort.TIME -> db.dailyDao().topTracksByTime(since, limit, AliasKind.LOCAL_URI)
             }
         }
 
@@ -118,8 +115,7 @@ class StatsRepository(
         return streak
     }
 
-    suspend fun lifetime(trackRowId: Long): TrackTotalsEntity? =
-        db.totalsDao().byRowId(trackRowId)
+    suspend fun lifetime(trackRowId: Long): TrackTotalsEntity? = db.totalsDao().byRowId(trackRowId)
 
     suspend fun lifetimeByPath(path: String): TrackTotalsEntity? = db.totalsDao().byPath(path)
 

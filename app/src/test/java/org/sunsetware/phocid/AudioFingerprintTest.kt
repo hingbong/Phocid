@@ -20,8 +20,7 @@ class AudioFingerprintTest {
         writeTrack(withTag, ByteArray(512) { (it * 7).toByte() })
 
         assertThat(AudioFingerprint.compute(audioOnly)).isNotNull
-        assertThat(AudioFingerprint.compute(withTag))
-            .isEqualTo(AudioFingerprint.compute(audioOnly))
+        assertThat(AudioFingerprint.compute(withTag)).isEqualTo(AudioFingerprint.compute(audioOnly))
     }
 
     @Test

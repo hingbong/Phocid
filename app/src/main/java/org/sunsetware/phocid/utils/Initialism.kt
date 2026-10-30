@@ -23,9 +23,9 @@ private val hanSet = UnicodeSet("[:Hani:]").freeze()
 private val kanaSet = UnicodeSet("[[:Hira:]+[:Kana:]]").freeze()
 private val letterSet = UnicodeSet("[:Letter:]").freeze()
 
-private val pinyinTransliterator =
-    runCatching { Transliterator.getInstance("Han-Latin; NFD; [:Mark:] Remove; NFC; Lower") }
-        .getOrNull()
+private val pinyinTransliterator = runCatching {
+    Transliterator.getInstance("Han-Latin; NFD; [:Mark:] Remove; NFC; Lower")
+}.getOrNull()
 
 private fun String.initialHan(locale: Locale): String {
     // ICU only has Han -> Pinyin conversion, so we can't get a meaningful result for
@@ -46,13 +46,10 @@ private fun String.initialHan(locale: Locale): String {
     } else this
 }
 
-private val kanaTransliterator =
-    runCatching {
-            Transliterator.getInstance(
-                "NFD; [:Mark:] Remove; NFC; Any-Latin; [:^Letter:] Remove; Lower"
-            )
-        }
-        .getOrNull()
+private val kanaTransliterator = runCatching {
+    Transliterator.getInstance("NFD; [:Mark:] Remove; NFC; Any-Latin; [:^Letter:] Remove; Lower")
+}
+    .getOrNull()
 
 private fun String.initialKana(): String {
     val s = kanaTransliterator?.transliterate(this) ?: return firstCharacter() ?: symbolInitial

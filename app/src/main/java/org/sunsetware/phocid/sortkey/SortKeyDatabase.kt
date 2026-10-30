@@ -17,8 +17,7 @@ abstract class SortKeyDatabase : RoomDatabase() {
         fun get(context: Context): SortKeyDatabase =
             instance
                 ?: synchronized(this) {
-                    instance
-                        ?: build(context.applicationContext).also { instance = it }
+                    instance ?: build(context.applicationContext).also { instance = it }
                 }
 
         private fun build(context: Context): SortKeyDatabase =

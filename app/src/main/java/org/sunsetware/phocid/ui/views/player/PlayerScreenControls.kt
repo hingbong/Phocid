@@ -273,8 +273,9 @@ class PlayerScreenControlsDefaultBase(
                 val position = currentPosition()
                 if (!isDraggingProgressSlider) {
                     progress =
-                        (position.toFloat() / currentTrack.duration.inWholeMilliseconds)
-                            .takeIf { !it.isNaN() } ?: 0f
+                        (position.toFloat() / currentTrack.duration.inWholeMilliseconds).takeIf {
+                            !it.isNaN()
+                        } ?: 0f
                 }
             }
 

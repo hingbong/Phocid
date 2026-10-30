@@ -117,22 +117,21 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                     }
             }
             .collectAsStateWithLifecycle()
-    val currentTrack by
-        remember {
-                playerManager.state
-                    .combine(viewModel.libraryIndex) { state, library ->
-                        if (state.actualPlayQueue.isEmpty()) null
-                        else library.tracks[state.actualPlayQueue[state.currentIndex]]
-                    }
-                    .filterNotNull()
+    val currentTrack by remember {
+        playerManager.state
+            .combine(viewModel.libraryIndex) { state, library ->
+                if (state.actualPlayQueue.isEmpty()) null
+                else library.tracks[state.actualPlayQueue[state.currentIndex]]
             }
-            .collectAsStateWithLifecycle(
-                initialValue =
-                    if (playerState.actualPlayQueue.isEmpty()) InvalidTrack
-                    else
-                        libraryIndex.tracks[playerState.actualPlayQueue[playerState.currentIndex]]
-                            ?: InvalidTrack
-            )
+            .filterNotNull()
+    }
+        .collectAsStateWithLifecycle(
+            initialValue =
+                if (playerState.actualPlayQueue.isEmpty()) InvalidTrack
+                else
+                    libraryIndex.tracks[playerState.actualPlayQueue[playerState.currentIndex]]
+                        ?: InvalidTrack
+        )
     val currentTrackIndex = playerState.currentIndex
     val playlists by viewModel.playlistManager.playlists.collectAsStateWithLifecycle()
     val currentTrackIsFavorite =

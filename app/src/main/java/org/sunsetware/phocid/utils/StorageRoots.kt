@@ -20,10 +20,9 @@ fun Context.externalStorageRoots(): List<File> {
             .mapNotNull { it.directory }
 
     val appRoots =
-        getExternalFilesDirs(null)
-            .orEmpty()
-            .asSequence()
-            .mapNotNull { it?.parentFile?.parentFile?.parentFile?.parentFile }
+        getExternalFilesDirs(null).orEmpty().asSequence().mapNotNull {
+            it?.parentFile?.parentFile?.parentFile?.parentFile
+        }
 
     return mergeStorageRoots(volumeRoots.toList(), appRoots.toList())
 }

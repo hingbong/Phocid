@@ -1,7 +1,7 @@
 package org.sunsetware.phocid
 
-import androidx.compose.ui.graphics.Color
 import android.icu.text.Collator
+import androidx.compose.ui.graphics.Color
 import java.util.Locale
 import kotlin.time.Duration
 import org.assertj.core.api.Assertions.*
