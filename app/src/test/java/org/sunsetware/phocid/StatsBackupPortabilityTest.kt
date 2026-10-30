@@ -5,6 +5,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -12,6 +13,10 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.sunsetware.phocid.stats.backup.BackupAlias
+import org.sunsetware.phocid.stats.backup.BackupDaily
+import org.sunsetware.phocid.stats.backup.BackupTotals
+import org.sunsetware.phocid.stats.backup.BackupTrack
+import org.sunsetware.phocid.stats.backup.StatsBackup
 import org.sunsetware.phocid.stats.backup.StatsBackupManager
 import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.StatsDatabase
@@ -75,6 +80,65 @@ class StatsBackupPortabilityTest {
         return row
     }
 
+    private suspend fun insertTrack(uuid: String, title: String = "Song"): Long =
+        db.trackDao()
+            .insert(
+                TrackEntity(
+                    uuid = uuid,
+                    title = title,
+                    artist = "Artist",
+                    album = "Album",
+                    durationMillis = 180_000,
+                    createdAt = 1,
+                )
+            )
+
+    private fun track(
+        uuid: String,
+        title: String = "Song",
+        artist: String = "Artist",
+        album: String = "Album",
+        durationMillis: Long = 180_000,
+        createdAt: Long = 1,
+    ) = BackupTrack(uuid, title, artist, album, durationMillis, createdAt)
+
+    private fun total(
+        uuid: String,
+        count: Int,
+        millis: Long,
+        firstPlayedAt: Long,
+        lastPlayedAt: Long,
+    ) = BackupTotals(uuid, count, millis, firstPlayedAt, lastPlayedAt)
+
+    private fun day(
+        uuid: String,
+        epochDay: Int,
+        count: Int,
+        millis: Long,
+        lastPlayedAt: Long,
+    ) = BackupDaily(uuid, epochDay, count, millis, lastPlayedAt)
+
+    private fun backup(
+        tracks: List<BackupTrack>,
+        aliases: List<BackupAlias> = emptyList(),
+        totals: List<BackupTotals> = emptyList(),
+        daily: List<BackupDaily> = emptyList(),
+    ) =
+        StatsBackup(
+            exportedAt = 0,
+            zoneId = "UTC",
+            tracks = tracks,
+            aliases = aliases,
+            totals = totals,
+            daily = daily,
+        )
+
+    private fun countRows(table: String): Int =
+        db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { cursor ->
+            cursor.moveToFirst()
+            cursor.getInt(0)
+        }
+
     @Test
     fun exportOmitsLocalUriAlias() =
         runBlocking<Unit> {
@@ -107,5 +171,267 @@ class StatsBackupPortabilityTest {
                 .isNull()
             assertThat(db.totalsDao().byRowId(db.trackDao().rowIdOfUuid("uuid-1")!!)!!.totalCount)
                 .isEqualTo(2)
+        }
+
+    @Test
+    fun restoreMergesAudioHashIntoExistingRow() =
+        runBlocking<Unit> {
+            val row = seed(db)
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-new", title = "Different")),
+                    aliases = listOf(BackupAlias(AliasKind.AUDIO_HASH, "hash", "uuid-new")),
+                    totals = listOf(total("uuid-new", 5, 900_000, 0, 10)),
+                    daily = listOf(day("uuid-new", 20_000, 3, 540_000, 9)),
+                )
+
+            StatsBackupManager(db).restore(payload, replace = false)
+
+            assertThat(countRows("tracks")).isEqualTo(1)
+            assertThat(db.trackDao().rowIdOfUuid("uuid-new")).isNull()
+            assertThat(db.trackDao().byRowId(row)!!.title).isEqualTo("Song")
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "hash")).isEqualTo(row)
+            val totals = db.totalsDao().byRowId(row)!!
+            assertThat(totals.totalCount).isEqualTo(5)
+            assertThat(totals.totalMillis).isEqualTo(900_000)
+            assertThat(totals.firstPlayedAt).isEqualTo(0)
+            assertThat(totals.lastPlayedAt).isEqualTo(10)
+            val daily = db.dailyDao().since(20_000).single()
+            assertThat(daily.trackRowId).isEqualTo(row)
+            assertThat(daily.playCount).isEqualTo(3)
+            assertThat(daily.playedMillis).isEqualTo(540_000)
+            assertThat(daily.lastPlayedAt).isEqualTo(9)
+        }
+
+    @Test
+    fun restoreMergesTagKeyIntoExistingRow() =
+        runBlocking<Unit> {
+            val row = seed(db)
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-new", title = "Different")),
+                    aliases = listOf(BackupAlias(AliasKind.TAG_KEY, "tag", "uuid-new")),
+                    totals = listOf(total("uuid-new", 4, 720_000, 0, 8)),
+                )
+
+            StatsBackupManager(db).restore(payload, replace = false)
+
+            assertThat(countRows("tracks")).isEqualTo(1)
+            assertThat(db.trackDao().rowIdOfUuid("uuid-new")).isNull()
+            assertThat(db.trackDao().byRowId(row)!!.title).isEqualTo("Song")
+            assertThat(db.aliasDao().resolve(AliasKind.TAG_KEY, "tag")).isEqualTo(row)
+            val totals = db.totalsDao().byRowId(row)!!
+            assertThat(totals.totalCount).isEqualTo(4)
+            assertThat(totals.totalMillis).isEqualTo(720_000)
+            assertThat(totals.firstPlayedAt).isEqualTo(0)
+            assertThat(totals.lastPlayedAt).isEqualTo(8)
+        }
+
+    @Test
+    fun restoreGroupsBackupUuidsSharingAnAlias() =
+        runBlocking<Unit> {
+            val row = seed(db)
+            val payload =
+                backup(
+                    tracks =
+                        listOf(
+                            track("uuid-a", title = "First"),
+                            track("uuid-b", title = "Second"),
+                        ),
+                    aliases =
+                        listOf(
+                            BackupAlias(AliasKind.AUDIO_HASH, "hash", "uuid-a"),
+                            BackupAlias(AliasKind.AUDIO_HASH, "hash", "uuid-b"),
+                        ),
+                    totals =
+                        listOf(
+                            total("uuid-a", 5, 500_000, 0, 5),
+                            total("uuid-b", 3, 900_000, 1, 7),
+                        ),
+                    daily =
+                        listOf(
+                            day("uuid-a", 20_000, 2, 200_000, 4),
+                            day("uuid-b", 20_000, 3, 500_000, 6),
+                        ),
+                )
+
+            StatsBackupManager(db).restore(payload, replace = false)
+
+            assertThat(countRows("tracks")).isEqualTo(1)
+            assertThat(db.trackDao().rowIdOfUuid("uuid-a")).isNull()
+            assertThat(db.trackDao().rowIdOfUuid("uuid-b")).isNull()
+            assertThat(db.trackDao().byRowId(row)!!.title).isEqualTo("Song")
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "hash")).isEqualTo(row)
+            val totals = db.totalsDao().byRowId(row)!!
+            assertThat(totals.totalCount).isEqualTo(5)
+            assertThat(totals.totalMillis).isEqualTo(900_000)
+            assertThat(totals.firstPlayedAt).isEqualTo(0)
+            assertThat(totals.lastPlayedAt).isEqualTo(7)
+            val daily = db.dailyDao().since(20_000).single()
+            assertThat(daily.trackRowId).isEqualTo(row)
+            assertThat(daily.playCount).isEqualTo(3)
+            assertThat(daily.playedMillis).isEqualTo(500_000)
+            assertThat(daily.lastPlayedAt).isEqualTo(6)
+        }
+
+    @Test
+    fun duplicateImportIsIdempotent() =
+        runBlocking<Unit> {
+            val row = seed(db)
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-new", title = "Different")),
+                    aliases = listOf(BackupAlias(AliasKind.AUDIO_HASH, "hash", "uuid-new")),
+                    totals = listOf(total("uuid-new", 5, 900_000, 0, 10)),
+                    daily = listOf(day("uuid-new", 20_000, 3, 540_000, 9)),
+                )
+            val manager = StatsBackupManager(db)
+
+            manager.restore(payload, replace = false)
+            val totalsAfterFirst = db.totalsDao().byRowId(row)!!
+            val dailyAfterFirst = db.dailyDao().since(20_000).single()
+            manager.restore(payload, replace = false)
+
+            assertThat(db.totalsDao().byRowId(row)).isEqualTo(totalsAfterFirst)
+            assertThat(db.dailyDao().since(20_000)).containsExactly(dailyAfterFirst)
+            assertThat(countRows("track_totals")).isEqualTo(1)
+            assertThat(countRows("track_daily")).isEqualTo(1)
+            assertThat(countRows("tracks")).isEqualTo(1)
+        }
+
+    @Test
+    fun exactUuidConflictingWithAliasThrowsAndLeavesDatabaseUnchanged() =
+        runBlocking<Unit> {
+            val rowB = insertTrack("uuid-b", "B")
+            val rowA = insertTrack("uuid-a", "A")
+            db.aliasDao().put(TrackAliasEntity(AliasKind.AUDIO_HASH, "hash", rowA))
+            db.totalsDao()
+                .insertAll(
+                    listOf(
+                        TrackTotalsEntity(
+                            trackRowId = rowB,
+                            totalCount = 2,
+                            totalMillis = 360_000,
+                            firstPlayedAt = 1,
+                            lastPlayedAt = 2,
+                        )
+                    )
+                )
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-b")),
+                    aliases = listOf(BackupAlias(AliasKind.AUDIO_HASH, "hash", "uuid-b")),
+                    totals = listOf(total("uuid-b", 9, 900_000, 0, 9)),
+                )
+
+            assertThatThrownBy {
+                    runBlocking { StatsBackupManager(db).restore(payload, replace = false) }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+
+            assertThat(countRows("tracks")).isEqualTo(2)
+            assertThat(db.trackDao().rowIdOfUuid("uuid-b")).isEqualTo(rowB)
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "hash")).isEqualTo(rowA)
+            assertThat(db.totalsDao().byRowId(rowB)!!.totalCount).isEqualTo(2)
+            assertThat(db.totalsDao().byRowId(rowB)!!.totalMillis).isEqualTo(360_000)
+        }
+
+    @Test
+    fun twoAliasesPointingAtDifferentRowsThrowAndLeaveDatabaseUnchanged() =
+        runBlocking<Unit> {
+            val rowA = insertTrack("uuid-a", "A")
+            val rowB = insertTrack("uuid-b", "B")
+            db.aliasDao().put(TrackAliasEntity(AliasKind.AUDIO_HASH, "hash", rowA))
+            db.aliasDao().put(TrackAliasEntity(AliasKind.TAG_KEY, "tag", rowB))
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-x")),
+                    aliases =
+                        listOf(
+                            BackupAlias(AliasKind.AUDIO_HASH, "hash", "uuid-x"),
+                            BackupAlias(AliasKind.TAG_KEY, "tag", "uuid-x"),
+                        ),
+                    totals = listOf(total("uuid-x", 9, 900_000, 0, 9)),
+                )
+
+            assertThatThrownBy {
+                    runBlocking { StatsBackupManager(db).restore(payload, replace = false) }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+
+            assertThat(countRows("tracks")).isEqualTo(2)
+            assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "hash")).isEqualTo(rowA)
+            assertThat(db.aliasDao().resolve(AliasKind.TAG_KEY, "tag")).isEqualTo(rowB)
+            assertThat(countRows("track_totals")).isEqualTo(0)
+        }
+
+    @Test
+    fun replaceGroupsPayloadUuidsSharingAnAliasIntoOneRow() =
+        runBlocking<Unit> {
+            seed(db)
+            val payload =
+                backup(
+                    tracks =
+                        listOf(
+                            track("uuid-a", title = "First"),
+                            track("uuid-b", title = "Second"),
+                        ),
+                    aliases =
+                        listOf(
+                            BackupAlias(AliasKind.TAG_KEY, "tag", "uuid-a"),
+                            BackupAlias(AliasKind.TAG_KEY, "tag", "uuid-b"),
+                        ),
+                    totals =
+                        listOf(
+                            total("uuid-a", 4, 400_000, 0, 4),
+                            total("uuid-b", 2, 800_000, 1, 8),
+                        ),
+                    daily =
+                        listOf(
+                            day("uuid-a", 20_000, 2, 200_000, 3),
+                            day("uuid-b", 20_000, 5, 500_000, 6),
+                        ),
+                )
+
+            StatsBackupManager(db).restore(payload, replace = true)
+
+            assertThat(countRows("tracks")).isEqualTo(1)
+            val row = db.trackDao().rowIdOfUuid("uuid-a")!!
+            assertThat(db.trackDao().rowIdOfUuid("uuid-b")).isNull()
+            assertThat(db.trackDao().rowIdOfUuid("uuid-1")).isNull()
+            assertThat(db.trackDao().byRowId(row)!!.title).isEqualTo("First")
+            assertThat(db.aliasDao().resolve(AliasKind.TAG_KEY, "tag")).isEqualTo(row)
+            val totals = db.totalsDao().byRowId(row)!!
+            assertThat(totals.totalCount).isEqualTo(4)
+            assertThat(totals.totalMillis).isEqualTo(800_000)
+            assertThat(totals.firstPlayedAt).isEqualTo(0)
+            assertThat(totals.lastPlayedAt).isEqualTo(8)
+            val daily = db.dailyDao().since(20_000).single()
+            assertThat(daily.trackRowId).isEqualTo(row)
+            assertThat(daily.playCount).isEqualTo(5)
+            assertThat(daily.playedMillis).isEqualTo(500_000)
+            assertThat(daily.lastPlayedAt).isEqualTo(6)
+            assertThat(countRows("track_totals")).isEqualTo(1)
+            assertThat(countRows("track_daily")).isEqualTo(1)
+        }
+
+    @Test
+    fun replaceRestoreValidationFailureLeavesDatabaseUnchanged() =
+        runBlocking<Unit> {
+            val row = seed(db)
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-1")),
+                    totals = listOf(total("missing-uuid", 9, 900_000, 0, 9)),
+                )
+
+            assertThatThrownBy {
+                    runBlocking { StatsBackupManager(db).restore(payload, replace = true) }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+
+            assertThat(countRows("tracks")).isEqualTo(1)
+            assertThat(db.trackDao().rowIdOfUuid("uuid-1")).isEqualTo(row)
+            assertThat(db.totalsDao().byRowId(row)!!.totalCount).isEqualTo(2)
         }
 }
