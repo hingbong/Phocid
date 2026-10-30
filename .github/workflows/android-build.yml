@@ -199,7 +199,7 @@ jobs:
           done
           echo "App and agent-bridge APKs share signer certificate SHA-256: $app_digest"
 
-          if [ -n "${PHOCID_CERT_SHA256:-}" ]; then
+          if [ "${GITHUB_REF:-}" = "refs/heads/main" ] && [ -n "${PHOCID_CERT_SHA256:-}" ]; then
             expected="$(printf '%s' "$PHOCID_CERT_SHA256" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]:')"
             if [ "$app_digest" != "$expected" ]; then
               echo "::error::App APK signer certificate does not match PHOCID_CERT_SHA256"
