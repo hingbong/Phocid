@@ -1,6 +1,7 @@
 package org.sunsetware.phocid.stats.resolver
 
 import android.content.Context
+import androidx.room.withTransaction
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -32,10 +33,10 @@ data class TrackMeta(
 /**
  * Media item -> trackRowId resolver.
  *
- * Lookup order: audio hash, normalized tags + duration bucket, local content URI, relative path. A
- * hit writes back any missing aliases and refreshes the display metadata. If different layers point
- * at different rows, they are merged in one transaction so the statistics page cannot show the same
- * song twice.
+ * Lookup order: audio hash, tags, relative path. LOCAL_URI is only a local hint used to clean up
+ * aliases; it never selects a row. Identity is resolved conservatively: when clues disagree the
+ * resolver creates a new row and leaves a temporary split instead of risking a wrong merge. Aliases
+ * are written with IGNORE so a weaker clue can never overwrite an existing identity.
  */
 class TrackResolver(
     private val db: StatsDatabase,
@@ -43,71 +44,95 @@ class TrackResolver(
     private val mediaRoots: () -> List<String>,
 ) {
     private val mutex = Mutex()
-    private val memo = HashMap<String, Long>()
 
     suspend fun resolve(meta: TrackMeta): Long {
-        val key = LocalUriKey.of(meta.uri, meta.size)
+        // Hashing can read the whole audio file. Do it before taking the write lock so slow
+        // media never serializes behind another track's database transaction.
+        val hash = withContext(Dispatchers.IO) { cachedHash(meta) }
+        val localUriKey = LocalUriKey.of(meta.uri, meta.size)
+        val tagKeys = TagKey.candidates(meta.artist, meta.album, meta.title, meta.durationMillis)
+        val relPath = meta.file?.let { RelPathKey.of(it.absolutePath, mediaRoots()) }
+
         return mutex.withLock {
-            memo[key]?.let {
-                return@withLock it
-            }
-            val rowId = withContext(Dispatchers.IO) { doResolve(meta) }
-            memo[key] = rowId
-            rowId
+            db.withTransaction { doResolve(meta, hash, localUriKey, tagKeys, relPath) }
         }
     }
 
     fun invalidate() {
-        memo.clear()
+        // Identity is re-read from the database on every resolve, so there is no memo to drop.
     }
 
-    private suspend fun doResolve(meta: TrackMeta): Long {
+    private suspend fun doResolve(
+        meta: TrackMeta,
+        hash: String?,
+        localUriKey: String,
+        tagKeys: List<String>,
+        relPath: String?,
+    ): Long {
         val tracks = db.trackDao()
         val aliases = db.aliasDao()
 
-        val localUriKey = LocalUriKey.of(meta.uri, meta.size)
-        val hash = cachedHash(meta)
-        val tagKeys = TagKey.candidates(meta.artist, meta.album, meta.title, meta.durationMillis)
-        val relPath = meta.file?.let { RelPathKey.of(it.absolutePath, mediaRoots()) }
-
-        val hits = LinkedHashMap<Int, Long>()
-        hash
-            ?.let { aliases.resolve(AliasKind.AUDIO_HASH, it) }
-            ?.let { hits[AliasKind.AUDIO_HASH] = it }
-        tagKeys
-            .firstNotNullOfOrNull { aliases.resolve(AliasKind.TAG_KEY, it) }
-            ?.let { hits[AliasKind.TAG_KEY] = it }
-        aliases.resolve(AliasKind.LOCAL_URI, localUriKey)?.let { hits[AliasKind.LOCAL_URI] = it }
-        relPath
-            ?.let { aliases.resolve(AliasKind.REL_PATH, it) }
-            ?.let { hits[AliasKind.REL_PATH] = it }
+        val hashHit = hash?.let { aliases.resolve(AliasKind.AUDIO_HASH, it) }
+        val tagHits = tagKeys.mapNotNull { aliases.resolve(AliasKind.TAG_KEY, it) }.distinct()
+        val relHit = relPath?.let { aliases.resolve(AliasKind.REL_PATH, it) }
+        var localHit = aliases.resolve(AliasKind.LOCAL_URI, localUriKey)
 
         val winner =
-            if (hits.isEmpty()) {
-                createTrack(meta)
-            } else {
-                val selected =
-                    AliasKind.PRIORITY.first { hits.containsKey(it) }.let { hits.getValue(it) }
-                (hits.values.toSet() - selected).forEach {
-                    mergeTracks(loser = it, winner = selected)
-                }
+            when {
+                hashHit != null -> hashHit
+                tagHits.size == 1 -> tagHits.single()
+                // Ambiguous tags are safer as a new row than as a guess between rows.
+                tagHits.size > 1 -> null
+                relHit != null -> relHit
+                else -> null
+            }
+
+        // Only a hash hit is strong enough to justify merging. Weak clues that disagree keep
+        // the rows apart rather than risking a wrong merge.
+        if (hashHit != null && tagHits.size <= 1) {
+            val weakRows = mutableSetOf<Long>()
+            weakRows.addAll(tagHits)
+            relHit?.let { weakRows.add(it) }
+            weakRows.remove(hashHit)
+            if (weakRows.size == 1) {
+                mergeTracks(loser = weakRows.single(), winner = hashHit)
+                // The merge repoints the loser's aliases, including a matching local URI hint.
+                localHit = aliases.resolve(AliasKind.LOCAL_URI, localUriKey)
+            }
+        }
+
+        val rowId =
+            if (winner != null) {
                 tracks.updateMetadata(
-                    rowId = selected,
+                    rowId = winner,
                     title = meta.title.orEmpty(),
                     artist = meta.artist.orEmpty(),
                     album = meta.album.orEmpty(),
                     durationMillis = meta.durationMillis,
                     path = meta.file?.absolutePath.orEmpty(),
                 )
-                selected
+                winner
+            } else {
+                createTrack(meta)
             }
 
-        hash?.let { aliases.put(TrackAliasEntity(AliasKind.AUDIO_HASH, it, winner)) }
-        tagKeys.firstOrNull()?.let { aliases.put(TrackAliasEntity(AliasKind.TAG_KEY, it, winner)) }
-        aliases.deleteKind(winner, AliasKind.LOCAL_URI)
-        aliases.put(TrackAliasEntity(AliasKind.LOCAL_URI, localUriKey, winner))
-        relPath?.let { aliases.put(TrackAliasEntity(AliasKind.REL_PATH, it, winner)) }
-        return winner
+        // IGNORE turns a conflicting alias into a no-op instead of a REPLACE that would steal
+        // another row's identity.
+        hash?.let { aliases.insertIgnore(TrackAliasEntity(AliasKind.AUDIO_HASH, it, rowId)) }
+        tagKeys.forEach { aliases.insertIgnore(TrackAliasEntity(AliasKind.TAG_KEY, it, rowId)) }
+
+        // The local URI is a hint: replace the winner's old URI, but never repoint an alias that
+        // still belongs to another row.
+        aliases.deleteKind(rowId, AliasKind.LOCAL_URI)
+        if (localHit == null || localHit == rowId) {
+            aliases.insertIgnore(TrackAliasEntity(AliasKind.LOCAL_URI, localUriKey, rowId))
+        }
+
+        relPath?.let {
+            aliases.deleteKind(rowId, AliasKind.REL_PATH)
+            aliases.insertIgnore(TrackAliasEntity(AliasKind.REL_PATH, it, rowId))
+        }
+        return rowId
     }
 
     private suspend fun createTrack(meta: TrackMeta): Long =
@@ -138,7 +163,6 @@ class TrackResolver(
                 aliases = db.aliasDao(),
                 tracks = db.trackDao(),
             )
-        memo.entries.removeAll { it.value == loser }
     }
 
     private suspend fun cachedHash(meta: TrackMeta): String? {

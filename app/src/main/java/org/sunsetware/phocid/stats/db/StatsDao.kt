@@ -77,6 +77,13 @@ interface TrackDao {
 interface TrackAliasDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(alias: TrackAliasEntity)
 
+    /**
+     * Insert an alias only when (kind, value) is still unused. A conflicting alias must never be
+     * overwritten: a weaker clue cannot steal another track's identity.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIgnore(alias: TrackAliasEntity)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putAll(aliases: List<TrackAliasEntity>)
 
