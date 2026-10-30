@@ -17,7 +17,8 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
-private val casefolder = Normalizer2.getNFKCCasefoldInstance()
+/** Project-wide ICU NFKC casefold, shared by every case-insensitive identity. */
+internal val casefolder = Normalizer2.getNFKCCasefoldInstance()
 
 fun String.trimAndNormalize(): String {
     return Normalizer2.getNFCInstance().normalize(this.trim())

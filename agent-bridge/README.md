@@ -92,8 +92,9 @@ Set or clear values with `library_update_sort_keys`:
 
 - `items` may contain more than 200 entries; only the first 200 are processed.
 - The response reports `truncated` and `remaining` when entries are left over.
-- `sortKey: null` clears the existing value.
-- `overwrite` defaults to false; existing values are skipped.
+- `sortKey: null` clears the existing value only when `overwrite` is true.
+- `overwrite` defaults to false; existing values are left untouched, including
+  attempts to clear them with `sortKey: null`.
 - `skippedItems` explains why a valid entry was skipped.
 - `library_validate_sort_keys` accepts the same request and returns the same
   counts without writing anything.

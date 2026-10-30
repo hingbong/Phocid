@@ -6,6 +6,7 @@ import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.sunsetware.phocid.agent.SortKeyBatch
 import org.sunsetware.phocid.agent.SortKeyRequest
 import org.sunsetware.phocid.agent.SortKeyRequestResult
 
@@ -87,5 +88,76 @@ class SortKeyRequestTest {
         val parsed = SortKeyRequest.parse(request(item(1, 42)))
         val batch = (parsed as SortKeyRequestResult.Ok).batch
         assertThat(batch.errors.single().code).isEqualTo("invalid_sort_key")
+    }
+
+    private fun parseLibraryIdLiteral(literal: String): SortKeyBatch {
+        val parsed = SortKeyRequest.parse("""{"items":[{"libraryId":$literal,"sortKey":"x"}]}""")
+        assertThat(parsed).isInstanceOf(SortKeyRequestResult.Ok::class.java)
+        return (parsed as SortKeyRequestResult.Ok).batch
+    }
+
+    private fun assertRejectedLibraryId(literal: String) {
+        val batch = parseLibraryIdLiteral(literal)
+        assertThat(batch.items).isEmpty()
+        assertThat(batch.errors.single().code).isEqualTo("invalid_library_id")
+        assertThat(batch.errors.single().libraryId).isNull()
+        assertThat(batch.errors.single().message).contains("positive integer")
+    }
+
+    @Test
+    fun parse_decimalLibraryId_isRejected() {
+        assertRejectedLibraryId("1.9")
+    }
+
+    @Test
+    fun parse_numericStringLibraryId_isRejected() {
+        assertRejectedLibraryId("\"1\"")
+    }
+
+    @Test
+    fun parse_booleanLibraryId_isRejected() {
+        assertRejectedLibraryId("true")
+    }
+
+    @Test
+    fun parse_nullLibraryId_isRejected() {
+        assertRejectedLibraryId("null")
+    }
+
+    @Test
+    fun parse_missingLibraryId_isRejected() {
+        val batch =
+            (SortKeyRequest.parse("""{"items":[{"sortKey":"x"}]}""") as SortKeyRequestResult.Ok)
+                .batch
+        assertThat(batch.items).isEmpty()
+        assertThat(batch.errors.single().code).isEqualTo("invalid_library_id")
+        assertThat(batch.errors.single().libraryId).isNull()
+    }
+
+    @Test
+    fun parse_overflowLibraryId_isRejected() {
+        assertRejectedLibraryId("9223372036854775808")
+    }
+
+    @Test
+    fun parse_zeroAndNegativeLibraryIds_areRejected() {
+        assertRejectedLibraryId("0")
+        assertRejectedLibraryId("-1")
+    }
+
+    @Test
+    fun parse_integerLibraryIds_acceptsIntAndLong() {
+        val batch = parseLibraryIdLiteral("1")
+        assertThat(batch.errors).isEmpty()
+        assertThat(batch.items.single().libraryId).isEqualTo(1L)
+
+        val parsed =
+            SortKeyRequest.parse(
+                """{"items":[{"libraryId":2147483648,"sortKey":"a"},{"libraryId":9223372036854775807,"sortKey":"b"}]}"""
+            )
+        val longBatch = (parsed as SortKeyRequestResult.Ok).batch
+        assertThat(longBatch.errors).isEmpty()
+        assertThat(longBatch.items.map { it.libraryId })
+            .containsExactly(2147483648L, Long.MAX_VALUE)
     }
 }

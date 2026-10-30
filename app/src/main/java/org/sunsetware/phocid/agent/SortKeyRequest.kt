@@ -65,8 +65,16 @@ object SortKeyRequest {
                     SortKeyItemError(null, "invalid_item", "items[" + index + "] is not an object")
                 continue
             }
-            val libraryId = entry.optLong("libraryId", -1L)
-            if (libraryId <= 0) {
+            // org.json produces Int/Long for integer literals. Do not use optLong here: it would
+            // silently truncate 1.9 to 1 and coerce numeric strings.
+            val rawLibraryId = entry.opt("libraryId")
+            val libraryId: Long? =
+                when {
+                    rawLibraryId is Int -> rawLibraryId.toLong()
+                    rawLibraryId is Long -> rawLibraryId
+                    else -> null
+                }
+            if (libraryId == null || libraryId <= 0) {
                 errors +=
                     SortKeyItemError(
                         null,
