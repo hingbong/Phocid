@@ -137,7 +137,10 @@ jobs:
 
       - name: Run Android Lint
         run: |
-          ./gradlew --no-daemon --stacktrace :app:lintDebug :agent-bridge:lintDebug
+          # Lint/AGP analysis needs more heap than the local/unit-test cap.
+          ./gradlew --no-daemon --stacktrace \
+            -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=1g -XX:ReservedCodeCacheSize=256m -Dfile.encoding=UTF-8' \
+            :app:lintDebug :agent-bridge:lintDebug
 
       - name: Upload lint report
         if: always()
