@@ -97,6 +97,7 @@ class AgentQueryService : Service() {
             .put(
                 "fieldUnits",
                 JSONObject()
+                    .put("firstPlayedAtMs", "epoch milliseconds")
                     .put("lastPlayedAtMs", "epoch milliseconds")
                     .put("dateAddedMs", "epoch milliseconds")
                     .put("playedMillis", "duration milliseconds")
@@ -751,6 +752,7 @@ class AgentQueryService : Service() {
             .put("durationMs", row.durationMillis)
             .put("plays", row.plays)
             .put("playedMillis", row.millis)
+            .put("firstPlayedAtMs", row.firstPlayedAt)
             .put("lastPlayedAtMs", row.lastPlayedAt)
             .put("startedCount", row.startedCount)
             .put("completedCount", row.completedCount)

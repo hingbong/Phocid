@@ -133,6 +133,8 @@ data class TrackDailyEntity(
     val playCount: Int,
     val playedMillis: Long,
     val lastPlayedAt: Long = 0,
+    /** Earliest observed playback instant for this track/day; null for legacy rows. */
+    val firstPlayedAt: Long? = null,
     @ColumnInfo(defaultValue = "0") val startedCount: Int = 0,
     @ColumnInfo(defaultValue = "0") val completedCount: Int = 0,
     @ColumnInfo(defaultValue = "0") val skipCount: Int = 0,

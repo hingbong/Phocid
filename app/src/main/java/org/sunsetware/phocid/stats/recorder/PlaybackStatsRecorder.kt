@@ -42,6 +42,7 @@ internal data class PlaybackOutboxDay(
     val epochDay: Int,
     val millis: Long,
     val plays: Int,
+    val firstPlayedAt: Long? = null,
     val lastPlayedAt: Long,
     val startedCount: Int = 0,
     val completedCount: Int = 0,
@@ -139,6 +140,7 @@ class PlaybackStatsRecorder(
     private data class PendingDay(
         var millis: Long = 0L,
         var plays: Int = 0,
+        var firstPlayedAt: Long? = null,
         var lastPlayedAt: Long = 0L,
         var startedCount: Int = 0,
         var completedCount: Int = 0,
@@ -179,6 +181,7 @@ class PlaybackStatsRecorder(
         val epochDay: Int,
         val millis: Long,
         val plays: Int,
+        val firstPlayedAt: Long,
         val lastPlayedAt: Long,
         val startedCount: Int,
         val completedCount: Int,
@@ -513,6 +516,7 @@ class PlaybackStatsRecorder(
         if (millis <= 0L) return
         val bucket = session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }
         bucket.millis += millis
+        bucket.firstPlayedAt = minOf(bucket.firstPlayedAt ?: segmentStartWall, segmentStartWall)
         bucket.lastPlayedAt = maxOf(bucket.lastPlayedAt, segmentEndWall)
 
         val before = session.accumulatedMillis
@@ -561,7 +565,9 @@ class PlaybackStatsRecorder(
 
     private fun addStartedLocked(session: Session, wall: Long, zone: ZoneId) {
         val epochDay = localEpochDay(wall, zone)
-        session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }.startedCount += 1
+        val bucket = session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }
+        bucket.firstPlayedAt = minOf(bucket.firstPlayedAt ?: wall, wall)
+        bucket.startedCount += 1
     }
 
     /**
@@ -883,6 +889,7 @@ class PlaybackStatsRecorder(
                                     epochDay = epochDay,
                                     millis = pending.millis,
                                     plays = pending.plays,
+                                    firstPlayedAt = pending.firstPlayedAt ?: pending.lastPlayedAt,
                                     lastPlayedAt = pending.lastPlayedAt,
                                     startedCount = pending.startedCount,
                                     completedCount = pending.completedCount,
@@ -934,6 +941,7 @@ class PlaybackStatsRecorder(
                                 playCount = bucket.plays,
                                 playedMillis = bucket.millis,
                                 at = bucket.lastPlayedAt,
+                                firstPlayedAt = bucket.firstPlayedAt,
                                 startedCount = bucket.startedCount,
                                 completedCount = bucket.completedCount,
                                 skipCount = bucket.skipCount,
@@ -997,6 +1005,8 @@ class PlaybackStatsRecorder(
                             pending.completedCount += bucket.completedCount
                             pending.skipCount += bucket.skipCount
                             pending.completedMillis += bucket.completedMillis
+                            pending.firstPlayedAt =
+                                minOf(pending.firstPlayedAt ?: bucket.firstPlayedAt, bucket.firstPlayedAt)
                             pending.lastPlayedAt = maxOf(pending.lastPlayedAt, bucket.lastPlayedAt)
                             if (pending.dayStartMs == null) pending.dayStartMs = bucket.dayStartMs
                             if (pending.dayEndMs == null) pending.dayEndMs = bucket.dayEndMs
@@ -1138,6 +1148,7 @@ class PlaybackStatsRecorder(
                                 epochDay = epochDay,
                                 millis = day.millis,
                                 plays = day.plays,
+                                firstPlayedAt = day.firstPlayedAt,
                                 lastPlayedAt = day.lastPlayedAt,
                                 startedCount = day.startedCount,
                                 completedCount = day.completedCount,
@@ -1306,6 +1317,7 @@ class PlaybackStatsRecorder(
                 PendingDay(
                     millis = day.millis,
                     plays = day.plays,
+                    firstPlayedAt = day.firstPlayedAt,
                     lastPlayedAt = day.lastPlayedAt,
                     startedCount = day.startedCount,
                     completedCount = day.completedCount,

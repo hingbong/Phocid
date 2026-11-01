@@ -94,7 +94,7 @@ returns a readable `response_too_large` error.
 ## Statistics payloads (API 6)
 
 All timestamps are epoch milliseconds and all durations are milliseconds:
-`lastPlayedAtMs`, `dateAddedMs`, `playedMillis`, `dayStartMs`, `dayEndMs`, and
+`firstPlayedAtMs`, `lastPlayedAtMs`, `dateAddedMs`, `playedMillis`, `dayStartMs`, `dayEndMs`, and
 `sampledAtElapsedRealtimeMs` (monotonic since boot). Dates also carry an ISO
 `date`/`dateAddedIso`; range boundaries carry ISO `rangeStart`/`rangeEnd` with
 an explicit `zoneOffset`.

@@ -20,7 +20,7 @@ import java.io.File
             FingerprintCacheEntity::class,
             PlaybackOutboxEntity::class,
         ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class StatsDatabase : RoomDatabase() {
@@ -105,6 +105,14 @@ abstract class StatsDatabase : RoomDatabase() {
                 }
             }
 
+        /** 4 -> 5 adds the earliest observed playback instant for each track/day. */
+        internal val MIGRATION_4_5 =
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE track_daily ADD COLUMN firstPlayedAt INTEGER")
+                }
+            }
+
         @Volatile private var instance: StatsDatabase? = null
 
         fun get(context: Context): StatsDatabase =
@@ -116,7 +124,7 @@ abstract class StatsDatabase : RoomDatabase() {
         private fun build(context: Context): StatsDatabase =
             Room.databaseBuilder(context, StatsDatabase::class.java, NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                 .addCallback(
                     object : Callback() {

@@ -88,6 +88,24 @@ class StatsMigrationTest {
     }
 
     @Test
+    fun migration4To5AddsFirstPlayedAtWithoutInventingAValue() {
+        val db = helper.writableDatabase
+        db.execSQL(CREATE_TRACK_DAILY)
+        db.execSQL(CREATE_TRACK_TOTALS)
+        StatsDatabase.MIGRATION_3_4.migrate(db)
+        StatsDatabase.MIGRATION_4_5.migrate(db)
+        db.execSQL(
+            "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, lastPlayedAt) " +
+                "VALUES (1, 20000, 1, 1000, 10)"
+        )
+
+        db.query("SELECT firstPlayedAt FROM track_daily").use { cursor ->
+            assertThat(cursor.moveToFirst()).isTrue()
+            assertThat(cursor.isNull(0)).isTrue()
+        }
+    }
+
+    @Test
     fun migration3To4AddsLifecycleAndDayBoundaryColumns() {
         val db = helper.writableDatabase
         db.execSQL(CREATE_TRACK_DAILY)

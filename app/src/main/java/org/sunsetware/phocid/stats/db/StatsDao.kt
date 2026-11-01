@@ -19,6 +19,7 @@ data class TrackAggregate(
     val durationMillis: Long,
     val plays: Int,
     val millis: Long,
+    val firstPlayedAt: Long = 0,
     val lastPlayedAt: Long,
     val startedCount: Int = 0,
     val completedCount: Int = 0,
@@ -177,18 +178,23 @@ interface TrackDailyDao {
     @Query(
         """
         INSERT INTO track_daily (
-            trackRowId, epochDay, playCount, playedMillis, lastPlayedAt,
+            trackRowId, epochDay, playCount, playedMillis, lastPlayedAt, firstPlayedAt,
             startedCount, completedCount, skipCount, completedMillis,
             dayStartMs, dayEndMs, utcOffsetMinutes
         )
         VALUES (
-            :trackRowId, :epochDay, :playCount, :playedMillis, :at,
+            :trackRowId, :epochDay, :playCount, :playedMillis, :at, :firstPlayedAt,
             :startedCount, :completedCount, :skipCount, :completedMillis,
             :dayStartMs, :dayEndMs, :utcOffsetMinutes
         )
         ON CONFLICT(trackRowId, epochDay) DO UPDATE SET
             playCount = playCount + excluded.playCount,
             playedMillis = playedMillis + excluded.playedMillis,
+            firstPlayedAt = CASE
+                WHEN firstPlayedAt IS NULL THEN excluded.firstPlayedAt
+                WHEN excluded.firstPlayedAt IS NULL THEN firstPlayedAt
+                ELSE MIN(firstPlayedAt, excluded.firstPlayedAt)
+            END,
             startedCount = startedCount + excluded.startedCount,
             completedCount = completedCount + excluded.completedCount,
             skipCount = skipCount + excluded.skipCount,
@@ -205,6 +211,7 @@ interface TrackDailyDao {
         playCount: Int,
         playedMillis: Long,
         at: Long,
+        firstPlayedAt: Long,
         startedCount: Int,
         completedCount: Int,
         skipCount: Int,
@@ -227,17 +234,22 @@ interface TrackDailyDao {
     @Query(
         """
         INSERT INTO track_daily (
-            trackRowId, epochDay, playCount, playedMillis, lastPlayedAt,
+            trackRowId, epochDay, playCount, playedMillis, lastPlayedAt, firstPlayedAt,
             startedCount, completedCount, skipCount, completedMillis,
             dayStartMs, dayEndMs, utcOffsetMinutes
         )
-        SELECT :winner, epochDay, playCount, playedMillis, lastPlayedAt,
+        SELECT :winner, epochDay, playCount, playedMillis, lastPlayedAt, firstPlayedAt,
                startedCount, completedCount, skipCount, completedMillis,
                dayStartMs, dayEndMs, utcOffsetMinutes
         FROM track_daily WHERE trackRowId = :loser
         ON CONFLICT(trackRowId, epochDay) DO UPDATE SET
             playCount = playCount + excluded.playCount,
             playedMillis = playedMillis + excluded.playedMillis,
+            firstPlayedAt = CASE
+                WHEN firstPlayedAt IS NULL THEN excluded.firstPlayedAt
+                WHEN excluded.firstPlayedAt IS NULL THEN firstPlayedAt
+                ELSE MIN(firstPlayedAt, excluded.firstPlayedAt)
+            END,
             startedCount = startedCount + excluded.startedCount,
             completedCount = completedCount + excluded.completedCount,
             skipCount = skipCount + excluded.skipCount,
@@ -266,6 +278,7 @@ interface TrackDailyDao {
                t.durationMillis AS durationMillis,
                SUM(d.playCount) AS plays,
                SUM(d.playedMillis) AS millis,
+               COALESCE(MIN(d.firstPlayedAt), 0) AS firstPlayedAt,
                MAX(d.lastPlayedAt) AS lastPlayedAt,
                SUM(d.startedCount) AS startedCount,
                SUM(d.completedCount) AS completedCount,
@@ -300,6 +313,7 @@ interface TrackDailyDao {
                t.durationMillis AS durationMillis,
                SUM(d.playCount) AS plays,
                SUM(d.playedMillis) AS millis,
+               COALESCE(MIN(d.firstPlayedAt), 0) AS firstPlayedAt,
                MAX(d.lastPlayedAt) AS lastPlayedAt,
                SUM(d.startedCount) AS startedCount,
                SUM(d.completedCount) AS completedCount,
@@ -499,6 +513,7 @@ interface TrackTotalsDao {
                t.durationMillis AS durationMillis,
                tt.totalCount AS plays,
                tt.totalMillis AS millis,
+               tt.firstPlayedAt AS firstPlayedAt,
                tt.lastPlayedAt AS lastPlayedAt,
                tt.startedCount AS startedCount,
                tt.completedCount AS completedCount,
@@ -526,6 +541,7 @@ interface TrackTotalsDao {
                t.durationMillis AS durationMillis,
                tt.totalCount AS plays,
                tt.totalMillis AS millis,
+               tt.firstPlayedAt AS firstPlayedAt,
                tt.lastPlayedAt AS lastPlayedAt,
                tt.startedCount AS startedCount,
                tt.completedCount AS completedCount,
