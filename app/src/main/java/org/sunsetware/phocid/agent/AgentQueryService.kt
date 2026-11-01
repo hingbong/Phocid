@@ -752,7 +752,7 @@ class AgentQueryService : Service() {
             .put("durationMs", row.durationMillis)
             .put("plays", row.plays)
             .put("playedMillis", row.millis)
-            .put("firstPlayedAtMs", row.firstPlayedAt)
+            .put("firstPlayedAtMs", row.firstPlayedAt ?: JSONObject.NULL)
             .put("lastPlayedAtMs", row.lastPlayedAt)
             .put("startedCount", row.startedCount)
             .put("completedCount", row.completedCount)
