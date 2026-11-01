@@ -153,6 +153,23 @@ class StatsSummaryTest {
         }
 
     @Test
+    fun daySummarySeparatesTouchedAndCountedTracks() =
+        runBlocking<Unit> {
+            val today = LocalDate.now(ZoneOffset.UTC).toEpochDay().toInt()
+            insertDailyTrack("counted", listOf(today), playCount = 1, millis = 60_000)
+            insertDailyTrack("touched-only", listOf(today), playCount = 0, millis = 1_000)
+
+            val summary = repository().summary(StatsRange.TODAY).first()
+            assertThat(summary.plays).isEqualTo(1)
+            assertThat(summary.uniqueTracks).isEqualTo(2)
+            assertThat(summary.countedTracks).isEqualTo(1)
+
+            val day = repository().dailyTrend(StatsRange.TODAY).first().single()
+            assertThat(day.uniqueTracks).isEqualTo(2)
+            assertThat(day.countedTracks).isEqualTo(1)
+        }
+
+    @Test
     fun rangeSummaryExcludesDaysAfterLocalToday() =
         runBlocking<Unit> {
             val today = LocalDate.now(ZoneOffset.UTC).toEpochDay().toInt()

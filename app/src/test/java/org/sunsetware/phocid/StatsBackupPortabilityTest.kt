@@ -482,7 +482,7 @@ class StatsBackupPortabilityTest {
             StatsBackupManager(db).export(out)
             val payload = StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray()))
 
-            assertThat(payload.version).isEqualTo(2)
+            assertThat(payload.version).isEqualTo(3)
             assertThat(payload.activeDays).containsExactly(19_500, 20_000, 20_001)
 
             StatsBackupManager(db).restore(payload, replace = true)

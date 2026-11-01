@@ -262,6 +262,38 @@ class PlaybackStatsRecorderTest {
         }
 
     @Test
+    fun trackTransitionsRecordStartedSkippedAndCompleted() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val fileA = temporaryFolder.newFile("A.flac")
+            val fileB = temporaryFolder.newFile("B.flac")
+            val fileC = temporaryFolder.newFile("C.flac")
+
+            recorder.onResumed()
+            recorder.onTrackStarted(meta("content://lifecycle/a", fileA))
+            clock.advance(35_000L)
+            recorder.onTrackStarted(meta("content://lifecycle/b", fileB))
+            clock.advance(60_000L)
+            recorder.onTrackStarted(meta("content://lifecycle/c", fileC))
+            awaitSettled(recorder)
+
+            val rowA = db.trackDao().rowIdOfPath(fileA.absolutePath)!!
+            val rowB = db.trackDao().rowIdOfPath(fileB.absolutePath)!!
+            val a = db.totalsDao().byRowId(rowA)!!
+            val b = db.totalsDao().byRowId(rowB)!!
+            assertThat(a.startedCount).isEqualTo(1)
+            assertThat(a.completedCount).isEqualTo(0)
+            assertThat(a.skipCount).isEqualTo(1)
+            assertThat(a.completedMillis).isEqualTo(0L)
+            assertThat(b.startedCount).isEqualTo(1)
+            assertThat(b.completedCount).isEqualTo(1)
+            assertThat(b.skipCount).isEqualTo(0)
+            assertThat(b.completedMillis).isEqualTo(60_000L)
+            assertInvariant(recorder)
+        }
+
+    @Test
     fun wallClockJumpsDoNotChangePlayedDuration() =
         runBlocking<Unit> {
             val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)

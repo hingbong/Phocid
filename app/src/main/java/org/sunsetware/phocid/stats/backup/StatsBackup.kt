@@ -44,9 +44,10 @@ data class StatsBackup(
     val activeDays: List<Int> = emptyList(),
 ) {
     companion object {
-        // Version 2 adds the global active-day list; earlier fields keep their meaning. Local-only
-        // aliases are still filtered from the payload.
-        const val VERSION = 2
+        // Version 2 adds the global active-day list. Version 3 adds lifecycle counters and the
+        // per-day boundaries captured when each day was written. Local-only aliases are still
+        // filtered from the payload.
+        const val VERSION = 3
         const val MAGIC = "MSTATS1\u0000"
     }
 }
@@ -70,6 +71,10 @@ data class BackupTotals(
     val totalMillis: Long,
     val firstPlayedAt: Long,
     val lastPlayedAt: Long,
+    val startedCount: Int = 0,
+    val completedCount: Int = 0,
+    val skipCount: Int = 0,
+    val completedMillis: Long = 0,
 )
 
 @Serializable
@@ -79,6 +84,13 @@ data class BackupDaily(
     val playCount: Int,
     val playedMillis: Long,
     val lastPlayedAt: Long,
+    val startedCount: Int = 0,
+    val completedCount: Int = 0,
+    val skipCount: Int = 0,
+    val completedMillis: Long = 0,
+    val dayStartMs: Long? = null,
+    val dayEndMs: Long? = null,
+    val utcOffsetMinutes: Int? = null,
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -123,6 +135,10 @@ class StatsBackupManager(
                             totalMillis = total.totalMillis,
                             firstPlayedAt = total.firstPlayedAt,
                             lastPlayedAt = total.lastPlayedAt,
+                            startedCount = total.startedCount,
+                            completedCount = total.completedCount,
+                            skipCount = total.skipCount,
+                            completedMillis = total.completedMillis,
                         )
                 }
                 db.aliasDao().all().forEach { alias ->
@@ -141,6 +157,13 @@ class StatsBackupManager(
                                 playCount = day.playCount,
                                 playedMillis = day.playedMillis,
                                 lastPlayedAt = day.lastPlayedAt,
+                                startedCount = day.startedCount,
+                                completedCount = day.completedCount,
+                                skipCount = day.skipCount,
+                                completedMillis = day.completedMillis,
+                                dayStartMs = day.dayStartMs,
+                                dayEndMs = day.dayEndMs,
+                                utcOffsetMinutes = day.utcOffsetMinutes,
                             )
                     }
                 }
@@ -340,6 +363,10 @@ class StatsBackupManager(
                         totalMillis = total.totalMillis,
                         firstPlayedAt = total.firstPlayedAt,
                         lastPlayedAt = total.lastPlayedAt,
+                        startedCount = total.startedCount,
+                        completedCount = total.completedCount,
+                        skipCount = total.skipCount,
+                        completedMillis = total.completedMillis,
                     )
                 } else {
                     TrackTotalsEntity(
@@ -348,6 +375,10 @@ class StatsBackupManager(
                         totalMillis = maxOf(current.totalMillis, total.totalMillis),
                         firstPlayedAt = minOf(current.firstPlayedAt, total.firstPlayedAt),
                         lastPlayedAt = maxOf(current.lastPlayedAt, total.lastPlayedAt),
+                        startedCount = maxOf(current.startedCount, total.startedCount),
+                        completedCount = maxOf(current.completedCount, total.completedCount),
+                        skipCount = maxOf(current.skipCount, total.skipCount),
+                        completedMillis = maxOf(current.completedMillis, total.completedMillis),
                     )
                 }
         }
@@ -364,6 +395,10 @@ class StatsBackupManager(
                         totalMillis = maxOf(current.totalMillis, group.totalMillis),
                         firstPlayedAt = minOf(current.firstPlayedAt, group.firstPlayedAt),
                         lastPlayedAt = maxOf(current.lastPlayedAt, group.lastPlayedAt),
+                        startedCount = maxOf(current.startedCount, group.startedCount),
+                        completedCount = maxOf(current.completedCount, group.completedCount),
+                        skipCount = maxOf(current.skipCount, group.skipCount),
+                        completedMillis = maxOf(current.completedMillis, group.completedMillis),
                     )
                 }
             }
@@ -388,6 +423,13 @@ class StatsBackupManager(
                         playCount = day.playCount,
                         playedMillis = day.playedMillis,
                         lastPlayedAt = day.lastPlayedAt,
+                        startedCount = day.startedCount,
+                        completedCount = day.completedCount,
+                        skipCount = day.skipCount,
+                        completedMillis = day.completedMillis,
+                        dayStartMs = day.dayStartMs,
+                        dayEndMs = day.dayEndMs,
+                        utcOffsetMinutes = day.utcOffsetMinutes,
                     )
                 } else {
                     TrackDailyEntity(
@@ -396,6 +438,13 @@ class StatsBackupManager(
                         playCount = maxOf(current.playCount, day.playCount),
                         playedMillis = maxOf(current.playedMillis, day.playedMillis),
                         lastPlayedAt = maxOf(current.lastPlayedAt, day.lastPlayedAt),
+                        startedCount = maxOf(current.startedCount, day.startedCount),
+                        completedCount = maxOf(current.completedCount, day.completedCount),
+                        skipCount = maxOf(current.skipCount, day.skipCount),
+                        completedMillis = maxOf(current.completedMillis, day.completedMillis),
+                        dayStartMs = current.dayStartMs ?: day.dayStartMs,
+                        dayEndMs = current.dayEndMs ?: day.dayEndMs,
+                        utcOffsetMinutes = current.utcOffsetMinutes ?: day.utcOffsetMinutes,
                     )
                 }
         }
@@ -414,6 +463,13 @@ class StatsBackupManager(
                         playCount = maxOf(current.playCount, group.playCount),
                         playedMillis = maxOf(current.playedMillis, group.playedMillis),
                         lastPlayedAt = maxOf(current.lastPlayedAt, group.lastPlayedAt),
+                        startedCount = maxOf(current.startedCount, group.startedCount),
+                        completedCount = maxOf(current.completedCount, group.completedCount),
+                        skipCount = maxOf(current.skipCount, group.skipCount),
+                        completedMillis = maxOf(current.completedMillis, group.completedMillis),
+                        dayStartMs = current.dayStartMs ?: group.dayStartMs,
+                        dayEndMs = current.dayEndMs ?: group.dayEndMs,
+                        utcOffsetMinutes = current.utcOffsetMinutes ?: group.utcOffsetMinutes,
                     )
                 }
             }

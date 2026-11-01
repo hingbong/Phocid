@@ -10,8 +10,10 @@ import android.os.SystemClock
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -80,9 +82,30 @@ class AgentQueryService : Service() {
             .put("apiVersion", API_VERSION)
             .put("libraryRevision", index.flowVersion)
             .put("zoneId", ZoneId.systemDefault().id)
+            .put("zoneOffset", zoneOffset(ZoneId.systemDefault()))
             .put("maxLimit", MAX_LIMIT)
             .put("writeSortKeys", true)
             .put("ranges", stringArray(RANGES))
+            .put(
+                "rangeAliases",
+                JSONObject().put("1d", "today").put("days_1", "today"),
+            )
+            .put(
+                "playCountRule",
+                "a play is counted once accumulated listening reaches min(30s, duration/2), with a 1s floor",
+            )
+            .put(
+                "fieldUnits",
+                JSONObject()
+                    .put("lastPlayedAtMs", "epoch milliseconds")
+                    .put("dateAddedMs", "epoch milliseconds")
+                    .put("playedMillis", "duration milliseconds")
+                    .put("dayStartMs", "epoch milliseconds")
+                    .put("dayEndMs", "epoch milliseconds")
+                    .put("sampledAtElapsedRealtimeMs", "monotonic milliseconds since boot"),
+            )
+            .put("statsDailyRetentionDays", 1095)
+            .put("dailyWindowForAll", "3y")
             .put("facetKinds", stringArray(FACET_KINDS))
             .put("fields", stringArray(TRACK_FIELDS))
             .put(
@@ -94,7 +117,6 @@ class AgentQueryService : Service() {
                     .put("albumArtists", index.albumArtists.size)
                     .put("genres", index.genres.size),
             )
-            .put("statsDailyRetentionDays", 1095)
             .toString()
     }
 
@@ -324,7 +346,11 @@ class AgentQueryService : Service() {
                     if (snapshot.durationMs > 0L) snapshot.durationMs else null,
                 )
                 .put("sampledAtElapsedRealtimeMs", snapshot.sampledAtElapsedRealtimeMs)
-                .putNullable("currentMediaId", snapshot.mediaId)
+                .put(
+                    "positionAgeMs",
+                    (SystemClock.elapsedRealtime() - snapshot.sampledAtElapsedRealtimeMs)
+                        .coerceAtLeast(0L),
+                )
                 .putNullable("currentTrack", track?.let { playerTrackSummaryJson(it) })
                 .put("queueLength", snapshot.queueLength)
                 .putNullable(
@@ -388,7 +414,7 @@ class AgentQueryService : Service() {
             .putNullable("positionMs", null)
             .putNullable("durationMs", null)
             .put("sampledAtElapsedRealtimeMs", 0L)
-            .putNullable("currentMediaId", null)
+            .putNullable("positionAgeMs", null)
             .putNullable("currentTrack", null)
             .put("queueLength", 0)
             .putNullable("currentIndex", null)
@@ -399,7 +425,7 @@ class AgentQueryService : Service() {
 
     private fun playerTrackSummaryJson(track: Track): JSONObject =
         JSONObject()
-            .put("libraryId", track.id)
+            .put("trackRef", trackRefJson(track.id, null))
             .putNullable("title", track.title)
             .put("artists", stringArray(track.artists))
             .putNullable("album", track.album)
@@ -422,16 +448,19 @@ class AgentQueryService : Service() {
         }
 
     private fun getTrackJson(libraryId: Long): String {
+        if (libraryId <= 0L) {
+            return errorJson(
+                "invalid_argument",
+                "libraryId must be a positive integer; use library_search_tracks or resolve_stats_uuid for a UUID",
+            )
+        }
         val track = GlobalData.libraryIndex.value.tracks[libraryId]
         if (track == null) {
             return errorJson("not_found", "No library track with id " + libraryId)
         }
         val statsUuid = statsUuidFor(track)
-        val full = trackJson(track).put("statsUuid", statsUuid ?: JSONObject.NULL).toString()
-        val compact =
-            trackJson(track, includeHeavyFields = false)
-                .put("statsUuid", statsUuid ?: JSONObject.NULL)
-                .toString()
+        val full = trackJson(track, statsUuid = statsUuid).toString()
+        val compact = trackJson(track, includeHeavyFields = false, statsUuid = statsUuid).toString()
         return when (val result = responseBudget.trackDetail(full, compact, HEAVY_TRACK_FIELDS)) {
             is ResponseJsonBudget.TrackDetailResult.Ok -> result.json
             is ResponseJsonBudget.TrackDetailResult.TooLarge ->
@@ -444,30 +473,73 @@ class AgentQueryService : Service() {
         if (parsed == null) {
             return errorJson("invalid_range", "Unknown range: " + range)
         }
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val window = rangeWindow(parsed, zone, today)
         val summary = runBlocking { GlobalData.statsManager.repository.summary(parsed).first() }
-        return summaryJson(range, summary)
+        return summaryJson(range, parsed, parsed, zone, window, summary)
     }
 
     private fun statsTopTracksJson(requestJson: String): String {
         val request = JSONObject(requestJson)
-        val range = request.optString("range", "30d")
-        val parsed = parseRange(range)
-        if (parsed == null) {
-            return errorJson("invalid_range", "Unknown range")
+        val requestedRange = request.optString("range", "").trim()
+        val requestedDay = request.optString("day", "").trim()
+        if (requestedRange.isNotEmpty() && requestedDay.isNotEmpty()) {
+            return errorJson("invalid_argument", "range and day are mutually exclusive")
         }
         val sort =
-            if (request.optString("sort", "plays").equals("time", true)) {
-                StatsSort.TIME
+            parseStatsSort(request.optString("sort", "plays"))
+                ?: return errorJson(
+                    "invalid_argument",
+                    "sort must be one of plays, time, or millis",
+                )
+        val limit = request.optInt("limit", 20)
+        if (limit !in 1..MAX_LIMIT) {
+            return errorJson("invalid_argument", "limit must be between 1 and $MAX_LIMIT")
+        }
+        val offset = request.optInt("offset", 0)
+        if (offset < 0) {
+            return errorJson("invalid_argument", "offset must be non-negative")
+        }
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val day =
+            if (requestedDay.isEmpty()) null
+            else
+                try {
+                    LocalDate.parse(requestedDay)
+                } catch (_: Exception) {
+                    return errorJson(
+                        "invalid_argument",
+                        "day must be an ISO local date, for example 2026-11-01",
+                    )
+                }
+        val parsed =
+            if (day == null) {
+                parseRange(requestedRange.ifEmpty { "30d" })
+                    ?: return errorJson("invalid_range", "Unknown range: " + requestedRange)
             } else {
-                StatsSort.PLAYS
+                null
             }
-        val limit = request.optInt("limit", 20).coerceIn(1, MAX_LIMIT)
-        val offset = request.optInt("offset", 0).coerceAtLeast(0)
+        val window = if (day != null) dayWindow(day, zone) else rangeWindow(parsed!!, zone, today)
         val fetchLimit =
             (offset.toLong() + limit).coerceAtMost(MAX_TOP_TRACKS_WINDOW.toLong()).toInt()
-        val rows = runBlocking {
-            GlobalData.statsManager.repository.topTracks(parsed, sort, fetchLimit).first()
-        }
+        val repository = GlobalData.statsManager.repository
+        val summary =
+            runBlocking {
+                if (day != null) repository.summaryForDay(day).first()
+                else repository.summary(parsed!!).first()
+            }
+        val rows =
+            runBlocking {
+                if (day != null) repository.topTracks(day, sort, fetchLimit).first()
+                else repository.topTracks(parsed!!, sort, fetchLimit).first()
+            }
+        val libraryIdByPath =
+            GlobalData.libraryIndex.value.tracks.values
+                .asSequence()
+                .filter { it.path.isNotBlank() }
+                .associate { it.path to it.id }
         val result =
             responseBudget.boundedPage(
                 total = rows.size,
@@ -477,20 +549,40 @@ class AgentQueryService : Service() {
                 tooLargeMessage =
                     "A single stats aggregate exceeds the response budget; increase offset",
             ) { items, extra, nextOffset, byteTruncated ->
+                val returned = items.size + if (extra != null) 1 else 0
+                val hasMore = offset + returned < summary.uniqueTracks
+                val truncatedBy =
+                    when {
+                        byteTruncated -> "budget"
+                        !hasMore -> null
+                        offset + returned >= MAX_TOP_TRACKS_WINDOW -> "window"
+                        else -> "limit"
+                    }
                 JSONObject()
-                    .put("range", range)
-                    .put("sort", if (sort == StatsSort.TIME) "time" else "plays")
+                    .put("range", parsed?.wireName() ?: JSONObject.NULL)
+                    .put("day", day?.toString() ?: JSONObject.NULL)
+                    .put("sort", sort.wireName())
+                    .put("requestedSort", request.optString("sort", "plays"))
+                    .put("zoneId", zone.id)
+                    .put("zoneOffset", zoneOffset(zone))
+                    .put("rangeStart", instantText(window.start, zone))
+                    .put("rangeEnd", instantText(window.end, zone))
+                    .put("rangeStartMs", window.start?.toEpochMilli() ?: JSONObject.NULL)
+                    .put("rangeEndMs", window.end.toEpochMilli())
                     .put("offset", offset)
                     .put("limit", limit)
+                    .put("returned", returned)
+                    .put("nextOffset", nextOffset)
+                    .put("hasMore", hasMore)
+                    .put("truncatedBy", truncatedBy ?: JSONObject.NULL)
+                    .put("rangeTotals", rangeTotalsJson(summary))
                     .put(
                         "tracks",
                         JSONArray().apply {
-                            items.forEach { put(aggregateJson(it)) }
-                            if (extra != null) put(aggregateJson(extra))
+                            items.forEach { put(aggregateJson(it, libraryIdByPath)) }
+                            if (extra != null) put(aggregateJson(extra, libraryIdByPath))
                         },
                     )
-                    .put("nextOffset", nextOffset)
-                    .put("byteTruncated", byteTruncated)
                     .toString()
             }
         return when (result) {
@@ -505,22 +597,36 @@ class AgentQueryService : Service() {
         if (parsed == null) {
             return errorJson("invalid_range", "Unknown range: " + range)
         }
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val effective = if (parsed == StatsRange.ALL) StatsRange.YEARS_3 else parsed
+        val window = rangeWindow(effective, zone, today)
         val days = runBlocking { GlobalData.statsManager.repository.dailyTrend(parsed).first() }
         return JSONObject()
-            .put("range", range)
+            .put("range", parsed.wireName())
+            .put("requestedRange", range)
+            .put("effectiveRange", effective.wireName())
+            .put("dailyWindow", if (parsed == StatsRange.ALL) "3y" else JSONObject.NULL)
+            .put("zoneId", zone.id)
+            .put("zoneOffset", zoneOffset(zone))
+            .put("rangeStart", instantText(window.start, zone))
+            .put("rangeEnd", instantText(window.end, zone))
+            .put("rangeStartMs", window.start?.toEpochMilli() ?: JSONObject.NULL)
+            .put("rangeEndMs", window.end.toEpochMilli())
             .put("days", JSONArray().apply { days.forEach { put(dayJson(it)) } })
             .toString()
     }
 
     private fun resolveStatsUuidJson(libraryId: Long): String {
+        if (libraryId <= 0L) {
+            return errorJson("invalid_argument", "libraryId must be a positive integer")
+        }
         val track = GlobalData.libraryIndex.value.tracks[libraryId]
         if (track == null) {
             return errorJson("not_found", "No library track with id " + libraryId)
         }
-        val statsUuid = statsUuidFor(track)
         return JSONObject()
-            .put("libraryId", libraryId)
-            .put("statsUuid", statsUuid ?: JSONObject.NULL)
+            .put("trackRef", trackRefJson(libraryId, statsUuidFor(track)))
             .toString()
     }
 
@@ -596,40 +702,87 @@ class AgentQueryService : Service() {
         GlobalData.statsManager.database.trackDao().byRowId(totals.trackRowId)?.uuid
     }
 
-    private fun summaryJson(range: String, summary: RangeSummary): String =
+    private fun summaryJson(
+        requestedRange: String,
+        range: StatsRange,
+        effectiveRange: StatsRange,
+        zone: ZoneId,
+        window: TimeWindow,
+        summary: RangeSummary,
+    ): String =
         JSONObject()
-            .put("range", range)
+            .put("range", range.wireName())
+            .put("requestedRange", requestedRange)
+            .put("effectiveRange", effectiveRange.wireName())
+            .put("zoneId", zone.id)
+            .put("zoneOffset", zoneOffset(zone))
+            .put("rangeStart", instantText(window.start, zone))
+            .put("rangeEnd", instantText(window.end, zone))
+            .put("rangeStartMs", window.start?.toEpochMilli() ?: JSONObject.NULL)
+            .put("rangeEndMs", window.end.toEpochMilli())
             .put("plays", summary.plays)
-            .put("millis", summary.millis)
+            .put("playedMillis", summary.millis)
             .put("uniqueTracks", summary.uniqueTracks)
+            .put("countedTracks", summary.countedTracks)
+            .put("startedCount", summary.startedCount)
+            .put("completedCount", summary.completedCount)
+            .put("skipCount", summary.skipCount)
+            .put("completedMillis", summary.completedMillis)
             .put("activeDays", summary.activeDays)
-            .put("zoneId", ZoneId.systemDefault().id)
             .toString()
 
-    private fun aggregateJson(row: TrackAggregate): JSONObject =
+    private fun rangeTotalsJson(summary: RangeSummary): JSONObject =
         JSONObject()
-            .put("uuid", row.uuid)
+            .put("uniqueTracks", summary.uniqueTracks)
+            .put("countedTracks", summary.countedTracks)
+            .put("plays", summary.plays)
+            .put("playedMillis", summary.millis)
+            .put("startedCount", summary.startedCount)
+            .put("completedCount", summary.completedCount)
+            .put("skipCount", summary.skipCount)
+            .put("completedMillis", summary.completedMillis)
+
+    private fun aggregateJson(row: TrackAggregate, libraryIdByPath: Map<String, Long>): JSONObject =
+        JSONObject()
+            .put("trackRef", trackRefJson(libraryIdByPath[row.path], row.uuid))
             .put("title", row.title)
-            .put("artist", row.artist)
+            .put("artists", JSONArray().apply { if (row.artist.isNotBlank()) put(row.artist) })
             .put("album", row.album)
             .put("durationMs", row.durationMillis)
             .put("plays", row.plays)
-            .put("millis", row.millis)
-            .put("lastPlayedAt", row.lastPlayedAt)
+            .put("playedMillis", row.millis)
+            .put("lastPlayedAtMs", row.lastPlayedAt)
+            .put("startedCount", row.startedCount)
+            .put("completedCount", row.completedCount)
+            .put("skipCount", row.skipCount)
+            .put("completedMillis", row.completedMillis)
 
     private fun dayJson(day: DayBucket): JSONObject =
         JSONObject()
-            .put("epochDay", day.epochDay)
             .put("date", LocalDate.ofEpochDay(day.epochDay.toLong()).toString())
+            .put("localEpochDay", day.epochDay)
+            .put("dayStartMs", day.dayStartMs ?: JSONObject.NULL)
+            .put("dayEndMs", day.dayEndMs ?: JSONObject.NULL)
+            .put("utcOffsetMinutes", day.utcOffsetMinutes ?: JSONObject.NULL)
             .put("plays", day.plays)
-            .put("millis", day.millis)
+            .put("playedMillis", day.millis)
+            .put("uniqueTracks", day.uniqueTracks)
+            .put("countedTracks", day.countedTracks)
+            .put("startedCount", day.startedCount)
+            .put("completedCount", day.completedCount)
+            .put("skipCount", day.skipCount)
+            .put("completedMillis", day.completedMillis)
 
     private fun trackSummaryJson(track: Track): JSONObject =
         trackJson(track, includeHeavyFields = false)
 
-    private fun trackJson(track: Track, includeHeavyFields: Boolean = true): JSONObject =
+    private fun trackJson(
+        track: Track,
+        includeHeavyFields: Boolean = true,
+        statsUuid: String? = null,
+    ): JSONObject =
         JSONObject()
-            .put("libraryId", track.id)
+            .put("trackRef", trackRefJson(track.id, statsUuid))
             .put("fileName", track.fileName)
             .putNullable("title", track.title)
             .put("artists", stringArray(track.artists))
@@ -655,7 +808,20 @@ class AgentQueryService : Service() {
                     putNullable("unsyncedLyrics", track.unsyncedLyrics)
                 }
             }
-            .put("dateAdded", track.dateAdded)
+            .put("dateAddedMs", track.dateAdded * 1000L)
+            .put(
+                "dateAddedIso",
+                if (track.dateAdded > 0L) {
+                    Instant.ofEpochSecond(track.dateAdded).toString()
+                } else {
+                    JSONObject.NULL
+                },
+            )
+
+    private fun trackRefJson(libraryId: Long?, statsUuid: String?): JSONObject =
+        JSONObject()
+            .put("libraryId", libraryId ?: JSONObject.NULL)
+            .put("statsUuid", statsUuid ?: JSONObject.NULL)
 
     private fun comparatorFor(sort: String): Comparator<Track> {
         val collator = GlobalData.preferences.value.sortCollator
@@ -701,6 +867,9 @@ class AgentQueryService : Service() {
 
     private fun parseRange(raw: String): StatsRange? =
         when (raw.trim().lowercase()) {
+            "today",
+            "1d",
+            "days_1" -> StatsRange.TODAY
             "7d",
             "days_7" -> StatsRange.DAYS_7
             "30d",
@@ -718,6 +887,54 @@ class AgentQueryService : Service() {
             "all" -> StatsRange.ALL
             else -> null
         }
+
+    private fun parseStatsSort(raw: String): StatsSort? =
+        when (raw.trim().lowercase()) {
+            "plays" -> StatsSort.PLAYS
+            "time",
+            "millis" -> StatsSort.TIME
+            else -> null
+        }
+
+    private fun StatsSort.wireName(): String =
+        when (this) {
+            StatsSort.PLAYS -> "plays"
+            StatsSort.TIME -> "time"
+        }
+
+    private fun StatsRange.wireName(): String =
+        when (this) {
+            StatsRange.TODAY -> "today"
+            StatsRange.DAYS_7 -> "7d"
+            StatsRange.DAYS_30 -> "30d"
+            StatsRange.CALENDAR_MONTH -> "month"
+            StatsRange.DAYS_90 -> "90d"
+            StatsRange.DAYS_365 -> "365d"
+            StatsRange.CALENDAR_YEAR -> "year"
+            StatsRange.YEARS_3 -> "3y"
+            StatsRange.ALL -> "all"
+        }
+
+    private data class TimeWindow(val start: Instant?, val end: Instant)
+
+    private fun rangeWindow(range: StatsRange, zone: ZoneId, today: LocalDate): TimeWindow =
+        TimeWindow(
+            start = range.startDate(today)?.atStartOfDay(zone)?.toInstant(),
+            end = today.plusDays(1).atStartOfDay(zone).toInstant(),
+        )
+
+    private fun dayWindow(day: LocalDate, zone: ZoneId): TimeWindow =
+        TimeWindow(
+            start = day.atStartOfDay(zone).toInstant(),
+            end = day.plusDays(1).atStartOfDay(zone).toInstant(),
+        )
+
+    private fun zoneOffset(zone: ZoneId): String =
+        zone.rules.getOffset(Instant.now()).id
+
+    private fun instantText(instant: Instant?, zone: ZoneId): Any =
+        instant?.atZone(zone)?.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            ?: JSONObject.NULL
 
     private fun JSONObject.optIntOrNull(name: String): Int? =
         if (has(name) && !isNull(name)) optInt(name) else null
@@ -816,7 +1033,7 @@ class AgentQueryService : Service() {
     }
 
     companion object {
-        private const val API_VERSION = 5
+        private const val API_VERSION = 6
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 200
 
@@ -824,11 +1041,12 @@ class AgentQueryService : Service() {
         // while still covering several pages when long aggregate strings stop a page early.
         private const val MAX_TOP_TRACKS_WINDOW = MAX_LIMIT * 10
         private val HEAVY_TRACK_FIELDS = listOf("comment", "unsyncedLyrics")
-        private val RANGES = listOf("7d", "30d", "month", "90d", "365d", "year", "3y", "all")
+        private val RANGES =
+            listOf("today", "1d", "7d", "30d", "month", "90d", "365d", "year", "3y", "all")
         private val FACET_KINDS = listOf("artists", "albums", "album_artists", "genres")
         private val TRACK_FIELDS =
             listOf(
-                "libraryId",
+                "trackRef",
                 "fileName",
                 "title",
                 "artists",
@@ -850,7 +1068,8 @@ class AgentQueryService : Service() {
                 "sortKey",
                 "comment",
                 "unsyncedLyrics",
-                "dateAdded",
+                "dateAddedMs",
+                "dateAddedIso",
             )
     }
 }

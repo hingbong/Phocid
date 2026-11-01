@@ -386,6 +386,7 @@ class McpServer(
         val capabilities = capabilitiesJson()
         val apiVersion = capabilities?.optInt("apiVersion", 1) ?: 1
         val api5 = apiVersion >= 5
+        val api6 = apiVersion >= 6
         val sortKeysAvailable =
             apiVersion >= 4 && capabilities?.optBoolean("writeSortKeys", false) == true
         val tools = JSONArray()
@@ -399,27 +400,37 @@ class McpServer(
         tools.put(
             tool(
                 "phocid_capabilities",
-                "Read the Phocid agent API version, library revision, time zone, and supported ranges.",
+                "Read the Phocid agent API version, library revision, time zone, supported ranges, " +
+                    "play-count rule, and field units.",
                 emptySchema(),
             )
         )
         tools.put(
             tool(
                 "library_search_tracks",
-                if (api5) {
+                if (api6) {
+                    "Search the Phocid library by tag fields (API 6). Returns a byte-bounded page " +
+                        "of summaries with trackRef, artists, dateAddedMs, and sortKey; call " +
+                        "library_get_track for full tags. Check byteTruncated and nextOffset."
+                } else if (api5) {
                     "Search the Phocid library by tag fields (API 5). Returns a byte-bounded page of " +
                         "track summaries without comment or unsyncedLyrics; call library_get_track " +
                         "for full tags. Check byteTruncated and continue from nextOffset."
                 } else {
                     "Search the Phocid library by tag fields. Returns a page of track metadata."
                 },
-                searchSchema(api5),
+                searchSchema(api5, api6),
             )
         )
         tools.put(
             tool(
                 "library_get_track",
-                if (api5) {
+                if (api6) {
+                    "Read every exposed tag field for one library track, including trackRef, " +
+                        "comment, unsyncedLyrics, dateAddedMs, and dateAddedIso. If the detail " +
+                        "exceeds the 512 KiB response budget, heavy fields are omitted and listed " +
+                        "in truncatedFields."
+                } else if (api5) {
                     "Read every exposed tag field for one library track, including comment, " +
                         "unsyncedLyrics, and its stats UUID when resolvable. If the detail exceeds " +
                         "the 512 KiB response budget, heavy fields are omitted and listed in " +
@@ -440,40 +451,66 @@ class McpServer(
         tools.put(
             tool(
                 "player_state",
-                "Read the current player state, including live position when the playback service is running.",
+                "Read the current player state, including live position and positionAgeMs when " +
+                    "the playback service is running. currentTrack carries trackRef.",
                 emptySchema(),
             )
         )
         tools.put(
             tool(
                 "stats_summary",
-                "Read playback totals for a range: plays, millis, unique tracks, and active days.",
+                if (api6) {
+                    "Read playback totals for a range or today: plays, playedMillis, touched and " +
+                        "counted tracks, started/completed/skipped counts, and active days. All " +
+                        "timestamps are epoch milliseconds and boundaries are ISO-8601 with offset."
+                } else {
+                    "Read playback totals for a range: plays, millis, unique tracks, and active days."
+                },
                 rangeSchema(),
             )
         )
         tools.put(
             tool(
                 "stats_top_tracks",
-                if (api5) {
+                if (api6) {
+                    "Read a byte-bounded page of per-track statistics for a range or one local day. " +
+                        "sort accepts plays, time, or millis. The response includes rangeTotals, " +
+                        "returned, hasMore, and lifecycle counts."
+                } else if (api5) {
                     "Read the top played tracks for a range. The response is byte-bounded; check " +
                         "byteTruncated and continue from nextOffset."
                 } else {
                     "Read the top played tracks for a range."
                 },
-                topTracksSchema(api5),
+                topTracksSchema(api6),
             )
         )
+        if (api6) {
+            tools.put(
+                tool(
+                    "stats_tracks",
+                    "Read per-track statistics for a range or one local day, with plays, " +
+                        "playedMillis, started/completed/skipped counts, and pagination totals.",
+                    topTracksSchema(true),
+                )
+            )
+        }
         tools.put(
             tool(
                 "stats_daily",
-                "Read the daily playback trend for a range.",
+                if (api6) {
+                    "Read daily totals with uniqueTracks, countedTracks, lifecycle counts, and " +
+                        "local-day start/end milliseconds. range=all covers the last three years."
+                } else {
+                    "Read the daily playback trend for a range."
+                },
                 rangeSchema(),
             )
         )
         tools.put(
             tool(
                 "resolve_stats_uuid",
-                "Resolve a library track id to its portable statistics UUID.",
+                "Resolve a numeric library track id to a trackRef with its portable statistics UUID.",
                 libraryIdSchema(),
             )
         )
@@ -508,15 +545,28 @@ class McpServer(
             "library_list_facets" -> dataResult(source?.listFacets(args.toString()))
             "player_state" -> dataResult(source?.playerState())
             "library_search_tracks" -> dataResult(source?.searchTracks(args.toString()))
-            "library_get_track" ->
-                dataResult(source?.getTrack(args.optLong("libraryId", -1L)))
+            "library_get_track" -> {
+                val libraryId = positiveLongArgument(args, "libraryId")
+                if (libraryId == null) {
+                    toolResult("libraryId must be a positive integer", isError = true)
+                } else {
+                    dataResult(source?.getTrack(libraryId))
+                }
+            }
             "stats_summary" ->
                 dataResult(source?.statsSummary(args.optString("range", "30d")))
             "stats_top_tracks" -> dataResult(source?.statsTopTracks(args.toString()))
+            "stats_tracks" -> dataResult(source?.statsTracks(args.toString()))
             "stats_daily" ->
                 dataResult(source?.statsDaily(args.optString("range", "30d")))
-            "resolve_stats_uuid" ->
-                dataResult(source?.resolveStatsUuid(args.optLong("libraryId", -1L)))
+            "resolve_stats_uuid" -> {
+                val libraryId = positiveLongArgument(args, "libraryId")
+                if (libraryId == null) {
+                    toolResult("libraryId must be a positive integer", isError = true)
+                } else {
+                    dataResult(source?.resolveStatsUuid(libraryId))
+                }
+            }
             "library_validate_sort_keys" ->
                 if (!canSortKeys()) {
                     toolResult("The main app is too old for sort keys", isError = true)
@@ -532,6 +582,14 @@ class McpServer(
                 }
             else -> toolResult("Unknown tool: $name", isError = true)
         }
+    }
+
+    private fun positiveLongArgument(args: JSONObject, name: String): Long? {
+        if (!args.has(name) || args.isNull(name)) return null
+        val value = args.opt(name)
+        if (value !is Number) return null
+        val id = value.toLong()
+        return id.takeIf { it > 0L }
     }
 
     private fun canSortKeys(): Boolean {
@@ -650,17 +708,36 @@ class McpServer(
             )
             .put("additionalProperties", false)
 
-    private fun topTracksSchema(api5: Boolean): JSONObject {
+    private fun topTracksSchema(api6: Boolean): JSONObject {
         val properties =
             JSONObject()
                 .put("range", rangeProp())
-                .put("sort", stringProp("plays or time"))
                 .put("limit", integerProp("1..200, default 20"))
-        if (api5) {
-            properties.put(
-                "offset",
-                integerProp("Pagination offset; continue from the response nextOffset"),
-            )
+                .put(
+                    "offset",
+                    integerProp("Pagination offset; continue from the response nextOffset"),
+                )
+        if (api6) {
+            properties
+                .put(
+                    "day",
+                    stringProp(
+                        "ISO local date (YYYY-MM-DD); mutually exclusive with range. Uses the " +
+                            "device time zone."
+                    ),
+                )
+                .put(
+                    "sort",
+                    stringProp("plays, time, or millis")
+                        .put(
+                            "enum",
+                            JSONArray().apply {
+                                listOf("plays", "time", "millis").forEach { put(it) }
+                            },
+                        ),
+                )
+        } else {
+            properties.put("sort", stringProp("plays or time"))
         }
         return JSONObject()
             .put("type", "object")
@@ -692,19 +769,32 @@ class McpServer(
             .put("required", JSONArray().put("kind"))
             .put("additionalProperties", false)
 
-    private fun searchSchema(api5: Boolean): JSONObject {
+    private fun searchSchema(api5: Boolean, api6: Boolean = false): JSONObject {
         val schema = JSONObject().put("type", "object")
-        if (api5) {
-            schema.put(
-                "description",
-                "API 5 search returns summaries with libraryId, fileName, title, artists, album, " +
-                    "albumArtists, genres, year, originalYear, trackNumber, discNumber, " +
-                    "durationMs, size, format, sampleRate, bitRate, bitDepth, hasArtwork, " +
-                    "hasSortKey, sortKey, and dateAdded. comment and unsyncedLyrics are only " +
-                    "returned by library_get_track, which lists them in truncatedFields when " +
-                    "they are omitted. Search responses use a 512 KiB UTF-16 JSON budget and " +
-                    "include byteTruncated and nextOffset.",
-            )
+        when {
+            api6 ->
+                schema.put(
+                    "description",
+                    "API 6 search returns summaries with trackRef (libraryId plus statsUuid when " +
+                        "resolved), fileName, title, artists, album, albumArtists, genres, year, " +
+                        "originalYear, trackNumber, discNumber, durationMs, size, format, " +
+                        "sampleRate, bitRate, bitDepth, hasArtwork, hasSortKey, sortKey, " +
+                        "dateAddedMs, and dateAddedIso. comment and unsyncedLyrics are only " +
+                        "returned by library_get_track, which lists them in truncatedFields when " +
+                        "they are omitted. Search responses use a 512 KiB UTF-16 JSON budget and " +
+                        "include byteTruncated and nextOffset.",
+                )
+            api5 ->
+                schema.put(
+                    "description",
+                    "API 5 search returns summaries with libraryId, fileName, title, artists, album, " +
+                        "albumArtists, genres, year, originalYear, trackNumber, discNumber, " +
+                        "durationMs, size, format, sampleRate, bitRate, bitDepth, hasArtwork, " +
+                        "hasSortKey, sortKey, and dateAdded. comment and unsyncedLyrics are only " +
+                        "returned by library_get_track, which lists them in truncatedFields when " +
+                        "they are omitted. Search responses use a 512 KiB UTF-16 JSON budget and " +
+                        "include byteTruncated and nextOffset.",
+                )
         }
         schema
             .put(
@@ -774,11 +864,11 @@ class McpServer(
     }
 
     private fun rangeProp(): JSONObject =
-        stringProp("7d, 30d, month, 90d, 365d, year, 3y, or all")
+        stringProp("today, 1d, 7d, 30d, month, 90d, 365d, year, 3y, or all")
             .put(
                 "enum",
                 JSONArray().apply {
-                    listOf("7d", "30d", "month", "90d", "365d", "year", "3y", "all")
+                    listOf("today", "1d", "7d", "30d", "month", "90d", "365d", "year", "3y", "all")
                         .forEach { put(it) }
                 },
             )

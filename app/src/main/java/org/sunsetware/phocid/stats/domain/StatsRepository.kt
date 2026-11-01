@@ -105,6 +105,23 @@ class StatsRepository(
         return db.dailyDao().summarySince(sinceDay(range, today), today.toEpochDay().toInt())
     }
 
+    fun summaryForDay(day: LocalDate): Flow<RangeSummary> {
+        val epochDay = day.toEpochDay().toInt()
+        return db.dailyDao().summarySince(epochDay, epochDay)
+    }
+
+    fun topTracks(day: LocalDate, sort: StatsSort, limit: Int = 100): Flow<List<TrackAggregate>> {
+        val epochDay = day.toEpochDay().toInt()
+        return when (sort) {
+            StatsSort.PLAYS ->
+                db.dailyDao()
+                    .topTracksByPlays(epochDay, epochDay, limit, AliasKind.LOCAL_URI)
+            StatsSort.TIME ->
+                db.dailyDao()
+                    .topTracksByTime(epochDay, epochDay, limit, AliasKind.LOCAL_URI)
+        }
+    }
+
     fun dailyTrend(range: StatsRange): Flow<List<DayBucket>> {
         // ALL still shows a trend, but intentionally only over the last three years. That window
         // is a bounded range too, so it ends at today just like the explicit ranges.

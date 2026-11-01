@@ -87,6 +87,54 @@ class StatsMigrationTest {
         }
     }
 
+    @Test
+    fun migration3To4AddsLifecycleAndDayBoundaryColumns() {
+        val db = helper.writableDatabase
+        db.execSQL(CREATE_TRACK_DAILY)
+        db.execSQL(CREATE_TRACK_TOTALS)
+        db.execSQL("INSERT INTO track_daily VALUES (1, 20000, 1, 1000, 10)")
+        db.execSQL("INSERT INTO track_totals VALUES (1, 1, 1000, 10, 10)")
+
+        StatsDatabase.MIGRATION_3_4.migrate(db)
+
+        db.query("PRAGMA table_info(track_daily)").use { cursor ->
+            val columns = buildSet {
+                while (cursor.moveToNext()) add(cursor.getString(1))
+            }
+            assertThat(columns)
+                .contains(
+                    "startedCount",
+                    "completedCount",
+                    "skipCount",
+                    "completedMillis",
+                    "dayStartMs",
+                    "dayEndMs",
+                    "utcOffsetMinutes",
+                )
+        }
+        db.query(
+            "SELECT startedCount, completedCount, skipCount, completedMillis, " +
+                "dayStartMs, dayEndMs, utcOffsetMinutes FROM track_daily"
+        ).use { cursor ->
+            assertThat(cursor.moveToFirst()).isTrue()
+            assertThat(cursor.getInt(0)).isEqualTo(0)
+            assertThat(cursor.getInt(1)).isEqualTo(0)
+            assertThat(cursor.getInt(2)).isEqualTo(0)
+            assertThat(cursor.getLong(3)).isEqualTo(0L)
+            assertThat(cursor.isNull(4)).isTrue()
+            assertThat(cursor.isNull(5)).isTrue()
+            assertThat(cursor.isNull(6)).isTrue()
+        }
+        db.query("SELECT startedCount, completedCount, skipCount, completedMillis FROM track_totals")
+            .use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.getInt(0)).isEqualTo(0)
+                assertThat(cursor.getInt(1)).isEqualTo(0)
+                assertThat(cursor.getInt(2)).isEqualTo(0)
+                assertThat(cursor.getLong(3)).isEqualTo(0L)
+            }
+    }
+
     private fun activeDays(db: SupportSQLiteDatabase): List<Int> =
         db.query("SELECT epochDay FROM active_days ORDER BY epochDay").use { cursor ->
             buildList { while (cursor.moveToNext()) add(cursor.getInt(0)) }
@@ -101,5 +149,13 @@ class StatsMigrationTest {
                 "playedMillis INTEGER NOT NULL, " +
                 "lastPlayedAt INTEGER NOT NULL, " +
                 "PRIMARY KEY(trackRowId, epochDay))"
+
+        const val CREATE_TRACK_TOTALS =
+            "CREATE TABLE track_totals (" +
+                "trackRowId INTEGER NOT NULL PRIMARY KEY, " +
+                "totalCount INTEGER NOT NULL, " +
+                "totalMillis INTEGER NOT NULL, " +
+                "firstPlayedAt INTEGER NOT NULL, " +
+                "lastPlayedAt INTEGER NOT NULL)"
     }
 }

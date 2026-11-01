@@ -39,6 +39,7 @@ MCP tools:
 - `library_list_facets` (artists, albums, album_artists, genres)
 - `stats_summary`
 - `stats_top_tracks`
+- `stats_tracks`
 - `stats_daily`
 - `resolve_stats_uuid`
 - `player_state` (read-only, optional live position)
@@ -57,22 +58,26 @@ or any queue mutation.
 
 `positionMs` is a snapshot. `sampledAtElapsedRealtimeMs` is
 `SystemClock.elapsedRealtime()`: milliseconds since device boot, including deep
-sleep. It is not a Unix timestamp and not bridge process uptime; clients should
-use elapsed-time differences for interpolation.
+sleep. It is not a Unix timestamp and not bridge process uptime. `positionAgeMs`
+is how old that snapshot was when the response was built; clients should add it
+to `positionMs` to estimate the current position. `currentTrack.trackRef` carries
+the library id and, when resolvable, the statistics UUID.
 
-The main app reports `apiVersion: 5`. `library_list_facets` requires API 2;
+The main app reports `apiVersion: 6`. `library_list_facets` requires API 2;
 `player_state` requires API 3; `library_validate_sort_keys` and
-`library_update_sort_keys` require API 4. Search and track detail require API 1.
-Older main APKs return `unsupported_api`.
+`library_update_sort_keys` require API 4; `stats_tracks` and the API 6 stats
+fields require API 6. Search and track detail require API 1. Older main APKs
+return `unsupported_api`.
 
-## Search and detail payloads (API 5)
+## Search and detail payloads (API 6)
 
 `library_search_tracks` returns lightweight summaries with these fields:
-`libraryId`, `fileName`, `title`, `artists`, `album`, `albumArtists`,
-`genres`, `year`, `originalYear`, `trackNumber`, `discNumber`, `durationMs`,
-`size`, `format`, `sampleRate`, `bitRate`, `bitDepth`, `hasArtwork`,
-`hasSortKey`, `sortKey`, and `dateAdded`. `comment` and `unsyncedLyrics` are
-not included in search results.
+`trackRef` (`libraryId`, `statsUuid` when resolved), `fileName`, `title`,
+`artists`, `album`, `albumArtists`, `genres`, `year`, `originalYear`,
+`trackNumber`, `discNumber`, `durationMs`, `size`, `format`, `sampleRate`,
+`bitRate`, `bitDepth`, `hasArtwork`, `hasSortKey`, `sortKey`, `dateAddedMs`,
+and `dateAddedIso`. `comment` and `unsyncedLyrics` are not included in search
+results.
 
 `library_get_track` keeps the full track payload, including `comment` and
 `unsyncedLyrics`. If that payload would exceed the 512 KiB UTF-16 JSON budget,
@@ -85,6 +90,38 @@ page stops before the first track that would exceed it. `nextOffset` points at
 the next unreturned track, and `byteTruncated` is true only when the budget (not
 the requested `limit`) stopped the page. A single summary that cannot fit
 returns a readable `response_too_large` error.
+
+## Statistics payloads (API 6)
+
+All timestamps are epoch milliseconds and all durations are milliseconds:
+`lastPlayedAtMs`, `dateAddedMs`, `playedMillis`, `dayStartMs`, `dayEndMs`, and
+`sampledAtElapsedRealtimeMs` (monotonic since boot). Dates also carry an ISO
+`date`/`dateAddedIso`; range boundaries carry ISO `rangeStart`/`rangeEnd` with
+an explicit `zoneOffset`.
+
+Ranges: `today`, `1d`, `7d`, `30d`, `month`, `90d`, `365d`, `year`, `3y`, and
+`all`. `1d`/`days_1` are aliases for `today`. `range=all` on `stats_summary` and
+`stats_top_tracks` is lifetime; `stats_daily` reports `effectiveRange: "3y"`
+because daily rows are retained for 1095 days.
+
+`plays` counts threshold crossings: accumulated listening must reach
+`min(30s, duration/2)`, with a 1s floor. `uniqueTracks` counts touched tracks
+with any listening time; `countedTracks` counts tracks with at least one counted
+play. `startedCount`, `completedCount`, `skipCount`, and `completedMillis` are
+lifecycle counters. A transition before the end counts as a skip; a transition
+within one second of the known duration counts as completed. Pausing or service
+shutdown does not close the lifecycle, so a resumed session is not a skip.
+
+`stats_top_tracks` and `stats_tracks` accept `range` or `day` (mutually
+exclusive), `sort` (`plays`, `time`, or `millis`; the latter two are aliases),
+`limit`, and `offset`. Their response includes `rangeTotals`, `returned`,
+`hasMore`, `nextOffset`, and `truncatedBy` (`limit`, `budget`, or `window`).
+Never sum a page to infer a range total; use `rangeTotals`.
+
+`stats_daily` returns per-day `uniqueTracks`, `countedTracks`, lifecycle
+counters, and the captured `dayStartMs`/`dayEndMs` with `utcOffsetMinutes`.
+Legacy rows migrated before API 6 have zero lifecycle counters and null
+boundaries because those values were never recorded.
 
 ## Sort keys
 
@@ -233,18 +270,17 @@ frozen client from a frozen server.
 
 ## API version
 
-The main app currently reports `apiVersion: 5`. The bridge caches this value
-and rejects `library_list_facets` (API 2), `player_state` (API 3), and
-`library_update_sort_keys` (API 4) with `unsupported_api` when an older main APK
-is installed. The write tool is also hidden unless **Allow agent writes** is on.
-API 5 adds search summaries and byte-bounded search/detail responses; those tools
-still only require API 1, and sort keys still require API 4.
+The main app currently reports `apiVersion: 6`. Each call probes capabilities on
+the current Binder session and rejects `library_list_facets` (API 2),
+`player_state` (API 3), `library_update_sort_keys` (API 4), and `stats_tracks`
+(API 6) with `unsupported_api` when an older main APK is installed. The write
+tool is also hidden unless **Allow agent writes** is on.
 
-`tools/list` describes the negotiated contract. With API 5 it advertises search
-summaries, the byte budget, `nextOffset`, `byteTruncated`, and
-`truncatedFields`. With an older main app, `library_search_tracks` and
-`library_get_track` stay available but are described as the legacy
-full-payload search and detail calls; the API 5 fields are not advertised.
+`tools/list` describes the negotiated contract. With API 6 it advertises
+`trackRef`, `dateAddedMs`, explicit units, `rangeTotals`, `hasMore`, `day`,
+lifecycle counters, and `stats_tracks`. With API 5 it advertises search
+summaries and byte budgets; with API 4 or older it describes the legacy
+full-payload search and detail calls.
 
 ## Out of scope
 

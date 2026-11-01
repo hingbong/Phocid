@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.room.withTransaction
 import java.io.File
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -42,6 +43,13 @@ internal data class PlaybackOutboxDay(
     val millis: Long,
     val plays: Int,
     val lastPlayedAt: Long,
+    val startedCount: Int = 0,
+    val completedCount: Int = 0,
+    val skipCount: Int = 0,
+    val completedMillis: Long = 0,
+    val dayStartMs: Long? = null,
+    val dayEndMs: Long? = null,
+    val utcOffsetMinutes: Int? = null,
 )
 
 /**
@@ -108,6 +116,7 @@ class PlaybackStatsRecorder(
         private const val FLUSH_INTERVAL_MILLIS = 30_000L
         private const val MIN_PLAY_MILLIS = 30_000L
         private const val SHUTDOWN_RESOLUTION_TIMEOUT_MILLIS = 1_000L
+        private const val COMPLETION_TOLERANCE_MILLIS = 1_000L
         private const val MAX_RE_RESOLVE_ATTEMPTS = 2
     }
 
@@ -131,6 +140,13 @@ class PlaybackStatsRecorder(
         var millis: Long = 0L,
         var plays: Int = 0,
         var lastPlayedAt: Long = 0L,
+        var startedCount: Int = 0,
+        var completedCount: Int = 0,
+        var skipCount: Int = 0,
+        var completedMillis: Long = 0L,
+        var dayStartMs: Long? = null,
+        var dayEndMs: Long? = null,
+        var utcOffsetMinutes: Int? = null,
     )
 
     private class Session(
@@ -152,6 +168,7 @@ class PlaybackStatsRecorder(
         var lastWall = segmentWall
         val pending = LinkedHashMap<Int, PendingDay>()
         var retired = false
+        var lifecycleEnded = false
         var writeQueued = false
         var cleared = false
 
@@ -163,6 +180,13 @@ class PlaybackStatsRecorder(
         val millis: Long,
         val plays: Int,
         val lastPlayedAt: Long,
+        val startedCount: Int,
+        val completedCount: Int,
+        val skipCount: Int,
+        val completedMillis: Long,
+        val dayStartMs: Long?,
+        val dayEndMs: Long?,
+        val utcOffsetMinutes: Int?,
     )
 
     private class FlushPlan(
@@ -170,6 +194,10 @@ class PlaybackStatsRecorder(
         val buckets: List<FlushBucket>,
         val totalMillis: Long,
         val totalPlays: Int,
+        val totalStarted: Int,
+        val totalCompleted: Int,
+        val totalSkipped: Int,
+        val totalCompletedMillis: Long,
         val playedAt: Long,
         val eventAt: Long,
         val eventPlayedMillis: Long,
@@ -189,8 +217,9 @@ class PlaybackStatsRecorder(
                 current?.let {
                     previous = it
                     accrueLocked(it, wall, elapsed)
-                    retireLocked(it)
+                    endSessionLocked(it, wall)
                 }
+                val zone = zoneId()
                 Session(
                         id = nextSessionId++,
                         meta = meta,
@@ -200,7 +229,10 @@ class PlaybackStatsRecorder(
                         segmentElapsed = if (playing) elapsed else 0L,
                         running = playing,
                     )
-                    .also { current = it }
+                    .also {
+                        current = it
+                        addStartedLocked(it, wall, zone)
+                    }
             }
         previous?.let { preserveUnresolvedIfFailed(it) }
         startResolution(session, meta)
@@ -273,10 +305,7 @@ class PlaybackStatsRecorder(
             val elapsed = elapsedRealtime()
             current?.let {
                 if (it.running) accrueLocked(it, wall, elapsed)
-                it.running = false
-                it.segmentElapsed = 0L
-                it.lastWall = maxOf(it.lastWall, wall)
-                retireLocked(it)
+                endSessionLocked(it, wall)
                 finished = it
             }
         }
@@ -482,7 +511,7 @@ class PlaybackStatsRecorder(
         zone: ZoneId,
     ) {
         if (millis <= 0L) return
-        val bucket = session.pending.getOrPut(epochDay) { PendingDay() }
+        val bucket = session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }
         bucket.millis += millis
         bucket.lastPlayedAt = maxOf(bucket.lastPlayedAt, segmentEndWall)
 
@@ -495,7 +524,8 @@ class PlaybackStatsRecorder(
         if (session.accumulatedMillis < threshold) return
         val within = (threshold - before).coerceIn(0L, millis)
         val countWall = mapOffsetToWall(segmentStartWall, segmentEndWall, millis, within)
-        val countBucket = session.pending.getOrPut(localEpochDay(countWall, zone)) { PendingDay() }
+        val countDay = localEpochDay(countWall, zone)
+        val countBucket = session.pending.getOrPut(countDay) { newPendingDay(countDay, zone) }
         countBucket.plays += 1
         countBucket.lastPlayedAt = maxOf(countBucket.lastPlayedAt, countWall)
         session.counted = true
@@ -527,6 +557,47 @@ class PlaybackStatsRecorder(
         if (nowElapsed < session.segmentElapsed) return
         session.segmentWall = nowWall
         session.segmentElapsed = nowElapsed
+    }
+
+    private fun addStartedLocked(session: Session, wall: Long, zone: ZoneId) {
+        val epochDay = localEpochDay(wall, zone)
+        session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }.startedCount += 1
+    }
+
+    /**
+     * Ends a session because the player moved to another track. A session counts as completed when
+     * it reached the end of the known duration; otherwise it is a skip. Pausing or shutting down
+     * does not end the lifecycle: the same session can resume later.
+     */
+    private fun endSessionLocked(session: Session, wall: Long) {
+        if (!session.lifecycleEnded) {
+            session.lifecycleEnded = true
+            val zone = zoneId()
+            val epochDay = localEpochDay(wall, zone)
+            val bucket = session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }
+            val completed =
+                session.durationMillis > 0L &&
+                    session.accumulatedMillis >=
+                        (session.durationMillis - COMPLETION_TOLERANCE_MILLIS).coerceAtLeast(0L)
+            if (completed) {
+                bucket.completedCount += 1
+                bucket.completedMillis += session.accumulatedMillis
+            } else {
+                bucket.skipCount += 1
+            }
+        }
+        retireLocked(session)
+    }
+
+    private fun newPendingDay(epochDay: Int, zone: ZoneId): PendingDay {
+        val date = LocalDate.ofEpochDay(epochDay.toLong())
+        val start = date.atStartOfDay(zone)
+        val end = date.plusDays(1).atStartOfDay(zone)
+        return PendingDay(
+            dayStartMs = start.toInstant().toEpochMilli(),
+            dayEndMs = end.toInstant().toEpochMilli(),
+            utcOffsetMinutes = start.offset.totalSeconds / 60,
+        )
     }
 
     private fun retireLocked(session: Session) {
@@ -798,13 +869,28 @@ class PlaybackStatsRecorder(
                     if (session.cleared) return false
                     val buckets =
                         session.pending.entries.mapNotNull { (epochDay, pending) ->
-                            if (pending.millis <= 0L && pending.plays == 0) null
-                            else {
+                            if (
+                                pending.millis <= 0L &&
+                                    pending.plays == 0 &&
+                                    pending.startedCount == 0 &&
+                                    pending.completedCount == 0 &&
+                                    pending.skipCount == 0 &&
+                                    pending.completedMillis == 0L
+                            ) {
+                                null
+                            } else {
                                 FlushBucket(
                                     epochDay = epochDay,
                                     millis = pending.millis,
                                     plays = pending.plays,
                                     lastPlayedAt = pending.lastPlayedAt,
+                                    startedCount = pending.startedCount,
+                                    completedCount = pending.completedCount,
+                                    skipCount = pending.skipCount,
+                                    completedMillis = pending.completedMillis,
+                                    dayStartMs = pending.dayStartMs,
+                                    dayEndMs = pending.dayEndMs,
+                                    utcOffsetMinutes = pending.utcOffsetMinutes,
                                 )
                             }
                         }
@@ -818,6 +904,10 @@ class PlaybackStatsRecorder(
                         buckets = buckets,
                         totalMillis = buckets.sumOf { it.millis },
                         totalPlays = buckets.sumOf { it.plays },
+                        totalStarted = buckets.sumOf { it.startedCount },
+                        totalCompleted = buckets.sumOf { it.completedCount },
+                        totalSkipped = buckets.sumOf { it.skipCount },
+                        totalCompletedMillis = buckets.sumOf { it.completedMillis },
                         playedAt = maxOf(session.lastWall, buckets.maxOf { it.lastPlayedAt }),
                         eventAt =
                             if (session.countWall > 0L) session.countWall else session.lastWall,
@@ -844,9 +934,20 @@ class PlaybackStatsRecorder(
                                 playCount = bucket.plays,
                                 playedMillis = bucket.millis,
                                 at = bucket.lastPlayedAt,
+                                startedCount = bucket.startedCount,
+                                completedCount = bucket.completedCount,
+                                skipCount = bucket.skipCount,
+                                completedMillis = bucket.completedMillis,
+                                dayStartMs = bucket.dayStartMs,
+                                dayEndMs = bucket.dayEndMs,
+                                utcOffsetMinutes = bucket.utcOffsetMinutes,
                             )
-                        // Lifetime active days are never aged out, so they outlive track_daily.
-                        db.activeDayDao().insert(ActiveDayEntity(bucket.epochDay))
+                        // Lifetime active days are never aged out, so they outlive track_daily. A
+                        // track that was only selected and immediately skipped does not make a day
+                        // active; actual listening or a counted play does.
+                        if (bucket.millis > 0L || bucket.plays > 0) {
+                            db.activeDayDao().insert(ActiveDayEntity(bucket.epochDay))
+                        }
                     }
                     db.totalsDao()
                         .accumulate(
@@ -854,6 +955,10 @@ class PlaybackStatsRecorder(
                             count = plan.totalPlays,
                             millis = plan.totalMillis,
                             at = plan.playedAt,
+                            startedCount = plan.totalStarted,
+                            completedCount = plan.totalCompleted,
+                            skipCount = plan.totalSkipped,
+                            completedMillis = plan.totalCompletedMillis,
                         )
                     if (plan.totalPlays > 0) {
                         db.eventDao()
@@ -882,10 +987,22 @@ class PlaybackStatsRecorder(
                 synchronized(lock) {
                     if (!session.cleared) {
                         for (bucket in plan.buckets) {
-                            val pending = session.pending.getOrPut(bucket.epochDay) { PendingDay() }
+                            val pending =
+                                session.pending.getOrPut(bucket.epochDay) {
+                                    newPendingDay(bucket.epochDay, zoneId())
+                                }
                             pending.millis += bucket.millis
                             pending.plays += bucket.plays
+                            pending.startedCount += bucket.startedCount
+                            pending.completedCount += bucket.completedCount
+                            pending.skipCount += bucket.skipCount
+                            pending.completedMillis += bucket.completedMillis
                             pending.lastPlayedAt = maxOf(pending.lastPlayedAt, bucket.lastPlayedAt)
+                            if (pending.dayStartMs == null) pending.dayStartMs = bucket.dayStartMs
+                            if (pending.dayEndMs == null) pending.dayEndMs = bucket.dayEndMs
+                            if (pending.utcOffsetMinutes == null) {
+                                pending.utcOffsetMinutes = bucket.utcOffsetMinutes
+                            }
                         }
                     }
                 }
@@ -1008,13 +1125,27 @@ class PlaybackStatsRecorder(
                 if (session.cleared) return true
                 val pending =
                     session.pending.entries
-                        .filter { (_, day) -> day.millis > 0L || day.plays > 0 }
+                        .filter { (_, day) ->
+                            day.millis > 0L ||
+                                day.plays > 0 ||
+                                day.startedCount > 0 ||
+                                day.completedCount > 0 ||
+                                day.skipCount > 0 ||
+                                day.completedMillis > 0L
+                        }
                         .map { (epochDay, day) ->
                             PlaybackOutboxDay(
                                 epochDay = epochDay,
                                 millis = day.millis,
                                 plays = day.plays,
                                 lastPlayedAt = day.lastPlayedAt,
+                                startedCount = day.startedCount,
+                                completedCount = day.completedCount,
+                                skipCount = day.skipCount,
+                                completedMillis = day.completedMillis,
+                                dayStartMs = day.dayStartMs,
+                                dayEndMs = day.dayEndMs,
+                                utcOffsetMinutes = day.utcOffsetMinutes,
                             )
                         }
                 if (pending.isEmpty()) return true
@@ -1176,6 +1307,13 @@ class PlaybackStatsRecorder(
                     millis = day.millis,
                     plays = day.plays,
                     lastPlayedAt = day.lastPlayedAt,
+                    startedCount = day.startedCount,
+                    completedCount = day.completedCount,
+                    skipCount = day.skipCount,
+                    completedMillis = day.completedMillis,
+                    dayStartMs = day.dayStartMs,
+                    dayEndMs = day.dayEndMs,
+                    utcOffsetMinutes = day.utcOffsetMinutes,
                 )
         }
         session.retired = true

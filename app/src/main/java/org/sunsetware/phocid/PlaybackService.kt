@@ -231,6 +231,7 @@ class PlaybackService : MediaLibraryService() {
                 if (isPlaying) statisticsRecorder.onResumed() else statisticsRecorder.onPaused()
             }
 
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 if (
                     player.currentMediaItemIndex == 0 &&

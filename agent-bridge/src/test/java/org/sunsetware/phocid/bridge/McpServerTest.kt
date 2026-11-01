@@ -158,6 +158,25 @@ class McpServerTest {
     }
 
     @Test
+    fun api6DescribesStatsTracksAndLifecycleFields() {
+        val api6Server = startServerWithApi(6)
+        try {
+            val summary = toolObject(api6Server, "stats_summary").toString()
+            val top = toolObject(api6Server, "stats_top_tracks").toString()
+            val tracks = toolObject(api6Server, "stats_tracks").toString()
+            assertTrue(summary, summary.contains("playedMillis"))
+            assertTrue(summary, summary.contains("completed"))
+            assertTrue(top, top.contains("rangeTotals"))
+            assertTrue(top, top.contains("\"day\""))
+            assertTrue(top, top.contains("millis"))
+            assertTrue(tracks, tracks.contains("stats_tracks"))
+            assertTrue(tracks, tracks.contains("playedMillis"))
+        } finally {
+            api6Server.stop()
+        }
+    }
+
+    @Test
     fun unknownPathIsRejectedWithoutReadingBody() {
         openSocket().use { socket ->
             write(

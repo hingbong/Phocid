@@ -229,6 +229,10 @@ class BinderPhocidDataSource(context: Context) : PhocidDataSource, AutoCloseable
         it.statsTopTracks(requestJson)
     }
 
+    override fun statsTracks(requestJson: String): String = call(requiredApi = 6) {
+        it.statsTopTracks(requestJson)
+    }
+
     override fun statsDaily(range: String): String = call { it.statsDaily(range) }
 
     override fun resolveStatsUuid(libraryId: Long): String = call { it.resolveStatsUuid(libraryId) }

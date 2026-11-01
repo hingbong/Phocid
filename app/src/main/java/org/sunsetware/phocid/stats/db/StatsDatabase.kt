@@ -20,7 +20,7 @@ import java.io.File
             FingerprintCacheEntity::class,
             PlaybackOutboxEntity::class,
         ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class StatsDatabase : RoomDatabase() {
@@ -77,6 +77,34 @@ abstract class StatsDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * 3 -> 4 adds lifecycle counters, per-day completed time, and the local-day boundaries
+         * captured when a day was first written. Legacy rows receive zero counters and null
+         * boundaries; lifecycle counters are only meaningful for rows written after API 6.
+         */
+        internal val MIGRATION_3_4 =
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    for (table in listOf("track_daily", "track_totals")) {
+                        db.execSQL(
+                            "ALTER TABLE $table ADD COLUMN startedCount INTEGER NOT NULL DEFAULT 0"
+                        )
+                        db.execSQL(
+                            "ALTER TABLE $table ADD COLUMN completedCount INTEGER NOT NULL DEFAULT 0"
+                        )
+                        db.execSQL(
+                            "ALTER TABLE $table ADD COLUMN skipCount INTEGER NOT NULL DEFAULT 0"
+                        )
+                        db.execSQL(
+                            "ALTER TABLE $table ADD COLUMN completedMillis INTEGER NOT NULL DEFAULT 0"
+                        )
+                    }
+                    db.execSQL("ALTER TABLE track_daily ADD COLUMN dayStartMs INTEGER")
+                    db.execSQL("ALTER TABLE track_daily ADD COLUMN dayEndMs INTEGER")
+                    db.execSQL("ALTER TABLE track_daily ADD COLUMN utcOffsetMinutes INTEGER")
+                }
+            }
+
         @Volatile private var instance: StatsDatabase? = null
 
         fun get(context: Context): StatsDatabase =
@@ -88,7 +116,7 @@ abstract class StatsDatabase : RoomDatabase() {
         private fun build(context: Context): StatsDatabase =
             Room.databaseBuilder(context, StatsDatabase::class.java, NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .addCallback(
                     object : Callback() {

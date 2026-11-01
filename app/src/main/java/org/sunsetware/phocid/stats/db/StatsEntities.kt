@@ -133,6 +133,14 @@ data class TrackDailyEntity(
     val playCount: Int,
     val playedMillis: Long,
     val lastPlayedAt: Long = 0,
+    @ColumnInfo(defaultValue = "0") val startedCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val completedCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val skipCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val completedMillis: Long = 0,
+    /** Local-day boundaries at the instant this day was first written; null for legacy rows. */
+    val dayStartMs: Long? = null,
+    val dayEndMs: Long? = null,
+    val utcOffsetMinutes: Int? = null,
 )
 
 /**
@@ -167,6 +175,10 @@ data class TrackTotalsEntity(
     val totalMillis: Long,
     val firstPlayedAt: Long,
     val lastPlayedAt: Long,
+    @ColumnInfo(defaultValue = "0") val startedCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val completedCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val skipCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val completedMillis: Long = 0,
 )
 
 /**
