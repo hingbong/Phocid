@@ -167,6 +167,70 @@ class StatsMigrationTest {
     }
 
     @Test
+    fun migration6To7RaisesLifecycleCountersToTheirLowerBound() {
+        val db = helper.writableDatabase
+        db.execSQL(CREATE_TRACK_DAILY_V6)
+        db.execSQL(CREATE_TRACK_TOTALS_V6)
+        db.execSQL(
+            "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, " +
+                "lastPlayedAt, firstPlayedAt, startedCount, completedCount, skipCount, " +
+                "completedMillis) VALUES " +
+                "(1, 20000, 0, 0, 100, NULL, 0, 0, 0, 0), " +
+                "(2, 20000, 3, 3000, 100, NULL, 0, 1, 0, 0), " +
+                "(3, 20000, 0, 1000, 100, NULL, 0, 0, 2, 0), " +
+                "(4, 20000, 0, 0, 0, NULL, 0, 0, 0, 0), " +
+                "(5, 20000, 2, 2000, 100, NULL, 5, 0, 0, 0)"
+        )
+        db.execSQL(
+            "INSERT INTO track_totals VALUES " +
+                "(1, 0, 0, 0, 100, 0, 0, 0, 0), " +
+                "(2, 3, 3000, 0, 100, 0, 1, 0, 0), " +
+                "(3, 0, 1000, 0, 100, 0, 0, 2, 0), " +
+                "(4, 0, 0, 0, 0, 0, 0, 0, 0), " +
+                "(5, 2, 2000, 0, 100, 5, 0, 0, 0)"
+        )
+
+        StatsDatabase.MIGRATION_6_7.migrate(db)
+
+        db.query("SELECT trackRowId, startedCount FROM track_daily ORDER BY trackRowId").use { cursor ->
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(1)
+            assertThat(cursor.getInt(1)).isEqualTo(1)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(2)
+            assertThat(cursor.getInt(1)).isEqualTo(3)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(3)
+            assertThat(cursor.getInt(1)).isEqualTo(2)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(4)
+            assertThat(cursor.getInt(1)).isEqualTo(0)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(5)
+            assertThat(cursor.getInt(1)).isEqualTo(5)
+            assertThat(cursor.moveToNext()).isFalse()
+        }
+        db.query("SELECT trackRowId, startedCount FROM track_totals ORDER BY trackRowId").use { cursor ->
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(1)
+            assertThat(cursor.getInt(1)).isEqualTo(1)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(2)
+            assertThat(cursor.getInt(1)).isEqualTo(3)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(3)
+            assertThat(cursor.getInt(1)).isEqualTo(2)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(4)
+            assertThat(cursor.getInt(1)).isEqualTo(0)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(5)
+            assertThat(cursor.getInt(1)).isEqualTo(5)
+            assertThat(cursor.moveToNext()).isFalse()
+        }
+    }
+
+    @Test
     fun migration3To4AddsLifecycleAndDayBoundaryColumns() {
         val db = helper.writableDatabase
         db.execSQL(CREATE_TRACK_DAILY)
@@ -265,5 +329,9 @@ class StatsMigrationTest {
                 "completedCount INTEGER NOT NULL DEFAULT 0, " +
                 "skipCount INTEGER NOT NULL DEFAULT 0, " +
                 "completedMillis INTEGER NOT NULL DEFAULT 0)"
+
+        const val CREATE_TRACK_DAILY_V6 = CREATE_TRACK_DAILY_V5
+
+        const val CREATE_TRACK_TOTALS_V6 = CREATE_TRACK_TOTALS_V5
     }
 }

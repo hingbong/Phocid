@@ -82,6 +82,7 @@ class PlaybackService : MediaLibraryService() {
     @Volatile private var reshuffleOnRepeat = false
     @Volatile private var defaultShuffleModeTrack = DefaultShuffleMode.KEEP_CURRENT
     @Volatile private var defaultShuffleModeList = DefaultShuffleMode.KEEP_CURRENT
+    private val statsSessions = PlaybackStatsSessionTracker()
     private lateinit var statisticsRecorder: PlaybackStatsRecorder
 
     override fun onCreate() {
@@ -113,8 +114,11 @@ class PlaybackService : MediaLibraryService() {
             GlobalData.playerState.value,
             GlobalData.unfilteredTrackIndex.value,
         )
-        trackForMediaItem(player.currentMediaItem)?.let {
-            statisticsRecorder.onTrackStarted(it.toTrackMeta())
+        // The listener may already have started a session while restoring player state. This call
+        // only fills the gap when restore did not trigger a transition. A restored ENDED player
+        // has no active playback to attribute; the next play callback opens the session.
+        if (player.playbackState != Player.STATE_ENDED) {
+            syncStatsSession(player.currentMediaItem, transitionReason = null)
         }
         if (player.isPlaying) statisticsRecorder.onResumed() else statisticsRecorder.onPaused()
         mainScope.launch {
@@ -228,9 +232,22 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) statisticsRecorder.onResumed() else statisticsRecorder.onPaused()
+                if (isPlaying) {
+                    // Playback can resume the same item after STATE_ENDED without an item
+                    // transition. Re-open the session so a replay counts as a new start.
+                    syncStatsSession(player.currentMediaItem, transitionReason = null)
+                    statisticsRecorder.onResumed()
+                } else {
+                    statisticsRecorder.onPaused()
+                }
             }
 
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    statisticsRecorder.onTrackFinished(endedByPlayer = true)
+                    statsSessions.onFinished()
+                }
+            }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 if (
@@ -247,9 +264,7 @@ class PlaybackService : MediaLibraryService() {
                     player.enableShuffle()
                 }
                 lastIndex = player.currentMediaItemIndex
-                val track = trackForMediaItem(player.currentMediaItem)
-                if (track != null) statisticsRecorder.onTrackStarted(track.toTrackMeta())
-                else statisticsRecorder.onTrackFinished()
+                syncStatsSession(mediaItem, transitionReason = reason)
             }
 
             override fun onPositionDiscontinuity(
@@ -266,6 +281,38 @@ class PlaybackService : MediaLibraryService() {
         return mediaItem?.mediaId?.toLongOrNull()?.let {
             GlobalData.unfilteredTrackIndex.value.tracks[it]
         }
+    }
+
+    /**
+     * Opens or closes the statistics session for [mediaItem]. A playlist edit or shuffle can
+     * re-announce the item that is already playing; that is not a new start and must not settle
+     * the running session as a skip.
+     */
+    private fun syncStatsSession(mediaItem: MediaItem?, transitionReason: Int?) {
+        val mediaId = mediaItem?.mediaId
+        if (mediaId == null) {
+            val previousEndedByPlayer = statsSessions.previousEndedByPlayer(transitionReason)
+            if (statsSessions.isActive) {
+                statisticsRecorder.onTrackFinished(endedByPlayer = previousEndedByPlayer)
+            }
+            statsSessions.onFinished()
+            return
+        }
+        if (!statsSessions.shouldStart(mediaId, transitionReason)) return
+        val previousEndedByPlayer = statsSessions.previousEndedByPlayer(transitionReason)
+        val track = trackForMediaItem(mediaItem)
+        if (track == null) {
+            if (statsSessions.isActive) {
+                statisticsRecorder.onTrackFinished(endedByPlayer = previousEndedByPlayer)
+            }
+            statsSessions.onFinished()
+            return
+        }
+        statisticsRecorder.onTrackStarted(
+            track.toTrackMeta(),
+            previousEndedByPlayer = previousEndedByPlayer,
+        )
+        statsSessions.onStarted(mediaId)
     }
 
     private val defaultLibraryParams =
@@ -595,4 +642,44 @@ class PlaybackService : MediaLibraryService() {
     }
 
     // endregion
+}
+
+/**
+ * Decides whether a player callback should open a new statistics session.
+ *
+ * Media3 re-announces the current item for playlist edits and shuffle changes. Those callbacks
+ * must not settle the running session as a skip. The tracker keeps the current item's media id
+ * and active state so that only a real transition, repeat, seek, or replay opens a new session.
+ */
+internal class PlaybackStatsSessionTracker {
+    private var activeMediaId: String? = null
+    private var active = false
+
+    val isActive: Boolean
+        get() = active
+
+    /**
+     * A playlist-only change for the item that is already current never starts a session. Every
+     * other transition starts one, including a repeated item and a replay after STATE_ENDED.
+     */
+    fun shouldStart(mediaId: String, transitionReason: Int?): Boolean {
+        if (mediaId != activeMediaId) return true
+        if (transitionReason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) return false
+        return !active || transitionReason != null
+    }
+
+    /** True when the player moved the previous session on because it reached its end. */
+    fun previousEndedByPlayer(transitionReason: Int?): Boolean =
+        active &&
+            (transitionReason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                transitionReason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
+
+    fun onStarted(mediaId: String) {
+        activeMediaId = mediaId
+        active = true
+    }
+
+    fun onFinished() {
+        active = false
+    }
 }

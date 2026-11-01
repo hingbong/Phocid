@@ -109,20 +109,28 @@ Ranges: `today`, `7d`, `30d`, `month`, `90d`, `365d`, `year`, `3y`, and
 a row in the range, including a zero-length skip. `listenedTracks` counts
 `playedMillis > 0` (or a counted play), and `countedTracks` counts at least one
 counted play. `startedCount`, `completedCount`, `skipCount`, and
-`completedMillis` are lifecycle counters. A transition before the end counts as
-a skip; a transition within one second of the known duration counts as
-completed. Pausing or service shutdown does not close the lifecycle, so a
-resumed session is not a skip. Legacy rows backfilled by the 5 -> 6 migration
-have `startedCount = playCount` as a lower bound; their skip/completed counters
-remain zero because the old schema never recorded them.
+`completedMillis` are lifecycle counters. A manual transition before the end
+counts as a skip; a manual transition within the completion tolerance (one second
+for normal-length tracks) counts as completed. The player's own end signal is
+authoritative: it counts as completed even at non-1x speed or when metadata has no
+duration, and it closes the last track without waiting for another transition. A
+zero-duration track is completed only when the player reports that it ended.
+Pausing or service shutdown does not close the lifecycle, so a resumed session is
+not a skip. Legacy rows repaired by the
+5 -> 6 and 6 -> 7 migrations raise `startedCount` to its provable lower bound:
+a counted play, completed/skipped session, or listening timestamp proves at least
+one start. Skip/completed counters stay zero for data that never recorded them.
+Restoring an older backup applies the same lower-bound repair.
 
 `stats_top_tracks` and `stats_tracks` accept `range` or `day` (mutually
 exclusive), `sort` (`plays` or `playedMillis`), `limit`, and `offset`. Range mode
 echoes `requestedRange` and `effectiveRange`; day mode returns `range: null`,
 `day: "YYYY-MM-DD"`, and `requestedRange`/`effectiveRange` set to `day`. Their
 response includes `rangeTotals`, `returned`, `hasMore`, `nextOffset`, and
-`truncatedBy` (`limit`, `budget`, or `window`). Never sum a page to infer a
-range total; use `rangeTotals`.
+`truncatedBy` (`limit`, `budget`, or `window`). `nextOffset` is null when
+`hasMore` is false. At the bounded read window `hasMore` is false because no
+further offset can be served, but `truncatedBy` remains `window` while tracks
+exist beyond it. Never sum a page to infer a range total; use `rangeTotals`.
 
 `stats_daily` returns per-day `touchedTracks`, `listenedTracks`,
 `countedTracks`, lifecycle counters, and `dayStartMs`/`dayEndMs` with

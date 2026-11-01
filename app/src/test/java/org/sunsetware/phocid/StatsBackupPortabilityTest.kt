@@ -226,6 +226,45 @@ class StatsBackupPortabilityTest {
         }
 
     @Test
+    fun restoreBackfillsStartOnlyLegacyCounters() =
+        runBlocking<Unit> {
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-start-only")),
+                    totals =
+                        listOf(
+                            BackupTotals(
+                                uuid = "uuid-start-only",
+                                totalCount = 0,
+                                totalMillis = 0,
+                                firstPlayedAt = 0,
+                                lastPlayedAt = 20,
+                            )
+                        ),
+                    daily =
+                        listOf(
+                            BackupDaily(
+                                uuid = "uuid-start-only",
+                                epochDay = 20_000,
+                                playCount = 0,
+                                playedMillis = 0,
+                                lastPlayedAt = 20,
+                            )
+                        ),
+                    version = 2,
+                )
+
+            StatsBackupManager(db).restore(payload, replace = true)
+
+            val rowId = db.trackDao().rowIdOfUuid("uuid-start-only")!!
+            val totals = db.totalsDao().byRowId(rowId)!!
+            val daily = db.dailyDao().since(20_000).single()
+            assertThat(totals.startedCount).isEqualTo(1)
+            assertThat(daily.startedCount).isEqualTo(1)
+            assertThat(daily.firstPlayedAt).isEqualTo(20)
+        }
+
+    @Test
     fun restoreMergesAudioHashIntoExistingRow() =
         runBlocking<Unit> {
             val row = seed(db)

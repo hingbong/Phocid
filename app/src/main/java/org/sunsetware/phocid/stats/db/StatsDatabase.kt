@@ -20,7 +20,7 @@ import java.io.File
             FingerprintCacheEntity::class,
             PlaybackOutboxEntity::class,
         ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class StatsDatabase : RoomDatabase() {
@@ -153,6 +153,29 @@ abstract class StatsDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * 6 -> 7 repairs lifecycle counters that older writes could leave below their provable
+         * lower bound. [MIGRATION_5_6] filled `startedCount` only for rows with a counted play, so
+         * a row that was selected and immediately skipped kept zero forever. Every row with any
+         * listening timestamp proves at least one start; completed and skipped sessions prove
+         * their own starts. The update only raises counters, never lowers them.
+         */
+        internal val MIGRATION_6_7 =
+            object : Migration(6, 7) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "UPDATE track_daily SET startedCount = MAX(" +
+                            "startedCount, playCount, completedCount + skipCount, " +
+                            "CASE WHEN lastPlayedAt > 0 THEN 1 ELSE 0 END)"
+                    )
+                    db.execSQL(
+                        "UPDATE track_totals SET startedCount = MAX(" +
+                            "startedCount, totalCount, completedCount + skipCount, " +
+                            "CASE WHEN lastPlayedAt > 0 THEN 1 ELSE 0 END)"
+                    )
+                }
+            }
+
         @Volatile private var instance: StatsDatabase? = null
 
         fun get(context: Context): StatsDatabase =
@@ -170,6 +193,7 @@ abstract class StatsDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 .fallbackToDestructiveMigration()
                 .addCallback(

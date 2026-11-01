@@ -294,6 +294,101 @@ class PlaybackStatsRecorderTest {
         }
 
     @Test
+    fun playerEndedMarksTheLastTrackCompleted() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val file = temporaryFolder.newFile("Ended.flac")
+
+            recorder.onResumed()
+            recorder.onTrackStarted(meta("content://ended/1", file))
+            clock.advance(60_000L)
+            recorder.onTrackFinished(endedByPlayer = true)
+            awaitSettled(recorder)
+
+            val rowId = db.trackDao().rowIdOfPath(file.absolutePath)!!
+            val totals = db.totalsDao().byRowId(rowId)!!
+            assertThat(totals.startedCount).isEqualTo(1)
+            assertThat(totals.completedCount).isEqualTo(1)
+            assertThat(totals.skipCount).isEqualTo(0)
+            assertThat(totals.completedMillis).isEqualTo(60_000L)
+        }
+
+    @Test
+    fun playerEndCompletesAtPlaybackSpeedEvenBeforeElapsedDuration() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val file = temporaryFolder.newFile("SpedUp.flac")
+
+            recorder.onResumed()
+            recorder.onTrackStarted(meta("content://speed/1", file))
+            clock.advance(5_000L)
+            recorder.onTrackFinished(endedByPlayer = true)
+            awaitSettled(recorder)
+
+            val totals =
+                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            assertThat(totals.completedCount).isEqualTo(1)
+            assertThat(totals.completedMillis).isEqualTo(5_000L)
+        }
+
+    @Test
+    fun zeroDurationTrackCompletesOnlyWhenThePlayerReportsTheEnd() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val skippedFile = temporaryFolder.newFile("UnknownDurationSkipped.flac")
+            val endedFile = temporaryFolder.newFile("UnknownDurationEnded.flac")
+
+            recorder.onResumed()
+            recorder.onTrackStarted(
+                meta("content://unknown/skipped", skippedFile, durationMillis = 0L)
+            )
+            clock.advance(5_000L)
+            recorder.onTrackFinished()
+            recorder.onTrackStarted(
+                meta("content://unknown/ended", endedFile, durationMillis = 0L)
+            )
+            clock.advance(5_000L)
+            recorder.onTrackFinished(endedByPlayer = true)
+            awaitSettled(recorder)
+
+            val skipped = db.totalsDao().byRowId(
+                db.trackDao().rowIdOfPath(skippedFile.absolutePath)!!
+            )!!
+            val ended = db.totalsDao().byRowId(
+                db.trackDao().rowIdOfPath(endedFile.absolutePath)!!
+            )!!
+            assertThat(skipped.completedCount).isEqualTo(0)
+            assertThat(skipped.skipCount).isEqualTo(1)
+            assertThat(ended.completedCount).isEqualTo(1)
+            assertThat(ended.skipCount).isEqualTo(0)
+            assertThat(ended.completedMillis).isEqualTo(5_000L)
+        }
+
+    @Test
+    fun shortTrackDoesNotCompleteWithoutAnyPlayedTime() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val file = temporaryFolder.newFile("Short.flac")
+
+            recorder.onResumed()
+            recorder.onTrackStarted(
+                meta("content://short/1", file, durationMillis = 2_000L)
+            )
+            recorder.onTrackFinished()
+            awaitSettled(recorder)
+
+            val totals =
+                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            assertThat(totals.completedCount).isEqualTo(0)
+            assertThat(totals.skipCount).isEqualTo(1)
+            assertThat(totals.completedMillis).isEqualTo(0L)
+        }
+
+    @Test
     fun wallClockJumpsDoNotChangePlayedDuration() =
         runBlocking<Unit> {
             val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)

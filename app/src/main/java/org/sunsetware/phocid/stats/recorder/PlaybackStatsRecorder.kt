@@ -208,7 +208,12 @@ class PlaybackStatsRecorder(
 
     // Player callbacks -------------------------------------------------
 
-    fun onTrackStarted(meta: TrackMeta) {
+    /**
+     * Starts a new session. [previousEndedByPlayer] is true only when the player itself reports
+     * that the previous track reached its end (automatic advance or repeat); a manual transition
+     * is a skip.
+     */
+    fun onTrackStarted(meta: TrackMeta, previousEndedByPlayer: Boolean = false) {
         var previous: Session? = null
         val session =
             synchronized(lock) {
@@ -220,7 +225,7 @@ class PlaybackStatsRecorder(
                 current?.let {
                     previous = it
                     accrueLocked(it, wall, elapsed)
-                    endSessionLocked(it, wall)
+                    endSessionLocked(it, wall, endedByPlayer = previousEndedByPlayer)
                 }
                 val zone = zoneId()
                 Session(
@@ -300,7 +305,11 @@ class PlaybackStatsRecorder(
         requestFlush()
     }
 
-    fun onTrackFinished() {
+    /**
+     * Ends the current session because the player is no longer on that item. [endedByPlayer] is
+     * true only for a real player end; a transition to an unknown item is a skip.
+     */
+    fun onTrackFinished(endedByPlayer: Boolean = false) {
         var finished: Session? = null
         synchronized(lock) {
             if (shuttingDown) return
@@ -308,7 +317,7 @@ class PlaybackStatsRecorder(
             val elapsed = elapsedRealtime()
             current?.let {
                 if (it.running) accrueLocked(it, wall, elapsed)
-                endSessionLocked(it, wall)
+                endSessionLocked(it, wall, endedByPlayer)
                 finished = it
             }
         }
@@ -576,7 +585,11 @@ class PlaybackStatsRecorder(
      * it reached the end of the known duration; otherwise it is a skip. Pausing or shutting down
      * does not end the lifecycle: the same session can resume later.
      */
-    private fun endSessionLocked(session: Session, wall: Long) {
+    private fun endSessionLocked(
+        session: Session,
+        wall: Long,
+        endedByPlayer: Boolean = false,
+    ) {
         if (!session.lifecycleEnded) {
             session.lifecycleEnded = true
             val zone = zoneId()
@@ -584,11 +597,7 @@ class PlaybackStatsRecorder(
             val bucket = session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }
             bucket.firstPlayedAt = minOf(bucket.firstPlayedAt ?: wall, wall)
             bucket.lastPlayedAt = maxOf(bucket.lastPlayedAt, wall)
-            val completed =
-                session.durationMillis > 0L &&
-                    session.accumulatedMillis >=
-                        (session.durationMillis - COMPLETION_TOLERANCE_MILLIS).coerceAtLeast(0L)
-            if (completed) {
+            if (isCompleted(session, endedByPlayer)) {
                 bucket.completedCount += 1
                 bucket.completedMillis += session.accumulatedMillis
             } else {
@@ -596,6 +605,20 @@ class PlaybackStatsRecorder(
             }
         }
         retireLocked(session)
+    }
+
+    /**
+     * A player-reported end is authoritative: it covers playback speed, seeking, and tracks whose
+     * metadata has no duration. Manual transitions still need enough played time, with the
+     * tolerance capped at half the duration so a short track cannot be completed immediately.
+     */
+    private fun isCompleted(session: Session, endedByPlayer: Boolean): Boolean {
+        if (session.accumulatedMillis <= 0L) return false
+        if (endedByPlayer) return true
+        if (session.durationMillis <= 0L) return false
+        val tolerance =
+            COMPLETION_TOLERANCE_MILLIS.coerceAtMost(session.durationMillis / 2)
+        return session.accumulatedMillis >= session.durationMillis - tolerance
     }
 
     private fun newPendingDay(epochDay: Int, zone: ZoneId): PendingDay {

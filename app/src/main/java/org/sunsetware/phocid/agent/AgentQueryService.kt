@@ -619,14 +619,14 @@ class AgentQueryService : Service() {
                     "A single stats aggregate exceeds the response budget; increase offset",
             ) { items, extra, nextOffset, byteTruncated ->
                 val returned = items.size + if (extra != null) 1 else 0
-                val hasMore = offset + returned < summary.touchedTracks
-                val truncatedBy =
-                    when {
-                        byteTruncated -> "budget"
-                        !hasMore -> null
-                        offset + returned >= MAX_TOP_TRACKS_WINDOW -> "window"
-                        else -> "limit"
-                    }
+                val progress =
+                    statsPageProgress(
+                        totalTracks = summary.touchedTracks,
+                        offset = offset,
+                        returned = returned,
+                        window = MAX_TOP_TRACKS_WINDOW,
+                        byteTruncated = byteTruncated,
+                    )
                 JSONObject()
                     .put("range", parsed?.wireName() ?: JSONObject.NULL)
                     .put("day", day?.toString() ?: JSONObject.NULL)
@@ -646,9 +646,9 @@ class AgentQueryService : Service() {
                     .put("offset", offset)
                     .put("limit", limit)
                     .put("returned", returned)
-                    .put("nextOffset", nextOffset)
-                    .put("hasMore", hasMore)
-                    .put("truncatedBy", truncatedBy ?: JSONObject.NULL)
+                    .put("nextOffset", if (progress.hasMore) nextOffset else JSONObject.NULL)
+                    .put("hasMore", progress.hasMore)
+                    .put("truncatedBy", progress.truncatedBy ?: JSONObject.NULL)
                     .put("rangeTotals", rangeTotalsJson(summary))
                     .put(
                         "tracks",
@@ -1142,4 +1142,31 @@ class AgentQueryService : Service() {
                 "dateAddedIso",
             )
     }
+}
+
+internal data class StatsPageProgress(val hasMore: Boolean, val truncatedBy: String?)
+
+/**
+ * Separates "another page can be fetched" from "the bounded read window stopped this page".
+ * Reaching the window makes [StatsPageProgress.hasMore] false, but must still be reported as
+ * `truncatedBy = "window"` while tracks remain beyond it.
+ */
+internal fun statsPageProgress(
+    totalTracks: Int,
+    offset: Int,
+    returned: Int,
+    window: Int,
+    byteTruncated: Boolean,
+): StatsPageProgress {
+    val consumed = offset.toLong() + returned
+    val reachable = minOf(totalTracks.toLong(), window.toLong())
+    val hasMore = consumed < reachable
+    val truncatedBy =
+        when {
+            byteTruncated -> "budget"
+            consumed >= window.toLong() && totalTracks.toLong() > consumed -> "window"
+            hasMore -> "limit"
+            else -> null
+        }
+    return StatsPageProgress(hasMore = hasMore, truncatedBy = truncatedBy)
 }

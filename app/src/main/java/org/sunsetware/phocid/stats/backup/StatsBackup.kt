@@ -527,32 +527,30 @@ class StatsBackupManager(
         }
 }
 
-/** A legacy row has no lifecycle counters; a counted play proves at least one start. */
+/**
+ * A legacy row may have no lifecycle counters. Every counted play, completed session, skipped
+ * session, or listening timestamp proves at least one start, so raise the counter to its provable
+ * lower bound instead of leaving a start-only row at zero.
+ */
 private fun BackupTotals.startedCountFor(): Int =
-    if (
-        startedCount == 0 &&
-            completedCount == 0 &&
-            skipCount == 0 &&
-            completedMillis == 0L &&
-            totalCount > 0
-    ) {
-        totalCount
-    } else {
-        startedCount
-    }
+    maxOf(
+        startedCount,
+        totalCount,
+        completedCount + skipCount,
+        if (lastPlayedAt > 0L) 1 else 0,
+    )
 
+/**
+ * Per-day variant of [startedCountFor]. A selected and immediately skipped track has no
+ * [playCount], so the timestamp is the only evidence that it was started.
+ */
 private fun BackupDaily.startedCountFor(): Int =
-    if (
-        startedCount == 0 &&
-            completedCount == 0 &&
-            skipCount == 0 &&
-            completedMillis == 0L &&
-            playCount > 0
-    ) {
-        playCount
-    } else {
-        startedCount
-    }
+    maxOf(
+        startedCount,
+        playCount,
+        completedCount + skipCount,
+        if (lastPlayedAt > 0L) 1 else 0,
+    )
 
 /**
  * Legacy backups did not record the first instant of a day. The last observed instant is the only
