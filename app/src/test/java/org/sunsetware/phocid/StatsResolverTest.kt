@@ -262,8 +262,8 @@ class StatsResolverTest {
             val b = insertTrack("B")
             putAlias(AliasKind.TAG_KEY, keys[0], a)
             putAlias(AliasKind.TAG_KEY, keys[1], b)
-            db.totalsDao().accumulate(a, 1, 100, 1)
-            db.totalsDao().accumulate(b, 2, 200, 2)
+            db.totalsDao().accumulate(a, 1, 100, 1, 0, 0, 0, 0)
+            db.totalsDao().accumulate(b, 2, 200, 2, 0, 0, 0, 0)
 
             val resolver = resolver { null }
             val resolved = resolver.resolve(meta())
@@ -289,8 +289,8 @@ class StatsResolverTest {
             putAlias(AliasKind.TAG_KEY, keys[1], b)
             // A owns the local hint, so it cannot be used to select a row for this item.
             putAlias(AliasKind.LOCAL_URI, localKey, a)
-            db.totalsDao().accumulate(a, 1, 100, 1)
-            db.totalsDao().accumulate(b, 2, 200, 2)
+            db.totalsDao().accumulate(a, 1, 100, 1, 0, 0, 0, 0)
+            db.totalsDao().accumulate(b, 2, 200, 2, 0, 0, 0, 0)
 
             val resolver = resolver { null }
             val first = resolver.resolve(meta())
@@ -324,7 +324,7 @@ class StatsResolverTest {
                 LocalUriKey.of("content://media/external/audio/media/1", 1024),
                 tagRow,
             )
-            db.totalsDao().accumulate(tagRow, 2, 500, 10)
+            db.totalsDao().accumulate(tagRow, 2, 500, 10, 0, 0, 0, 0)
 
             val resolver = resolver { "hash" }
             val resolved = resolver.resolve(meta())
@@ -353,8 +353,8 @@ class StatsResolverTest {
             val b = insertTrack("B")
             putAlias(AliasKind.TAG_KEY, keys[0], a)
             putAlias(AliasKind.TAG_KEY, keys[1], b)
-            db.totalsDao().accumulate(a, 1, 100, 1)
-            db.totalsDao().accumulate(b, 2, 200, 2)
+            db.totalsDao().accumulate(a, 1, 100, 1, 0, 0, 0, 0)
+            db.totalsDao().accumulate(b, 2, 200, 2, 0, 0, 0, 0)
 
             val resolver = resolver { "hash" }
             val resolved = resolver.resolve(meta())
@@ -398,7 +398,7 @@ class StatsResolverTest {
             val oldMeta = meta(modified = 1)
             val newMeta = meta(modified = 2)
             val first = resolver.resolve(oldMeta)
-            db.totalsDao().accumulate(first, 2, 500, 10)
+            db.totalsDao().accumulate(first, 2, 500, 10, 0, 0, 0, 0)
 
             val second = resolver.resolve(newMeta)
 
@@ -432,7 +432,7 @@ class StatsResolverTest {
             val newMeta =
                 noIdentityMeta("content://media/external/audio/media/22", 2).copy(file = file)
             val first = resolver.resolve(oldMeta)
-            db.totalsDao().accumulate(first, 3, 700, 10)
+            db.totalsDao().accumulate(first, 3, 700, 10, 0, 0, 0, 0)
 
             val second = resolver.resolve(newMeta)
 

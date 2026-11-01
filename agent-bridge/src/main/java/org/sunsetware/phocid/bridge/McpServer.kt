@@ -482,7 +482,7 @@ class McpServer(
                 } else {
                     "Read the top played tracks for a range."
                 },
-                topTracksSchema(api6),
+                topTracksSchema(api6, api5),
             )
         )
         if (api6) {
@@ -491,7 +491,7 @@ class McpServer(
                     "stats_tracks",
                     "Read per-track statistics for a range or one local day, with plays, " +
                         "playedMillis, started/completed/skipped counts, and pagination totals.",
-                    topTracksSchema(true),
+                    topTracksSchema(true, true),
                 )
             )
         }
@@ -708,15 +708,17 @@ class McpServer(
             )
             .put("additionalProperties", false)
 
-    private fun topTracksSchema(api6: Boolean): JSONObject {
+    private fun topTracksSchema(api6: Boolean, api5: Boolean): JSONObject {
         val properties =
             JSONObject()
                 .put("range", rangeProp())
                 .put("limit", integerProp("1..200, default 20"))
-                .put(
-                    "offset",
-                    integerProp("Pagination offset; continue from the response nextOffset"),
-                )
+        if (api5 || api6) {
+            properties.put(
+                "offset",
+                integerProp("Pagination offset; continue from the response nextOffset"),
+            )
+        }
         if (api6) {
             properties
                 .put(

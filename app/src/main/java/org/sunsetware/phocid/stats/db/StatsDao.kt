@@ -205,13 +205,13 @@ interface TrackDailyDao {
         playCount: Int,
         playedMillis: Long,
         at: Long,
-        startedCount: Int = 0,
-        completedCount: Int = 0,
-        skipCount: Int = 0,
-        completedMillis: Long = 0,
-        dayStartMs: Long? = null,
-        dayEndMs: Long? = null,
-        utcOffsetMinutes: Int? = null,
+        startedCount: Int,
+        completedCount: Int,
+        skipCount: Int,
+        completedMillis: Long,
+        dayStartMs: Long?,
+        dayEndMs: Long?,
+        utcOffsetMinutes: Int?,
     )
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -426,10 +426,10 @@ interface TrackTotalsDao {
         count: Int,
         millis: Long,
         at: Long,
-        startedCount: Int = 0,
-        completedCount: Int = 0,
-        skipCount: Int = 0,
-        completedMillis: Long = 0,
+        startedCount: Int,
+        completedCount: Int,
+        skipCount: Int,
+        completedMillis: Long,
     )
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
