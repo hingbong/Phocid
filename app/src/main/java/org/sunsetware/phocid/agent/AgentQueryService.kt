@@ -10,6 +10,7 @@ import android.os.SystemClock
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -22,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import org.sunsetware.phocid.PlaybackService
+import org.sunsetware.phocid.data.LibraryIndex
 import org.sunsetware.phocid.data.Track
 import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.sortkey.SortKeyKeys
@@ -76,20 +78,86 @@ class AgentQueryService : Service() {
 
     private val responseBudget = ResponseJsonBudget()
 
+    private val libraryRevisionLock = Any()
+
+    @Volatile private var libraryRevisionTracks: Map<Long, Track>? = null
+
+    @Volatile private var libraryRevisionValue = 0L
+
+    /**
+     * A durable revision for client caches. `flowVersion` is a process-local generation counter and
+     * drops back to 0 on every restart, which makes it useless for cache invalidation. Persist a
+     * counter keyed by a content signature instead, and only advance it when the library changes.
+     */
+    private fun libraryRevision(index: LibraryIndex): Long {
+        val tracks = index.tracks
+        if (tracks === libraryRevisionTracks && libraryRevisionValue > 0L) {
+            return libraryRevisionValue
+        }
+        synchronized(libraryRevisionLock) {
+            if (tracks === libraryRevisionTracks && libraryRevisionValue > 0L) {
+                return libraryRevisionValue
+            }
+            val preferences = getSharedPreferences("library_revision", MODE_PRIVATE)
+            val signature = librarySignature(index)
+            val storedSignature = preferences.getString(KEY_LIBRARY_SIGNATURE, null)
+            val storedRevision = preferences.getLong(KEY_LIBRARY_REVISION, 0L)
+            // Seed with wall time instead of 1 so an upgrade from the old process-local
+            // generation counter cannot make the revision appear to move backwards.
+            val revision =
+                when {
+                    storedSignature == null -> System.currentTimeMillis()
+                    storedSignature == signature -> storedRevision.coerceAtLeast(1L)
+                    else ->
+                        maxOf(
+                            storedRevision.coerceAtLeast(0L) + 1L,
+                            System.currentTimeMillis(),
+                        )
+                }
+            if (storedSignature != signature || storedRevision != revision) {
+                preferences
+                    .edit()
+                    .putString(KEY_LIBRARY_SIGNATURE, signature)
+                    .putLong(KEY_LIBRARY_REVISION, revision)
+                    .apply()
+            }
+            libraryRevisionTracks = tracks
+            libraryRevisionValue = revision
+            return revision
+        }
+    }
+
+    private fun librarySignature(index: LibraryIndex): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        index.tracks.values.sortedBy { it.id }.forEach { track ->
+            digest.updateField(track.id.toString())
+            digest.updateField(track.version.toString())
+            digest.updateField(track.path)
+            digest.updateField(track.title ?: "")
+            digest.updateField(track.artists.joinToString("\u0000"))
+            digest.updateField(track.album ?: "")
+            digest.updateField(track.duration.inWholeMilliseconds.toString())
+        }
+        return digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+    }
+
+    private fun MessageDigest.updateField(value: String) {
+        update(value.toByteArray(Charsets.UTF_8))
+        update(0.toByte())
+    }
+
     private fun capabilitiesJson(): String {
         val index = GlobalData.libraryIndex.value
         return JSONObject()
             .put("apiVersion", API_VERSION)
-            .put("libraryRevision", index.flowVersion)
+            .put("libraryRevision", libraryRevision(index))
             .put("zoneId", ZoneId.systemDefault().id)
             .put("zoneOffset", zoneOffset(ZoneId.systemDefault()))
             .put("maxLimit", MAX_LIMIT)
             .put("writeSortKeys", true)
             .put("ranges", stringArray(RANGES))
-            .put(
-                "rangeAliases",
-                JSONObject().put("1d", "today").put("days_1", "today"),
-            )
             .put(
                 "playCountRule",
                 "a play is counted once accumulated listening reaches min(30s, duration/2), with a 1s floor",
@@ -492,7 +560,7 @@ class AgentQueryService : Service() {
             parseStatsSort(request.optString("sort", "plays"))
                 ?: return errorJson(
                     "invalid_argument",
-                    "sort must be one of plays, time, or millis",
+                    "sort must be one of plays or playedMillis",
                 )
         val limit = request.optInt("limit", 20)
         if (limit !in 1..MAX_LIMIT) {
@@ -551,7 +619,7 @@ class AgentQueryService : Service() {
                     "A single stats aggregate exceeds the response budget; increase offset",
             ) { items, extra, nextOffset, byteTruncated ->
                 val returned = items.size + if (extra != null) 1 else 0
-                val hasMore = offset + returned < summary.uniqueTracks
+                val hasMore = offset + returned < summary.touchedTracks
                 val truncatedBy =
                     when {
                         byteTruncated -> "budget"
@@ -562,6 +630,11 @@ class AgentQueryService : Service() {
                 JSONObject()
                     .put("range", parsed?.wireName() ?: JSONObject.NULL)
                     .put("day", day?.toString() ?: JSONObject.NULL)
+                    .put(
+                        "requestedRange",
+                        requestedRange.ifEmpty { if (day != null) "day" else "30d" },
+                    )
+                    .put("effectiveRange", if (day != null) "day" else parsed!!.wireName())
                     .put("sort", sort.wireName())
                     .put("requestedSort", request.optString("sort", "plays"))
                     .put("zoneId", zone.id)
@@ -723,7 +796,8 @@ class AgentQueryService : Service() {
             .put("rangeEndMs", window.end.toEpochMilli())
             .put("plays", summary.plays)
             .put("playedMillis", summary.millis)
-            .put("uniqueTracks", summary.uniqueTracks)
+            .put("touchedTracks", summary.touchedTracks)
+            .put("listenedTracks", summary.listenedTracks)
             .put("countedTracks", summary.countedTracks)
             .put("startedCount", summary.startedCount)
             .put("completedCount", summary.completedCount)
@@ -734,7 +808,8 @@ class AgentQueryService : Service() {
 
     private fun rangeTotalsJson(summary: RangeSummary): JSONObject =
         JSONObject()
-            .put("uniqueTracks", summary.uniqueTracks)
+            .put("touchedTracks", summary.touchedTracks)
+            .put("listenedTracks", summary.listenedTracks)
             .put("countedTracks", summary.countedTracks)
             .put("plays", summary.plays)
             .put("playedMillis", summary.millis)
@@ -768,7 +843,8 @@ class AgentQueryService : Service() {
             .put("utcOffsetMinutes", day.utcOffsetMinutes ?: JSONObject.NULL)
             .put("plays", day.plays)
             .put("playedMillis", day.millis)
-            .put("uniqueTracks", day.uniqueTracks)
+            .put("touchedTracks", day.touchedTracks)
+            .put("listenedTracks", day.listenedTracks)
             .put("countedTracks", day.countedTracks)
             .put("startedCount", day.startedCount)
             .put("completedCount", day.completedCount)
@@ -869,23 +945,14 @@ class AgentQueryService : Service() {
 
     private fun parseRange(raw: String): StatsRange? =
         when (raw.trim().lowercase()) {
-            "today",
-            "1d",
-            "days_1" -> StatsRange.TODAY
-            "7d",
-            "days_7" -> StatsRange.DAYS_7
-            "30d",
-            "days_30" -> StatsRange.DAYS_30
-            "month",
-            "calendar_month" -> StatsRange.CALENDAR_MONTH
-            "90d",
-            "days_90" -> StatsRange.DAYS_90
-            "365d",
-            "days_365" -> StatsRange.DAYS_365
-            "year",
-            "calendar_year" -> StatsRange.CALENDAR_YEAR
-            "3y",
-            "years_3" -> StatsRange.YEARS_3
+            "today" -> StatsRange.TODAY
+            "7d" -> StatsRange.DAYS_7
+            "30d" -> StatsRange.DAYS_30
+            "month" -> StatsRange.CALENDAR_MONTH
+            "90d" -> StatsRange.DAYS_90
+            "365d" -> StatsRange.DAYS_365
+            "year" -> StatsRange.CALENDAR_YEAR
+            "3y" -> StatsRange.YEARS_3
             "all" -> StatsRange.ALL
             else -> null
         }
@@ -893,15 +960,14 @@ class AgentQueryService : Service() {
     private fun parseStatsSort(raw: String): StatsSort? =
         when (raw.trim().lowercase()) {
             "plays" -> StatsSort.PLAYS
-            "time",
-            "millis" -> StatsSort.TIME
+            "playedmillis" -> StatsSort.TIME
             else -> null
         }
 
     private fun StatsSort.wireName(): String =
         when (this) {
             StatsSort.PLAYS -> "plays"
-            StatsSort.TIME -> "time"
+            StatsSort.TIME -> "playedMillis"
         }
 
     private fun StatsRange.wireName(): String =
@@ -1044,7 +1110,9 @@ class AgentQueryService : Service() {
         private const val MAX_TOP_TRACKS_WINDOW = MAX_LIMIT * 10
         private val HEAVY_TRACK_FIELDS = listOf("comment", "unsyncedLyrics")
         private val RANGES =
-            listOf("today", "1d", "7d", "30d", "month", "90d", "365d", "year", "3y", "all")
+            listOf("today", "7d", "30d", "month", "90d", "365d", "year", "3y", "all")
+        private const val KEY_LIBRARY_SIGNATURE = "signature"
+        private const val KEY_LIBRARY_REVISION = "revision"
         private val FACET_KINDS = listOf("artists", "albums", "album_artists", "genres")
         private val TRACK_FIELDS =
             listOf(

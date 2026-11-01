@@ -138,7 +138,8 @@ class StatsSummaryTest {
 
             assertThat(summary.plays).isEqualTo(3)
             assertThat(summary.millis).isEqualTo(540_000)
-            assertThat(summary.uniqueTracks).isEqualTo(1)
+            assertThat(summary.touchedTracks).isEqualTo(1)
+            assertThat(summary.listenedTracks).isEqualTo(1)
             assertThat(summary.activeDays).isEqualTo(3)
         }
 
@@ -161,12 +162,43 @@ class StatsSummaryTest {
 
             val summary = repository().summary(StatsRange.TODAY).first()
             assertThat(summary.plays).isEqualTo(1)
-            assertThat(summary.uniqueTracks).isEqualTo(2)
+            assertThat(summary.touchedTracks).isEqualTo(2)
+            assertThat(summary.listenedTracks).isEqualTo(2)
             assertThat(summary.countedTracks).isEqualTo(1)
 
             val day = repository().dailyTrend(StatsRange.TODAY).first().single()
-            assertThat(day.uniqueTracks).isEqualTo(2)
+            assertThat(day.touchedTracks).isEqualTo(2)
+            assertThat(day.listenedTracks).isEqualTo(2)
             assertThat(day.countedTracks).isEqualTo(1)
+        }
+
+    @Test
+    fun dailyTrendDerivesBoundariesForLegacyRows() =
+        runBlocking<Unit> {
+            val today = LocalDate.now(ZoneOffset.UTC).toEpochDay().toInt()
+            insertDailyTrack("legacy", listOf(today), playCount = 1, millis = 60_000)
+
+            val day = repository().dailyTrend(StatsRange.TODAY).first().single()
+            val date = LocalDate.ofEpochDay(day.epochDay.toLong())
+
+            assertThat(day.dayStartMs)
+                .isEqualTo(date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
+            assertThat(day.dayEndMs)
+                .isEqualTo(date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
+            assertThat(day.utcOffsetMinutes).isEqualTo(0)
+        }
+
+    @Test
+    fun zeroLengthSkipIsTouchedButNotListened() =
+        runBlocking<Unit> {
+            val today = LocalDate.now(ZoneOffset.UTC).toEpochDay().toInt()
+            insertDailyTrack("skipped", listOf(today), playCount = 0, millis = 0)
+
+            val summary = repository().summary(StatsRange.TODAY).first()
+
+            assertThat(summary.touchedTracks).isEqualTo(1)
+            assertThat(summary.listenedTracks).isEqualTo(0)
+            assertThat(summary.countedTracks).isEqualTo(0)
         }
 
     @Test

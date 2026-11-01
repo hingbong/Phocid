@@ -106,6 +106,67 @@ class StatsMigrationTest {
     }
 
     @Test
+    fun migration5To6BackfillsLegacyTimestampsAndCounters() {
+        val db = helper.writableDatabase
+        db.execSQL(CREATE_TRACK_DAILY_V5)
+        db.execSQL(CREATE_TRACK_TOTALS_V5)
+        db.execSQL(
+            "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, lastPlayedAt, " +
+                "firstPlayedAt, startedCount, completedCount, skipCount, completedMillis) " +
+                "VALUES (1, 20000, 3, 3000, 100, NULL, 0, 0, 0, 0)"
+        )
+        db.execSQL(
+            "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, lastPlayedAt, " +
+                "firstPlayedAt, startedCount, completedCount, skipCount, completedMillis) " +
+                "VALUES (2, 20000, 1, 1000, 100, 200, 0, 0, 0, 0)"
+        )
+        db.execSQL(
+            "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, lastPlayedAt, " +
+                "firstPlayedAt, startedCount, completedCount, skipCount, completedMillis) " +
+                "VALUES (3, 20000, 0, 0, 0, NULL, 1, 0, 0, 0)"
+        )
+        db.execSQL(
+            "INSERT INTO track_totals VALUES (1, 3, 3000, 1, 100, 0, 0, 0, 0)"
+        )
+        db.execSQL(
+            "INSERT INTO track_totals VALUES (2, 1, 1000, 200, 100, 0, 0, 0, 0)"
+        )
+
+        StatsDatabase.MIGRATION_5_6.migrate(db)
+
+        db.query(
+            "SELECT trackRowId, firstPlayedAt, lastPlayedAt, startedCount FROM track_daily " +
+                "ORDER BY trackRowId"
+        ).use { cursor ->
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(1)
+            assertThat(cursor.getLong(1)).isEqualTo(100)
+            assertThat(cursor.getLong(2)).isEqualTo(100)
+            assertThat(cursor.getInt(3)).isEqualTo(3)
+
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(2)
+            assertThat(cursor.getLong(1)).isEqualTo(200)
+            assertThat(cursor.getLong(2)).isEqualTo(200)
+            assertThat(cursor.getInt(3)).isEqualTo(1)
+
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getLong(0)).isEqualTo(3)
+            assertThat(cursor.isNull(1)).isTrue()
+            assertThat(cursor.getLong(2)).isEqualTo(0)
+            assertThat(cursor.getInt(3)).isEqualTo(1)
+        }
+        db.query("SELECT startedCount, lastPlayedAt FROM track_totals ORDER BY trackRowId").use { cursor ->
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getInt(0)).isEqualTo(3)
+            assertThat(cursor.getLong(1)).isEqualTo(100)
+            assertThat(cursor.moveToNext()).isTrue()
+            assertThat(cursor.getInt(0)).isEqualTo(1)
+            assertThat(cursor.getLong(1)).isEqualTo(200)
+        }
+    }
+
+    @Test
     fun migration3To4AddsLifecycleAndDayBoundaryColumns() {
         val db = helper.writableDatabase
         db.execSQL(CREATE_TRACK_DAILY)
@@ -175,5 +236,34 @@ class StatsMigrationTest {
                 "totalMillis INTEGER NOT NULL, " +
                 "firstPlayedAt INTEGER NOT NULL, " +
                 "lastPlayedAt INTEGER NOT NULL)"
+
+        const val CREATE_TRACK_DAILY_V5 =
+            "CREATE TABLE track_daily (" +
+                "trackRowId INTEGER NOT NULL, " +
+                "epochDay INTEGER NOT NULL, " +
+                "playCount INTEGER NOT NULL, " +
+                "playedMillis INTEGER NOT NULL, " +
+                "lastPlayedAt INTEGER NOT NULL, " +
+                "firstPlayedAt INTEGER, " +
+                "startedCount INTEGER NOT NULL DEFAULT 0, " +
+                "completedCount INTEGER NOT NULL DEFAULT 0, " +
+                "skipCount INTEGER NOT NULL DEFAULT 0, " +
+                "completedMillis INTEGER NOT NULL DEFAULT 0, " +
+                "dayStartMs INTEGER, " +
+                "dayEndMs INTEGER, " +
+                "utcOffsetMinutes INTEGER, " +
+                "PRIMARY KEY(trackRowId, epochDay))"
+
+        const val CREATE_TRACK_TOTALS_V5 =
+            "CREATE TABLE track_totals (" +
+                "trackRowId INTEGER NOT NULL PRIMARY KEY, " +
+                "totalCount INTEGER NOT NULL, " +
+                "totalMillis INTEGER NOT NULL, " +
+                "firstPlayedAt INTEGER NOT NULL, " +
+                "lastPlayedAt INTEGER NOT NULL, " +
+                "startedCount INTEGER NOT NULL DEFAULT 0, " +
+                "completedCount INTEGER NOT NULL DEFAULT 0, " +
+                "skipCount INTEGER NOT NULL DEFAULT 0, " +
+                "completedMillis INTEGER NOT NULL DEFAULT 0)"
     }
 }

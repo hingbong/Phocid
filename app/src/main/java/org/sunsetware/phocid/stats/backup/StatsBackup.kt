@@ -44,9 +44,9 @@ data class StatsBackup(
     val activeDays: List<Int> = emptyList(),
 ) {
     companion object {
-        // Version 2 adds the global active-day list. Version 3 adds lifecycle counters and the
-        // per-day boundaries captured when each day was written. Local-only aliases are still
-        // filtered from the payload.
+        // Version 2 adds the global active-day list. Version 3 adds lifecycle counters, the
+        // per-day boundaries captured when each day was written, and the earliest observed
+        // playback instant. Local-only aliases are still filtered from the payload.
         const val VERSION = 3
         const val MAGIC = "MSTATS1\u0000"
     }
@@ -357,6 +357,7 @@ class StatsBackupManager(
         payload.totals.forEach { total ->
             val rowId = uuidToRowId.getValue(total.uuid)
             val current = grouped[rowId]
+            val startedCount = total.startedCountFor()
             grouped[rowId] =
                 if (current == null) {
                     TrackTotalsEntity(
@@ -365,7 +366,7 @@ class StatsBackupManager(
                         totalMillis = total.totalMillis,
                         firstPlayedAt = total.firstPlayedAt,
                         lastPlayedAt = total.lastPlayedAt,
-                        startedCount = total.startedCount,
+                        startedCount = startedCount,
                         completedCount = total.completedCount,
                         skipCount = total.skipCount,
                         completedMillis = total.completedMillis,
@@ -376,8 +377,13 @@ class StatsBackupManager(
                         totalCount = maxOf(current.totalCount, total.totalCount),
                         totalMillis = maxOf(current.totalMillis, total.totalMillis),
                         firstPlayedAt = minOf(current.firstPlayedAt, total.firstPlayedAt),
-                        lastPlayedAt = maxOf(current.lastPlayedAt, total.lastPlayedAt),
-                        startedCount = maxOf(current.startedCount, total.startedCount),
+                        lastPlayedAt =
+                            maxOf(
+                                current.lastPlayedAt,
+                                total.lastPlayedAt,
+                                minOf(current.firstPlayedAt, total.firstPlayedAt),
+                            ),
+                        startedCount = maxOf(current.startedCount, startedCount),
                         completedCount = maxOf(current.completedCount, total.completedCount),
                         skipCount = maxOf(current.skipCount, total.skipCount),
                         completedMillis = maxOf(current.completedMillis, total.completedMillis),
@@ -391,12 +397,14 @@ class StatsBackupManager(
             } else {
                 grouped.values.map { group ->
                     val current = db.totalsDao().byRowId(group.trackRowId) ?: return@map group
+                    val firstPlayedAt = minOf(current.firstPlayedAt, group.firstPlayedAt)
                     TrackTotalsEntity(
                         trackRowId = group.trackRowId,
                         totalCount = maxOf(current.totalCount, group.totalCount),
                         totalMillis = maxOf(current.totalMillis, group.totalMillis),
-                        firstPlayedAt = minOf(current.firstPlayedAt, group.firstPlayedAt),
-                        lastPlayedAt = maxOf(current.lastPlayedAt, group.lastPlayedAt),
+                        firstPlayedAt = firstPlayedAt,
+                        lastPlayedAt =
+                            maxOf(current.lastPlayedAt, group.lastPlayedAt, firstPlayedAt),
                         startedCount = maxOf(current.startedCount, group.startedCount),
                         completedCount = maxOf(current.completedCount, group.completedCount),
                         skipCount = maxOf(current.skipCount, group.skipCount),
@@ -417,6 +425,8 @@ class StatsBackupManager(
             val rowId = uuidToRowId.getValue(day.uuid)
             val key = rowId to day.epochDay
             val current = grouped[key]
+            val firstPlayedAt = day.firstPlayedAtFor()
+            val startedCount = day.startedCountFor()
             grouped[key] =
                 if (current == null) {
                     TrackDailyEntity(
@@ -424,9 +434,9 @@ class StatsBackupManager(
                         epochDay = day.epochDay,
                         playCount = day.playCount,
                         playedMillis = day.playedMillis,
-                        lastPlayedAt = day.lastPlayedAt,
-                        firstPlayedAt = day.firstPlayedAt,
-                        startedCount = day.startedCount,
+                        lastPlayedAt = maxOf(day.lastPlayedAt, firstPlayedAt ?: 0L),
+                        firstPlayedAt = firstPlayedAt,
+                        startedCount = startedCount,
                         completedCount = day.completedCount,
                         skipCount = day.skipCount,
                         completedMillis = day.completedMillis,
@@ -440,10 +450,15 @@ class StatsBackupManager(
                         epochDay = day.epochDay,
                         playCount = maxOf(current.playCount, day.playCount),
                         playedMillis = maxOf(current.playedMillis, day.playedMillis),
-                        lastPlayedAt = maxOf(current.lastPlayedAt, day.lastPlayedAt),
+                        lastPlayedAt =
+                            maxOf(
+                                current.lastPlayedAt,
+                                day.lastPlayedAt,
+                                firstPlayedAt ?: 0L,
+                            ),
                         firstPlayedAt =
-                            listOfNotNull(current.firstPlayedAt, day.firstPlayedAt).minOrNull(),
-                        startedCount = maxOf(current.startedCount, day.startedCount),
+                            listOfNotNull(current.firstPlayedAt, firstPlayedAt).minOrNull(),
+                        startedCount = maxOf(current.startedCount, startedCount),
                         completedCount = maxOf(current.completedCount, day.completedCount),
                         skipCount = maxOf(current.skipCount, day.skipCount),
                         completedMillis = maxOf(current.completedMillis, day.completedMillis),
@@ -462,14 +477,16 @@ class StatsBackupManager(
                     db.dailyDao().since(Int.MIN_VALUE).associateBy { it.trackRowId to it.epochDay }
                 grouped.values.map { group ->
                     val current = existing[group.trackRowId to group.epochDay] ?: return@map group
+                    val firstPlayedAt =
+                        listOfNotNull(current.firstPlayedAt, group.firstPlayedAt).minOrNull()
                     TrackDailyEntity(
                         trackRowId = group.trackRowId,
                         epochDay = group.epochDay,
                         playCount = maxOf(current.playCount, group.playCount),
                         playedMillis = maxOf(current.playedMillis, group.playedMillis),
-                        lastPlayedAt = maxOf(current.lastPlayedAt, group.lastPlayedAt),
-                        firstPlayedAt =
-                            listOfNotNull(current.firstPlayedAt, group.firstPlayedAt).minOrNull(),
+                        lastPlayedAt =
+                            maxOf(current.lastPlayedAt, group.lastPlayedAt, firstPlayedAt ?: 0L),
+                        firstPlayedAt = firstPlayedAt,
                         startedCount = maxOf(current.startedCount, group.startedCount),
                         completedCount = maxOf(current.completedCount, group.completedCount),
                         skipCount = maxOf(current.skipCount, group.skipCount),
@@ -509,6 +526,40 @@ class StatsBackupManager(
             }
         }
 }
+
+/** A legacy row has no lifecycle counters; a counted play proves at least one start. */
+private fun BackupTotals.startedCountFor(): Int =
+    if (
+        startedCount == 0 &&
+            completedCount == 0 &&
+            skipCount == 0 &&
+            completedMillis == 0L &&
+            totalCount > 0
+    ) {
+        totalCount
+    } else {
+        startedCount
+    }
+
+private fun BackupDaily.startedCountFor(): Int =
+    if (
+        startedCount == 0 &&
+            completedCount == 0 &&
+            skipCount == 0 &&
+            completedMillis == 0L &&
+            playCount > 0
+    ) {
+        playCount
+    } else {
+        startedCount
+    }
+
+/**
+ * Legacy backups did not record the first instant of a day. The last observed instant is the only
+ * timestamp they carry, so it becomes the earliest known value. A zero-length skip stays unknown.
+ */
+private fun BackupDaily.firstPlayedAtFor(): Long? =
+    firstPlayedAt ?: lastPlayedAt.takeIf { it > 0L }
 
 private class BackupUuidUnionFind(uuids: Collection<String>) {
     private val parent = uuids.associateWith { it }.toMutableMap()

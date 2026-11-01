@@ -567,6 +567,7 @@ class PlaybackStatsRecorder(
         val epochDay = localEpochDay(wall, zone)
         val bucket = session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }
         bucket.firstPlayedAt = minOf(bucket.firstPlayedAt ?: wall, wall)
+        bucket.lastPlayedAt = maxOf(bucket.lastPlayedAt, wall)
         bucket.startedCount += 1
     }
 
@@ -581,6 +582,8 @@ class PlaybackStatsRecorder(
             val zone = zoneId()
             val epochDay = localEpochDay(wall, zone)
             val bucket = session.pending.getOrPut(epochDay) { newPendingDay(epochDay, zone) }
+            bucket.firstPlayedAt = minOf(bucket.firstPlayedAt ?: wall, wall)
+            bucket.lastPlayedAt = maxOf(bucket.lastPlayedAt, wall)
             val completed =
                 session.durationMillis > 0L &&
                     session.accumulatedMillis >=
@@ -885,12 +888,16 @@ class PlaybackStatsRecorder(
                             ) {
                                 null
                             } else {
+                                val firstPlayedAt =
+                                    pending.firstPlayedAt
+                                        ?: pending.lastPlayedAt
+                                        ?: session.lastWall
                                 FlushBucket(
                                     epochDay = epochDay,
                                     millis = pending.millis,
                                     plays = pending.plays,
-                                    firstPlayedAt = pending.firstPlayedAt ?: pending.lastPlayedAt,
-                                    lastPlayedAt = pending.lastPlayedAt,
+                                    firstPlayedAt = firstPlayedAt,
+                                    lastPlayedAt = maxOf(pending.lastPlayedAt, firstPlayedAt),
                                     startedCount = pending.startedCount,
                                     completedCount = pending.completedCount,
                                     skipCount = pending.skipCount,

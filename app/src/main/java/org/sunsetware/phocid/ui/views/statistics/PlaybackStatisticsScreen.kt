@@ -129,7 +129,9 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                 .collectAsStateWithLifecycle(emptyList<TrackAggregate>())
         val summary by
             remember(statsManager, range) { statsManager.repository.summary(range) }
-                .collectAsStateWithLifecycle(RangeSummary(0, 0, 0, 0))
+                .collectAsStateWithLifecycle(
+                    RangeSummary(plays = 0, millis = 0, touchedTracks = 0, activeDays = 0)
+                )
         val tracksByPath =
             remember(libraryIndex) { libraryIndex.tracks.values.associateBy { it.path } }
         val tracksByLocalUri =
@@ -268,7 +270,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                     item {
                         PlaybackStatisticsSummary(
                             totalPlays = summary.plays.toLong(),
-                            trackCount = summary.uniqueTracks,
+                            trackCount = summary.listenedTracks,
                             totalPlayedMillis = summary.millis,
                         )
                     }

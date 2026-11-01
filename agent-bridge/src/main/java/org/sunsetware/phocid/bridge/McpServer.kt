@@ -460,8 +460,9 @@ class McpServer(
             tool(
                 "stats_summary",
                 if (api6) {
-                    "Read playback totals for a range or today: plays, playedMillis, touched and " +
-                        "counted tracks, started/completed/skipped counts, and active days. All " +
+                    "Read playback totals for a range or today: plays, playedMillis, touched, " +
+                        "listened, and counted tracks, started/completed/skipped counts, and active " +
+                        "days. All " +
                         "timestamps are epoch milliseconds and boundaries are ISO-8601 with offset."
                 } else {
                     "Read playback totals for a range: plays, millis, unique tracks, and active days."
@@ -474,8 +475,8 @@ class McpServer(
                 "stats_top_tracks",
                 if (api6) {
                     "Read a byte-bounded page of per-track statistics for a range or one local day. " +
-                        "sort accepts plays, time, or millis. The response includes rangeTotals, " +
-                        "returned, hasMore, and lifecycle counts."
+                        "sort accepts plays or playedMillis. The response includes requestedRange, " +
+                        "effectiveRange, rangeTotals, returned, hasMore, and lifecycle counts."
                 } else if (api5) {
                     "Read the top played tracks for a range. The response is byte-bounded; check " +
                         "byteTruncated and continue from nextOffset."
@@ -499,8 +500,9 @@ class McpServer(
             tool(
                 "stats_daily",
                 if (api6) {
-                    "Read daily totals with uniqueTracks, countedTracks, lifecycle counts, and " +
-                        "local-day start/end milliseconds. range=all covers the last three years."
+                    "Read daily totals with touchedTracks, listenedTracks, countedTracks, " +
+                        "lifecycle counts, and local-day start/end milliseconds. range=all covers " +
+                        "the last three years."
                 } else {
                     "Read the daily playback trend for a range."
                 },
@@ -730,16 +732,16 @@ class McpServer(
                 )
                 .put(
                     "sort",
-                    stringProp("plays, time, or millis")
+                    stringProp("plays or playedMillis")
                         .put(
                             "enum",
                             JSONArray().apply {
-                                listOf("plays", "time", "millis").forEach { put(it) }
+                                listOf("plays", "playedMillis").forEach { put(it) }
                             },
                         ),
                 )
         } else {
-            properties.put("sort", stringProp("plays or time"))
+            properties.put("sort", stringProp("plays or playedMillis"))
         }
         return JSONObject()
             .put("type", "object")
@@ -866,11 +868,11 @@ class McpServer(
     }
 
     private fun rangeProp(): JSONObject =
-        stringProp("today, 1d, 7d, 30d, month, 90d, 365d, year, 3y, or all")
+        stringProp("today, 7d, 30d, month, 90d, 365d, year, 3y, or all")
             .put(
                 "enum",
                 JSONArray().apply {
-                    listOf("today", "1d", "7d", "30d", "month", "90d", "365d", "year", "3y", "all")
+                    listOf("today", "7d", "30d", "month", "90d", "365d", "year", "3y", "all")
                         .forEach { put(it) }
                 },
             )

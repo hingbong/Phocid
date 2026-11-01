@@ -20,7 +20,7 @@ import java.io.File
             FingerprintCacheEntity::class,
             PlaybackOutboxEntity::class,
         ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class StatsDatabase : RoomDatabase() {
@@ -113,6 +113,46 @@ abstract class StatsDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * 5 -> 6 backfills the values that older rows could not carry.
+         *
+         * The previous one-shot write could not know the first instant of a legacy day; the last
+         * observed instant is the only recorded value and is therefore used as the earliest known
+         * timestamp. A start with no listening time keeps a null first instant (lastPlayedAt is 0).
+         * Rows written after API 6 always carry both instants. Rows that only recorded a start can
+         * have first > last, so last is raised to first.
+         *
+         * Lifecycle counters are a lower bound for legacy rows: a counted play proves at least one
+         * start, but the old schema never recorded skips or completions. New rows are unaffected.
+         */
+        internal val MIGRATION_5_6 =
+            object : Migration(5, 6) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "UPDATE track_daily SET firstPlayedAt = lastPlayedAt " +
+                            "WHERE firstPlayedAt IS NULL AND lastPlayedAt > 0"
+                    )
+                    db.execSQL(
+                        "UPDATE track_daily SET lastPlayedAt = firstPlayedAt " +
+                            "WHERE firstPlayedAt IS NOT NULL AND firstPlayedAt > lastPlayedAt"
+                    )
+                    db.execSQL(
+                        "UPDATE track_totals SET lastPlayedAt = firstPlayedAt " +
+                            "WHERE firstPlayedAt > lastPlayedAt"
+                    )
+                    db.execSQL(
+                        "UPDATE track_daily SET startedCount = playCount " +
+                            "WHERE playCount > 0 AND startedCount = 0 AND completedCount = 0 " +
+                            "AND skipCount = 0 AND completedMillis = 0"
+                    )
+                    db.execSQL(
+                        "UPDATE track_totals SET startedCount = totalCount " +
+                            "WHERE totalCount > 0 AND startedCount = 0 AND completedCount = 0 " +
+                            "AND skipCount = 0 AND completedMillis = 0"
+                    )
+                }
+            }
+
         @Volatile private var instance: StatsDatabase? = null
 
         fun get(context: Context): StatsDatabase =
@@ -124,7 +164,13 @@ abstract class StatsDatabase : RoomDatabase() {
         private fun build(context: Context): StatsDatabase =
             Room.databaseBuilder(context, StatsDatabase::class.java, NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                )
                 .fallbackToDestructiveMigration()
                 .addCallback(
                     object : Callback() {

@@ -125,9 +125,28 @@ class StatsRepository(
     fun dailyTrend(range: StatsRange): Flow<List<DayBucket>> {
         // ALL still shows a trend, but intentionally only over the last three years. That window
         // is a bounded range too, so it ends at today just like the explicit ranges.
-        val today = LocalDate.now(zoneId())
+        val zone = zoneId()
+        val today = LocalDate.now(zone)
         val window = if (range.isAll) StatsRange.YEARS_3 else range
-        return db.dailyDao().dailyTrend(sinceDay(window, today), today.toEpochDay().toInt())
+        return db.dailyDao()
+            .dailyTrend(sinceDay(window, today), today.toEpochDay().toInt())
+            .map { days -> days.map { it.withDayBoundaries(zone) } }
+    }
+
+    /**
+     * A day is a local date, so its boundaries are a property of the response zone rather than of
+     * any one track row. Rows written before API 6 have no captured boundaries; deriving them here
+     * also keeps a single legacy row from nulling the whole day.
+     */
+    private fun DayBucket.withDayBoundaries(zone: ZoneId): DayBucket {
+        val date = LocalDate.ofEpochDay(epochDay.toLong())
+        val start = date.atStartOfDay(zone)
+        val end = date.plusDays(1).atStartOfDay(zone)
+        return copy(
+            dayStartMs = dayStartMs ?: start.toInstant().toEpochMilli(),
+            dayEndMs = dayEndMs ?: end.toInstant().toEpochMilli(),
+            utcOffsetMinutes = utcOffsetMinutes ?: (start.offset.totalSeconds / 60),
+        )
     }
 
     /**

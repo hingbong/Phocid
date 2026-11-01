@@ -168,7 +168,8 @@ class McpServerTest {
             assertTrue(summary, summary.contains("completed"))
             assertTrue(top, top.contains("rangeTotals"))
             assertTrue(top, top.contains("\"day\""))
-            assertTrue(top, top.contains("millis"))
+            assertTrue(top, top.contains("playedMillis"))
+            assertFalse(top, top.contains("\"millis\""))
             assertTrue(tracks, tracks.contains("stats_tracks"))
             assertTrue(tracks, tracks.contains("playedMillis"))
         } finally {

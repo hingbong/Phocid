@@ -42,7 +42,10 @@ data class DayBucket(
     val epochDay: Int,
     val plays: Int,
     val millis: Long,
-    val uniqueTracks: Int = 0,
+    /** Distinct tracks with any row for this day, including a zero-length skip. */
+    val touchedTracks: Int = 0,
+    /** Distinct tracks with any listening time or a counted play. */
+    val listenedTracks: Int = 0,
     val countedTracks: Int = 0,
     val startedCount: Int = 0,
     val completedCount: Int = 0,
@@ -339,15 +342,17 @@ interface TrackDailyDao {
         SELECT epochDay AS epochDay,
                SUM(playCount) AS plays,
                SUM(playedMillis) AS millis,
-               COUNT(DISTINCT trackRowId) AS uniqueTracks,
+               COUNT(DISTINCT trackRowId) AS touchedTracks,
+               COUNT(DISTINCT CASE WHEN playedMillis > 0 OR playCount > 0 THEN trackRowId END)
+                   AS listenedTracks,
                COUNT(DISTINCT CASE WHEN playCount > 0 THEN trackRowId END) AS countedTracks,
                SUM(startedCount) AS startedCount,
                SUM(completedCount) AS completedCount,
                SUM(skipCount) AS skipCount,
                SUM(completedMillis) AS completedMillis,
-               CASE WHEN COUNT(dayStartMs) = COUNT(*) THEN MIN(dayStartMs) ELSE NULL END AS dayStartMs,
-               CASE WHEN COUNT(dayEndMs) = COUNT(*) THEN MIN(dayEndMs) ELSE NULL END AS dayEndMs,
-               CASE WHEN COUNT(utcOffsetMinutes) = COUNT(*) THEN MIN(utcOffsetMinutes) ELSE NULL END AS utcOffsetMinutes
+               MIN(dayStartMs) AS dayStartMs,
+               MIN(dayEndMs) AS dayEndMs,
+               MIN(utcOffsetMinutes) AS utcOffsetMinutes
         FROM track_daily
         WHERE epochDay >= :sinceDay AND epochDay <= :untilDay
         GROUP BY epochDay
@@ -360,7 +365,9 @@ interface TrackDailyDao {
         """
         SELECT COALESCE(SUM(playCount), 0) AS plays,
                COALESCE(SUM(playedMillis), 0) AS millis,
-               COUNT(DISTINCT trackRowId) AS uniqueTracks,
+               COUNT(DISTINCT trackRowId) AS touchedTracks,
+               COUNT(DISTINCT CASE WHEN playedMillis > 0 OR playCount > 0 THEN trackRowId END)
+                   AS listenedTracks,
                COUNT(DISTINCT epochDay) AS activeDays,
                COUNT(DISTINCT CASE WHEN playCount > 0 THEN trackRowId END) AS countedTracks,
                COALESCE(SUM(startedCount), 0) AS startedCount,
@@ -387,8 +394,11 @@ interface TrackDailyDao {
 data class RangeSummary(
     val plays: Int,
     val millis: Long,
-    val uniqueTracks: Int,
+    /** Distinct tracks with any row in the range, including a zero-length skip. */
+    val touchedTracks: Int,
     val activeDays: Int,
+    /** Distinct tracks with any listening time or a counted play. */
+    val listenedTracks: Int = 0,
     val countedTracks: Int = 0,
     val startedCount: Int = 0,
     val completedCount: Int = 0,
@@ -559,8 +569,10 @@ interface TrackTotalsDao {
         """
         SELECT COALESCE(SUM(totalCount), 0) AS plays,
                COALESCE(SUM(totalMillis), 0) AS millis,
-               COUNT(*) AS uniqueTracks,
+               COUNT(*) AS touchedTracks,
                (SELECT COUNT(*) FROM active_days) AS activeDays,
+               COUNT(CASE WHEN totalMillis > 0 OR totalCount > 0 THEN 1 END)
+                   AS listenedTracks,
                COUNT(CASE WHEN totalCount > 0 THEN 1 END) AS countedTracks,
                COALESCE(SUM(startedCount), 0) AS startedCount,
                COALESCE(SUM(completedCount), 0) AS completedCount,
