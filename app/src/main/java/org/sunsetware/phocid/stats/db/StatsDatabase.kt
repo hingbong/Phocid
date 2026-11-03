@@ -195,7 +195,6 @@ abstract class StatsDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                 )
-                .fallbackToDestructiveMigration()
                 .addCallback(
                     object : Callback() {
                         override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {

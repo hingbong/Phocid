@@ -334,6 +334,80 @@ class PlaybackStatsRecorderTest {
         }
 
     @Test
+    fun seekToTheEndOfTheTrackDoesNotCountAsACompletedPlay() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val file = temporaryFolder.newFile("SeekedToEnd.flac")
+
+            recorder.onResumed()
+            recorder.onTrackStarted(
+                meta("content://seek-end/1", file, durationMillis = 300_000L)
+            )
+            // The user drags the seek bar to the last second after 5 s of listening. The player
+            // reports STATE_ENDED, but the session must fall back to the accumulated threshold.
+            clock.advance(5_000L)
+            recorder.onSeek(seekedToEnd = true)
+            recorder.onTrackFinished(endedByPlayer = true)
+            awaitSettled(recorder)
+
+            val totals =
+                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            assertThat(totals.startedCount).isEqualTo(1)
+            assertThat(totals.completedCount).isEqualTo(0)
+            assertThat(totals.skipCount).isEqualTo(1)
+            assertThat(totals.completedMillis).isEqualTo(0L)
+            assertThat(totals.totalMillis).isEqualTo(5_000L)
+        }
+
+    @Test
+    fun seekToTheEndStillCompletesWhenMostOfTheTrackWasPlayed() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val file = temporaryFolder.newFile("SeekedToEndAfterMost.flac")
+
+            recorder.onResumed()
+            recorder.onTrackStarted(
+                meta("content://seek-end-most/1", file, durationMillis = 60_000L)
+            )
+            // 59.5 s of a 60 s track: the accumulated time covers the duration minus the
+            // tolerance, so even a non-authoritative end counts as completed.
+            clock.advance(59_500L)
+            recorder.onSeek(seekedToEnd = true)
+            recorder.onTrackFinished(endedByPlayer = true)
+            awaitSettled(recorder)
+
+            val totals =
+                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            assertThat(totals.completedCount).isEqualTo(1)
+            assertThat(totals.skipCount).isEqualTo(0)
+            assertThat(totals.completedMillis).isEqualTo(59_500L)
+        }
+
+    @Test
+    fun plainSeekDoesNotDemoteARealPlayerEnd() =
+        runBlocking<Unit> {
+            val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)
+            val recorder = createRecorder(clock)
+            val file = temporaryFolder.newFile("PlainSeek.flac")
+
+            recorder.onResumed()
+            recorder.onTrackStarted(
+                meta("content://seek-middle/1", file, durationMillis = 60_000L)
+            )
+            clock.advance(5_000L)
+            recorder.onSeek()
+            recorder.onTrackFinished(endedByPlayer = true)
+            awaitSettled(recorder)
+
+            val totals =
+                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            assertThat(totals.completedCount).isEqualTo(1)
+            assertThat(totals.skipCount).isEqualTo(0)
+        }
+
+    @Test
     fun zeroDurationTrackCompletesOnlyWhenThePlayerReportsTheEnd() =
         runBlocking<Unit> {
             val clock = FakeClock(Instant.parse("2026-01-01T12:00:00Z").toEpochMilli(), 0L)

@@ -231,6 +231,30 @@ class StatsMigrationTest {
     }
 
     @Test
+    fun registeredMigrationsCoverEveryConsecutiveStepUpToTheCurrentVersion() {
+        // The database no longer falls back to destructive migration, so a missed step would
+        // crash (or, before that, silently wipe user statistics on older builds). Every version
+        // from 1 up to the current one must have a registered consecutive migration.
+        val currentVersion = 7
+        val migrations =
+            listOf(
+                StatsDatabase.MIGRATION_1_2,
+                StatsDatabase.MIGRATION_2_3,
+                StatsDatabase.MIGRATION_3_4,
+                StatsDatabase.MIGRATION_4_5,
+                StatsDatabase.MIGRATION_5_6,
+                StatsDatabase.MIGRATION_6_7,
+            )
+        val steps = migrations.associate { it.startVersion to it.endVersion }
+
+        (1 until currentVersion).forEach { from ->
+            assertThat(steps).containsKey(from)
+            assertThat(steps[from]).isEqualTo(from + 1)
+        }
+        assertThat(migrations).hasSize(currentVersion - 1)
+    }
+
+    @Test
     fun migration3To4AddsLifecycleAndDayBoundaryColumns() {
         val db = helper.writableDatabase
         db.execSQL(CREATE_TRACK_DAILY)

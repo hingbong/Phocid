@@ -65,6 +65,8 @@ import org.sunsetware.phocid.utils.Random
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
     companion object {
+        private const val SEEK_TO_END_TOLERANCE_MILLIS = 1_000L
+
         @Volatile
         var isRunning = false
             private set
@@ -115,9 +117,12 @@ class PlaybackService : MediaLibraryService() {
             GlobalData.unfilteredTrackIndex.value,
         )
         // The listener may already have started a session while restoring player state. This call
-        // only fills the gap when restore did not trigger a transition. A restored ENDED player
-        // has no active playback to attribute; the next play callback opens the session.
-        if (player.playbackState != Player.STATE_ENDED) {
+        // only fills the gap when restore did not trigger a transition. Opening a session for a
+        // merely restored (paused or buffered) player would inflate startedCount even when the
+        // user never presses play this launch, so require actual playback; the first
+        // onIsPlayingChanged(true) opens the session otherwise. A restored ENDED player has no
+        // active playback to attribute either.
+        if (player.playbackState != Player.STATE_ENDED && player.isPlaying) {
             syncStatsSession(player.currentMediaItem, transitionReason = null)
         }
         if (player.isPlaying) statisticsRecorder.onResumed() else statisticsRecorder.onPaused()
@@ -272,9 +277,25 @@ class PlaybackService : MediaLibraryService() {
                 newPosition: Player.PositionInfo,
                 reason: Int,
             ) {
-                if (reason == Player.DISCONTINUITY_REASON_SEEK) statisticsRecorder.onSeek()
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    statisticsRecorder.onSeek(seekedToEnd = isSeekToTrackEnd(newPosition, player))
+                }
             }
         }
+    }
+
+    /**
+     * A seek that lands at (or very near) the end of the track makes the player report
+     * STATE_ENDED immediately. The recorder must not treat that as a real completion, so the seek
+     * is flagged and the usual accumulated-time threshold decides instead.
+     */
+    private fun isSeekToTrackEnd(
+        newPosition: Player.PositionInfo,
+        player: CustomizedPlayer,
+    ): Boolean {
+        val duration = player.duration
+        return duration != C.TIME_UNSET &&
+            newPosition.positionMs >= duration - SEEK_TO_END_TOLERANCE_MILLIS
     }
 
     private fun trackForMediaItem(mediaItem: MediaItem?): Track? {

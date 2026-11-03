@@ -114,9 +114,16 @@ counts as a skip; a manual transition within the completion tolerance (one secon
 for normal-length tracks) counts as completed. The player's own end signal is
 authoritative: it counts as completed even at non-1x speed or when metadata has no
 duration, and it closes the last track without waiting for another transition. A
-zero-duration track is completed only when the player reports that it ended.
-Pausing or service shutdown does not close the lifecycle, so a resumed session is
-not a skip. Legacy rows repaired by the
+seek that lands at (or within one second of) the end of the track also triggers
+the player's end signal, but that end is not authoritative: such a session only
+counts as completed when its accumulated listening covers the duration minus the
+same tolerance, so dragging the seek bar to the last second of a long track is a
+skip. A zero-duration track is completed only when the player reports that it
+ended. Pausing or service shutdown does not close the lifecycle, so a resumed
+session is not a skip. Restoring the playback service (process restart with a
+saved queue) does not open a statistics session by itself: `startedCount` is only
+incremented when playback actually starts on the restored item. Legacy rows
+repaired by the
 5 -> 6 and 6 -> 7 migrations raise `startedCount` to its provable lower bound:
 a counted play, completed/skipped session, or listening timestamp proves at least
 one start. Skip/completed counters stay zero for data that never recorded them.

@@ -169,6 +169,7 @@ class PlaybackStatsRecorder(
         var countPlayedMillis = 0L
         var lastWall = segmentWall
         val pending = LinkedHashMap<Int, PendingDay>()
+        var seekedToEnd = false
         var retired = false
         var lifecycleEnded = false
         var writeQueued = false
@@ -285,12 +286,18 @@ class PlaybackStatsRecorder(
         requestFlush()
     }
 
-    fun onSeek() {
+    /**
+     * A seek interrupts the running interval. [seekedToEnd] marks a seek that landed at (or very
+     * near) the end of the track: the player will report STATE_ENDED for it, but that end was
+     * caused by the user, so it must not be treated as an authoritative completion.
+     */
+    fun onSeek(seekedToEnd: Boolean = false) {
         synchronized(lock) {
             if (shuttingDown) return
             val wall = wallMillis()
             val elapsed = elapsedRealtime()
             current?.let {
+                if (seekedToEnd) it.seekedToEnd = true
                 if (it.running) accrueLocked(it, wall, elapsed)
                 it.lastWall = maxOf(it.lastWall, wall)
                 if (it.running) {
@@ -609,12 +616,14 @@ class PlaybackStatsRecorder(
 
     /**
      * A player-reported end is authoritative: it covers playback speed, seeking, and tracks whose
-     * metadata has no duration. Manual transitions still need enough played time, with the
+     * metadata has no duration. A seek that landed at the very end of the track also produces a
+     * player-reported end, but that one was user-caused, so it falls back to the same accumulated
+     * threshold as a manual transition. Manual transitions still need enough played time, with the
      * tolerance capped at half the duration so a short track cannot be completed immediately.
      */
     private fun isCompleted(session: Session, endedByPlayer: Boolean): Boolean {
         if (session.accumulatedMillis <= 0L) return false
-        if (endedByPlayer) return true
+        if (endedByPlayer && !session.seekedToEnd) return true
         if (session.durationMillis <= 0L) return false
         val tolerance =
             COMPLETION_TOLERANCE_MILLIS.coerceAtMost(session.durationMillis / 2)
