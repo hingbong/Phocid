@@ -122,8 +122,16 @@ jobs:
       - name: Report unit test failures
         if: failure() && steps.unit_tests.outcome == 'failure'
         run: |
+          # The console log truncates test failure messages; the JUnit XML has them verbatim, and
+          # the annotation budget is small, so report those first.
+          for report in app/build/test-results/testDebugUnitTest/*.xml agent-bridge/build/test-results/testDebugUnitTest/*.xml; do
+            [ -f "$report" ] || continue
+            grep -o '<failure[^>]*message="[^"]*"' "$report" | head -5 | while IFS= read -r line; do
+              echo "::error::${report}: ${line}"
+            done
+          done
           if [ -f "$RUNNER_TEMP/unit-test.log" ]; then
-            grep -nE "(^e: | error: |FAILED|> Task .* FAILED|AssertionError|expected:|but was:)" "$RUNNER_TEMP/unit-test.log" | head -20 | while IFS= read -r line; do
+            grep -nE "(^e: | error: |FAILED|> Task .* FAILED|AssertionError|expected:|but was:)" "$RUNNER_TEMP/unit-test.log" | head -5 | while IFS= read -r line; do
               echo "::error::$line"
             done
             grep -n -A16 -B2 -E "What went wrong|Could not resolve|Failed to apply plugin|requires Gradle" "$RUNNER_TEMP/unit-test.log" | head -60 | while IFS= read -r line; do
@@ -132,13 +140,6 @@ jobs:
             echo "--- test log tail ---"
             tail -80 "$RUNNER_TEMP/unit-test.log"
           fi
-          # The console log truncates test failure messages; the JUnit XML has them verbatim.
-          for report in app/build/test-results/testDebugUnitTest/*.xml agent-bridge/build/test-results/testDebugUnitTest/*.xml; do
-            [ -f "$report" ] || continue
-            grep -o '<failure[^>]*message="[^"]*"' "$report" | head -5 | while IFS= read -r line; do
-              echo "::error::${report}: ${line}"
-            done
-          done
 
       - name: Upload unit test reports
         if: failure() && steps.unit_tests.outcome == 'failure'
