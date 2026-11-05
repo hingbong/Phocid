@@ -109,6 +109,16 @@ class BridgeService : Service() {
                 buildNotification("Starting local MCP server…"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
+            // Binding still succeeds without the grant, but Android 17+ drops the traffic, so
+            // refuse a listen that other devices can never reach.
+            if (LocalNetworkPermission.isMissing(this, config.host)) {
+                return failStart(
+                    config,
+                    "Local network access permission is not granted; Android 17+ blocks " +
+                        "connections from other devices to ${config.host}:${config.port}. " +
+                        "Grant the permission in system settings, then start the bridge again.",
+                )
+            }
             val source = BinderPhocidDataSource(this)
             dataSource = source
             instance =
@@ -137,20 +147,11 @@ class BridgeService : Service() {
             dataSource?.close()
             dataSource = null
             server = null
-            _state.update {
-                it.copy(
-                    running = false,
-                    starting = false,
-                    host = config.host,
-                    port = config.port,
-                    error =
-                        "Cannot listen on ${config.host}:${config.port}: " +
-                            (t.message ?: t.javaClass.simpleName),
-                )
-            }
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-            return START_NOT_STICKY
+            return failStart(
+                config,
+                "Cannot listen on ${config.host}:${config.port}: " +
+                    (t.message ?: t.javaClass.simpleName),
+            )
         }
     }
 
@@ -169,6 +170,22 @@ class BridgeService : Service() {
         dataSource?.close()
         dataSource = null
         _state.update { it.copy(running = false) }
+    }
+
+    /** Reports [message] and shuts the foreground service down instead of retrying forever. */
+    private fun failStart(config: BridgeConfig, message: String): Int {
+        _state.update {
+            it.copy(
+                running = false,
+                starting = false,
+                host = config.host,
+                port = config.port,
+                error = message,
+            )
+        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        return START_NOT_STICKY
     }
 
     private fun notificationText(config: BridgeConfig): String {

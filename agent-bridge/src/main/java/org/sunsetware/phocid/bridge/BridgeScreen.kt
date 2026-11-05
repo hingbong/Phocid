@@ -1,11 +1,16 @@
 package org.sunsetware.phocid.bridge
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -77,6 +82,13 @@ fun BridgeScreen() {
     var token by remember { mutableStateOf(TokenStore.getOrCreate(context)) }
     var showRegenerateDialog by remember { mutableStateOf(false) }
     var batteryUnrestricted by remember { mutableStateOf(isBatteryUnrestricted(context)) }
+    var localNetworkGranted by remember {
+        mutableStateOf(LocalNetworkPermission.isGranted(context))
+    }
+    var localNetworkError by remember { mutableStateOf<String?>(null) }
+    var pendingConfig by remember { mutableStateOf<BridgeConfig?>(null) }
+    var pendingRestart by remember { mutableStateOf(false) }
+    var showLocalNetworkRationale by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
@@ -84,6 +96,8 @@ fun BridgeScreen() {
     LaunchedEffect(lifecycleState) {
         if (lifecycleState == Lifecycle.State.RESUMED) {
             batteryUnrestricted = isBatteryUnrestricted(context)
+            // Re-read after returning from system settings, where the user may have revoked it.
+            localNetworkGranted = LocalNetworkPermission.isGranted(context)
         }
     }
 
@@ -99,6 +113,10 @@ fun BridgeScreen() {
         if (state.running) BridgeConfig(state.host, state.port, savedConfig.allowWrites)
         else savedConfig
     val endpoint = BridgeEndpoint.httpUrl(displayedConfig.host, displayedConfig.port)
+    // While running, warn about the address that is actually bound, not the draft input.
+    val localNetworkHint =
+        LocalNetworkPermission.isRequired(if (state.running) state.host else normalizedHost) &&
+            !localNetworkGranted
 
     fun copy(label: String, value: String) {
         val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -106,22 +124,70 @@ fun BridgeScreen() {
         scope.launch { snackbarHostState.showSnackbar("Copied to clipboard") }
     }
 
-    fun startServer() {
-        val config = draftConfig ?: return
+    fun applyConfig(config: BridgeConfig) {
         BridgeSettings.save(context, config)
         savedConfig = config
         hostInput = config.host
         portInput = config.port.toString()
-        BridgeService.start(context)
     }
 
-    fun restartServer() {
-        val config = draftConfig ?: return
-        BridgeSettings.save(context, config)
-        savedConfig = config
-        hostInput = config.host
-        portInput = config.port.toString()
-        BridgeService.restart(context)
+    fun launchServer(config: BridgeConfig, restart: Boolean) {
+        applyConfig(config)
+        localNetworkError = null
+        if (restart) BridgeService.restart(context) else BridgeService.start(context)
+    }
+
+    val requestLocalNetworkAccess =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            localNetworkGranted = granted
+            val config = pendingConfig
+            val restart = pendingRestart
+            pendingConfig = null
+            pendingRestart = false
+            if (config != null) {
+                if (granted) {
+                    launchServer(config, restart)
+                } else {
+                    localNetworkError =
+                        if (restart) {
+                            "Not restarted: Android 17+ blocks connections to " +
+                                "${config.host}:${config.port} without local network " +
+                                "access. The server is still listening on its previous " +
+                                "address; grant the permission and try again."
+                        } else {
+                            "Not started: Android 17+ blocks connections from other " +
+                                "devices to ${config.host}:${config.port} without local " +
+                                "network access. Grant the permission in system settings, " +
+                                "then start the server again."
+                        }
+                }
+            }
+        }
+
+    fun startOrRestart(config: BridgeConfig, restart: Boolean) {
+        if (LocalNetworkPermission.isMissing(context, config.host)) {
+            pendingConfig = config
+            pendingRestart = restart
+            localNetworkError = null
+            showLocalNetworkRationale = true
+            return
+        }
+        launchServer(config, restart)
+    }
+
+    fun cancelLocalNetworkStart() {
+        showLocalNetworkRationale = false
+        pendingConfig = null
+        pendingRestart = false
+        localNetworkError =
+            if (state.running) {
+                "Not applied: local network access is required to listen on a " +
+                    "non-loopback address. The server is still running on its previous " +
+                    "address."
+            } else {
+                "Not started: other devices cannot reach the bridge without the local " +
+                    "network access permission."
+            }
     }
 
     Scaffold(
@@ -158,12 +224,28 @@ fun BridgeScreen() {
                 portError = portError,
                 dirty = dirty,
                 allowWrites = allowWritesInput,
+                localNetworkHint = localNetworkHint,
+                localNetworkError = localNetworkError,
                 onHostChange = { hostInput = it },
                 onPortChange = { portInput = it },
                 onAllowWritesChange = { allowWritesInput = it },
-                onStart = { startServer() },
+                onStart = { draftConfig?.let { startOrRestart(it, restart = false) } },
                 onStop = { BridgeService.stop(context) },
-                onRestart = { restartServer() },
+                onRestart = { draftConfig?.let { startOrRestart(it, restart = true) } },
+                onOpenPermissionSettings = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", context.packageName, null),
+                            )
+                        )
+                    }.onFailure {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Could not open app settings")
+                        }
+                    }
+                },
             )
             TokenCard(
                 token = token,
@@ -228,6 +310,39 @@ fun BridgeScreen() {
             },
             dismissButton = {
                 TextButton(onClick = { showRegenerateDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showLocalNetworkRationale) {
+        AlertDialog(
+            onDismissRequest = { cancelLocalNetworkStart() },
+            title = { Text("Local network access required") },
+            text = {
+                Text(
+                    "Android 17 and later block other devices from reaching this phone's " +
+                        "local network unless this app has the local network access " +
+                        "permission. The system prompt appears next. Without it, USB " +
+                        "debugging with adb forward still works, but Wi-Fi clients cannot " +
+                        "connect."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLocalNetworkRationale = false
+                        if (Build.VERSION.SDK_INT >= LocalNetworkPermission.SDK_LEVEL) {
+                            requestLocalNetworkAccess.launch(
+                                Manifest.permission.ACCESS_LOCAL_NETWORK,
+                            )
+                        }
+                    }
+                ) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { cancelLocalNetworkStart() }) { Text("Not now") }
             },
         )
     }
@@ -361,12 +476,15 @@ private fun ServerCard(
     portError: String?,
     dirty: Boolean,
     allowWrites: Boolean,
+    localNetworkHint: Boolean,
+    localNetworkError: String?,
     onHostChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
     onAllowWritesChange: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRestart: () -> Unit,
+    onOpenPermissionSettings: () -> Unit,
 ) {
     Card(
         colors =
@@ -445,6 +563,28 @@ private fun ServerCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+            if (localNetworkHint) {
+                Text(
+                    text =
+                        if (state.running) {
+                            "Local network access is not granted, so other devices cannot " +
+                                "reach this phone. Grant it in system settings."
+                        } else {
+                            "Android 17+ asks for local network access before other devices " +
+                                "can connect to this address."
+                        },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            localNetworkError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                TextButton(onClick = onOpenPermissionSettings) { Text("Open app settings") }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

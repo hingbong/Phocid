@@ -48,6 +48,13 @@ object BridgeEndpoint {
         return host == "127.0.0.1" || host.startsWith("127.") || host == "::1"
     }
 
+    /**
+     * Android 17 (API 37) requires ACCESS_LOCAL_NETWORK for local network traffic, and inbound
+     * connections to a non-loopback listen address count as such traffic. Loopback stays exempt,
+     * so the default bind and adb forward keep working without the permission.
+     */
+    fun requiresLocalNetworkPermission(raw: String): Boolean = !isLoopback(raw)
+
     fun httpUrl(host: String, port: Int): String {
         val normalized = normalizeHost(host)
         val displayHost =

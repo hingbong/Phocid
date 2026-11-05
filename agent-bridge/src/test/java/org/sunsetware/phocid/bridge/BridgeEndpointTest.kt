@@ -35,6 +35,20 @@ class BridgeEndpointTest {
     }
 
     @Test
+    fun loopbackDoesNotRequireLocalNetworkPermission() {
+        listOf("127.0.0.1", "127.0.0.2", "localhost", "::1", "[::1]").forEach {
+            assertFalse(BridgeEndpoint.requiresLocalNetworkPermission(it))
+        }
+    }
+
+    @Test
+    fun nonLoopbackRequiresLocalNetworkPermission() {
+        listOf("0.0.0.0", "::", "192.168.1.10", "10.0.0.1", "2001:db8::1").forEach {
+            assertTrue(BridgeEndpoint.requiresLocalNetworkPermission(it))
+        }
+    }
+
+    @Test
     fun acceptsNumericAddresses() {
         assertTrue(BridgeEndpoint.isNumericHost("127.0.0.1"))
         assertTrue(BridgeEndpoint.isNumericHost("0.0.0.0"))

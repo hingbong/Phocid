@@ -9,6 +9,7 @@ port can be changed in the app.
 Phocid's main APK has no `INTERNET` permission. The bridge owns:
 
 - `INTERNET`
+- `ACCESS_LOCAL_NETWORK` (Android 17+ only; requested at runtime)
 - the MCP/HTTP server
 - the bearer token
 
@@ -16,6 +17,14 @@ The main APK exposes a read-only Binder query API to the bridge, plus one
 opt-in method for local sort keys. The bridge translates MCP tool calls into
 Binder calls. The agent app never needs Android native integration; it only
 sees a standard MCP HTTP endpoint.
+
+Android 17 (API 37) made local network access a runtime permission: inbound
+connections on a non-loopback address are blocked without it, while loopback
+and `adb forward` keep working. The bridge declares `ACCESS_LOCAL_NETWORK`,
+asks for it when you start on such an address, and refuses to start instead of
+silently accepting connections that can never arrive. Android 16 and earlier
+grant local network access implicitly through `INTERNET` and do not know the
+permission, so the bridge skips the check and the request there.
 
 ## Current state
 
@@ -205,8 +214,10 @@ and the current UTC time. The About card displays all three values.
 1. Install `agent-bridge-release.apk`.
 2. Open **Phocid Agent Bridge**. The default listen address is
    `127.0.0.1:8765`; change **Listen address** and **Port** if needed.
-3. Tap **Start server**. **Allow agent writes** is off by default; enabling it
-   exposes only `library_update_sort_keys`. Changing settings while running uses
+3. Tap **Start server**. On Android 17+, a non-loopback listen address asks for
+   the **local network access** permission first; without it other devices
+   cannot connect. **Allow agent writes** is off by default; enabling it exposes
+   only `library_update_sort_keys`. Changing settings while running uses
    **Apply & restart**, which disconnects current MCP sessions.
 4. In OpenMinis, add an MCP server:
 
@@ -237,6 +248,12 @@ same version is reported by MCP `initialize` (`serverInfo.version`) and by
 - Only IPv4/IPv6 literals are accepted. `localhost` is normalized to
   `127.0.0.1`; host names and URLs are rejected.
 - Ports must be in `1024-65535`. The default is `8765`.
+- On Android 17+ the local network access permission is required before other
+  devices can reach a non-loopback listen address (`0.0.0.0`, `::`, or a LAN
+  IP). Denying it leaves the server stopped rather than listening unreachably.
+- Loopback (`127.0.0.1`, `::1`, `localhost`) and
+  `adb forward tcp:8765 tcp:8765` need no local network permission; USB
+  debugging keeps working.
 
 ## Debug with curl
 
