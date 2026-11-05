@@ -1,13 +1,16 @@
 package org.sunsetware.phocid
 
 import android.annotation.SuppressLint
+import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import android.widget.RemoteViews
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -55,7 +58,6 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import java.util.Locale
 import kotlin.coroutines.coroutineContext
-import kotlin.math.min
 import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -331,6 +333,23 @@ class MainAppWidget : GlanceAppWidget() {
         }
     }
 
+    override fun onCompositionError(
+        context: Context,
+        glanceId: GlanceId,
+        appWidgetId: Int,
+        throwable: Throwable,
+    ) {
+        // Android 17 rejects an update whose bitmaps exceed the display budget with an
+        // IllegalArgumentException, and Glance routes that here. Show a layout with no bitmaps
+        // at all so the widget keeps rendering something instead of freezing on stale content.
+        Log.w("Phocid", "Failed to compose widget $appWidgetId, showing fallback", throwable)
+        val fallback =
+            RemoteViews(context.packageName, android.R.layout.simple_list_item_1).apply {
+                setTextViewText(android.R.id.text1, context.getString(R.string.app_name))
+            }
+        AppWidgetManager.getInstance(context).updateAppWidget(appWidgetId, fallback)
+    }
+
     @Composable
     private fun TrackInfo(
         currentTrack: Track?,
@@ -495,15 +514,31 @@ class MainAppWidget : GlanceAppWidget() {
         }
     }
 
-    // Android 17 enforces a 6 * display area byte cap on RemoteViews bitmaps. Keep the
-    // artwork small enough even if an ARGB_8888 bitmap is serialized twice.
     private fun maxWidgetArtworkSize(context: Context): Int {
-        val metrics = context.resources.displayMetrics
-        val bounds =
-            context.getSystemService(WindowManager::class.java)?.maximumWindowMetrics?.bounds
-        val width = min(metrics.widthPixels, bounds?.width() ?: metrics.widthPixels)
-        val height = min(metrics.heightPixels, bounds?.height() ?: metrics.heightPixels)
-        return sqrt(6.0 * width * height / 8.0).toInt().coerceAtLeast(256)
+        val (width, height) = widgetDisplayBounds(context)
+        return WidgetArtworkBudget.maxArtworkSidePx(width, height)
+    }
+
+    /**
+     * Pixel bounds of the display the widget is composed for.
+     *
+     * `resources.displayMetrics` may describe a display that is not the active one, so window
+     * metrics are preferred. `currentWindowMetrics` follows the configuration the widget is
+     * currently composed for, while `maximumWindowMetrics` is the largest configuration the app
+     * can get; taking the smaller of the two keeps the estimate valid when the current metrics are
+     * stale or the device is folded, since the platform cap follows the active display area.
+     */
+    private fun widgetDisplayBounds(context: Context): Pair<Int, Int> {
+        val windowManager = context.getSystemService(WindowManager::class.java)
+        val current = windowManager?.currentWindowMetrics?.bounds
+        val maximum = windowManager?.maximumWindowMetrics?.bounds
+        val bounds = listOfNotNull(current, maximum).filter { it.width() > 0 && it.height() > 0 }
+        val smallest = bounds.minByOrNull { it.width().toLong() * it.height().toLong() }
+        if (smallest == null) {
+            val metrics = context.resources.displayMetrics
+            return metrics.widthPixels to metrics.heightPixels
+        }
+        return smallest.width() to smallest.height()
     }
 
     private inline fun withController(
@@ -517,5 +552,60 @@ class MainAppWidget : GlanceAppWidget() {
             { action(controllerFuture.get()) },
             MoreExecutors.directExecutor(),
         )
+    }
+}
+
+/**
+ * Computes the largest widget artwork that fits the Android 17 RemoteViews bitmap budget.
+ *
+ * From Android 17 (API 37) the system rejects an [AppWidgetManager.updateAppWidget] whose
+ * RemoteViews payload holds more than `6 * width * height` bytes of bitmaps with an
+ * `IllegalArgumentException`. The artwork is the only bitmap this widget puts into a RemoteViews,
+ * so it may use the whole budget, divided by the number of references to the same bitmap and by
+ * the bytes per pixel.
+ *
+ * https://developer.android.com/about/versions/17/behavior-changes-17#memory-limit-widget
+ */
+internal object WidgetArtworkBudget {
+    /** Bytes the platform allows per pixel of the active display area. */
+    const val BYTES_PER_DISPLAY_PIXEL = 6L
+
+    /** The platform charges a bitmap once per hierarchy, but it may back more than one view. */
+    const val MAX_BITMAP_REFERENCES = 2
+
+    /** Album art is opaque, so RGB_565 halves the cost of ARGB_8888. */
+    const val ARGB_8888_BYTES_PER_PIXEL = 4
+    const val RGB_565_BYTES_PER_PIXEL = 2
+
+    /** Artwork smaller than this looks broken; no real display is small enough to prevent it. */
+    const val MIN_ARTWORK_SIDE_PX = 256
+
+    fun capBytes(widthPx: Int, heightPx: Int): Long =
+        BYTES_PER_DISPLAY_PIXEL * widthPx.toLong() * heightPx.toLong()
+
+    fun bitmapBytes(sidePx: Int, bytesPerPixel: Int): Long =
+        sidePx.toLong() * sidePx.toLong() * bytesPerPixel
+
+    /**
+     * Largest square artwork side whose bitmap, including [references] copies of it and
+     * [bytesPerPixel] bytes per pixel, stays within the cap.
+     */
+    fun maxArtworkSidePx(
+        widthPx: Int,
+        heightPx: Int,
+        bytesPerPixel: Int = ARGB_8888_BYTES_PER_PIXEL,
+        references: Int = MAX_BITMAP_REFERENCES,
+    ): Int {
+        if (widthPx <= 0 || heightPx <= 0) return MIN_ARTWORK_SIDE_PX
+        val cap = capBytes(widthPx, heightPx)
+        val bytesPerPixelWithReferences = bytesPerPixel.toLong() * references
+        val side = sqrt(cap.toDouble() / bytesPerPixelWithReferences).toInt()
+        // Keep the minimum only when it still fits, so the floor cannot push a tiny display over
+        // the cap.
+        return if (bitmapBytes(MIN_ARTWORK_SIDE_PX, bytesPerPixel) * references <= cap) {
+            maxOf(side, MIN_ARTWORK_SIDE_PX)
+        } else {
+            side
+        }
     }
 }
