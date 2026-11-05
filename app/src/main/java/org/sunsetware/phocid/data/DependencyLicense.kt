@@ -51,11 +51,13 @@ inline fun listDependencies(
     return dependencyInfos.map { dependency ->
         val licenseNames =
             licenseMappings.projectMappings[dependency.project]
-                ?: dependency.licenses!!.map {
-                    requireNotNull(licenseMappings.urlMappings[it.licenseUrl]) {
-                        "No license name found for ${dependency.project}"
+                ?: dependency.licenses
+                    ?.map {
+                        requireNotNull(licenseMappings.urlMappings[it.licenseUrl]) {
+                            "No license name found for ${dependency.project}"
+                        }
                     }
-                }
+                ?: emptyList()
         Pair(
             dependency,
             licenseNames.map {

@@ -1,5 +1,11 @@
 {
   "projectMappings": {
+    "com.google.guava:listenablefuture": [
+      "Apache-2.0.txt"
+    ],
+    "com.google.auto.service:auto-service-annotations": [
+      "Apache-2.0.txt"
+    ]
   },
   "urlMappings": {
     "http://www.apache.org/licenses/LICENSE-2.0.txt": "Apache-2.0.txt",
