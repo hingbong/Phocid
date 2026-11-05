@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:instructions="Phocid is a local music player: it indexes every audio file on the device into one library and keeps playback statistics for it.
+
+Operational patterns:
+- Use searchTracks to resolve a track the user names before acting on it.
+- Use getNowPlaying to answer what is playing, then setPlayback to change it.
+- Use getLibraryStats for library-wide counts and getPlaybackStats for listening history.
+
+Constraints:
+- The library is local only; there are no streams, accounts, or playlists.
+- setPlayback requires the player to be running and the queue to contain the requested item.
+- Statistics start when this build began recording; older listening is not available." />

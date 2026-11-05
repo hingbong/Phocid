@@ -2,6 +2,7 @@
 accompanistPermissions = "0.37.3"
 activityKtx = "1.13.0"
 agp = "9.4.1"
+appfunctions = "1.0.0-rc01"
 assertjCore = "3.27.7"
 commonsIo = "2.22.0"
 coreSplashscreenVersion = "1.2.0"
@@ -34,6 +35,8 @@ jaudiotagger = "3.0.1"
 [libraries]
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissions" }
 androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
+androidx-appfunctions = { module = "androidx.appfunctions:appfunctions", version.ref = "appfunctions" }
+androidx-appfunctions-compiler = { module = "androidx.appfunctions:appfunctions-compiler", version.ref = "appfunctions" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glanceAppwidget" }

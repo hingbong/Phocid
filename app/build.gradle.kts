@@ -117,6 +117,7 @@ dependencies {
     implementation(libs.accompanist.permissions)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.appfunctions)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -145,6 +146,7 @@ dependencies {
     implementation(libs.jaudiotagger)
     implementation(libs.juniversalchardet)
     implementation(libs.reorderable)
+    ksp(libs.androidx.appfunctions.compiler)
     ksp(libs.androidx.room.compiler)
     //noinspection UseTomlInstead
     implementation("org.sunsetware.omio:omio")
