@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.Player
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import org.sunsetware.phocid.R
 import org.sunsetware.phocid.TNUM
 import org.sunsetware.phocid.data.PlaybackClock
@@ -280,7 +281,9 @@ class PlayerScreenControlsDefaultBase(
             }
 
             updateProgress(playbackClock.positionAt())
-            playbackClock.position.collect { updateProgress(it) }
+            // The flow replays its last value to a new collector, which may still belong to
+            // the previous track. Skip it; the immediate sample above is authoritative.
+            playbackClock.position.drop(1).collect { updateProgress(it) }
         }
 
         Surface(color = containerColor, contentColor = contentColor, modifier = dragModifier) {

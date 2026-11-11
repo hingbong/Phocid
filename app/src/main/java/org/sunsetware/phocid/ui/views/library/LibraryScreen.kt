@@ -106,6 +106,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import org.sunsetware.phocid.DEFAULT_SWIPE_THRESHOLD
@@ -795,7 +796,8 @@ private fun BottomBar(
         }
 
         updateProgress(playerManager.playbackClock.positionAt())
-        playerManager.playbackClock.position.collect { updateProgress(it) }
+        // Skip the replayed cached value; the immediate sample above is authoritative.
+        playerManager.playbackClock.position.drop(1).collect { updateProgress(it) }
     }
 
     AnimatedContent(
