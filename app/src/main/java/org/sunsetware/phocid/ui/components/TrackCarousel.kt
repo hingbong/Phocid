@@ -117,8 +117,7 @@ inline fun <reified T> TrackCarousel(
             count = countSelector(state)
             repeat = repeatSelector(state)
             val currentIndexEquality = indexEqualitySelector(state, index)
-            val indexChanged = lastIndexEquality != currentIndexEquality
-            if (!indexChanged) {
+            if (lastIndexEquality == currentIndexEquality) {
                 isLastAdjacent = true
             } else if (previousIndex == nextIndex && index == previousIndex) {
                 isLastAdjacent = true
@@ -161,11 +160,13 @@ inline fun <reified T> TrackCarousel(
                     nextIndex,
                 )
 
-            // Only settle when the index actually moved. Several version bumps arrive per track
-            // transition, and re-running the settle on each of them restarts it mid-flight, which
-            // reads as stutter. A bump that leaves the index alone must not touch the offset.
-            if (indexChanged && !isDragging) {
-                offset.animateTo(0f, emphasizedExit())
+            // Settle only a stranded offset. A settle that is already running must not be
+            // restarted: several version bumps arrive per transition and restarting it mid-flight
+            // is the stutter this guards against. The settle is also launched outside this effect,
+            // because the next bump would cancel it and leave the carousel frozen between two
+            // pages. A drag owns the offset until it ends.
+            if (!isDragging && !offset.isRunning && offset.value != 0f) {
+                coroutineScope.launch(dispatcher) { offset.animateTo(0f, emphasizedExit()) }
             }
         }
     }
