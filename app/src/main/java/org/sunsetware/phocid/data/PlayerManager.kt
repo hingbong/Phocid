@@ -68,9 +68,6 @@ class PlayerManager(
             }
         }
 
-    val currentPosition: Long
-        get() = mediaController.currentPosition
-
     private var playbackPreferenceJob = null as Job?
 
     override fun close() {
