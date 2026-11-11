@@ -15,7 +15,11 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +39,27 @@ class PlayerManager(
     private val _transientState: MutableStateFlow<PlayerTransientState>,
 ) : AutoCloseable {
     private lateinit var mediaController: MediaController
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val transientState = _transientState.asStateFlow()
+
+    /**
+     * Single application-side position clock. UI consumers read [PlaybackClock.position] or
+     * [PlaybackClock.positionAt] instead of querying the controller once per frame.
+     */
+    val playbackClock =
+        PlaybackClock(scope) {
+            if (!::mediaController.isInitialized) {
+                null
+            } else {
+                PlaybackClock.Sample(
+                    positionMs = mediaController.currentPosition.coerceAtLeast(0L),
+                    durationMs = mediaController.duration,
+                    isPlaying = mediaController.isPlaying,
+                    speed = mediaController.playbackParameters.speed,
+                    sampledAtUptimeMs = SystemClock.uptimeMillis(),
+                )
+            }
+        }
 
     val currentPosition: Long
         get() = mediaController.currentPosition
@@ -44,6 +68,7 @@ class PlayerManager(
 
     override fun close() {
         playbackPreferenceJob?.cancel()
+        scope.cancel()
         mediaController.release()
     }
 
@@ -56,6 +81,16 @@ class PlayerManager(
             {
                 mediaController = controllerFuture.get()
                 mediaController.prepare()
+                // External changes (notification, headset, track transition) must reach the
+                // clock immediately instead of waiting for the next tick.
+                mediaController.addListener(
+                    object : Player.Listener {
+                        override fun onEvents(player: Player, events: Player.Events) {
+                            playbackClock.invalidate()
+                        }
+                    }
+                )
+                playbackClock.invalidate()
                 completed.set(true)
             },
             ContextCompat.getMainExecutor(context),
@@ -81,6 +116,7 @@ class PlayerManager(
         // Force a state emission for UI recomposition.
         updateTransientState()
         mediaController.play()
+        playbackClock.invalidate()
     }
 
     fun seekToPreviousSmart() {
@@ -98,6 +134,7 @@ class PlayerManager(
         // Force a state emission for UI recomposition.
         updateTransientState()
         mediaController.play()
+        playbackClock.invalidate()
     }
 
     fun seekToNext() {
@@ -111,16 +148,19 @@ class PlayerManager(
         // Force a state emission for UI recomposition.
         updateTransientState()
         mediaController.play()
+        playbackClock.invalidate()
     }
 
     fun seekTo(index: Int) {
         mediaController.seekTo(index, 0)
         mediaController.play()
+        playbackClock.invalidate()
     }
 
     fun seekToFraction(fraction: Float) {
         val duration = mediaController.duration
         mediaController.seekTo((duration * fraction).toLong().coerceInOrMin(0, duration))
+        playbackClock.invalidate()
     }
 
     fun togglePlay() {
@@ -129,6 +169,7 @@ class PlayerManager(
         } else {
             play()
         }
+        playbackClock.invalidate()
     }
 
     fun play() {
@@ -142,6 +183,7 @@ class PlayerManager(
             mediaController.seekTo(0)
         }
         mediaController.play()
+        playbackClock.invalidate()
     }
 
     fun setTracks(tracks: List<Track>, index: Int?) {
@@ -149,6 +191,7 @@ class PlayerManager(
             mediaController.setMediaItems(tracks.map { it.getMediaItem(null) }, index, 0)
         else mediaController.setMediaItems(tracks.map { it.getMediaItem(null) })
         mediaController.play()
+        playbackClock.invalidate()
     }
 
     fun addTracks(tracks: List<Track>) {
@@ -269,6 +312,7 @@ class PlayerManager(
 
     fun setSpeedAndPitch(speed: Float, pitch: Float) {
         mediaController.playbackParameters = PlaybackParameters(speed, pitch)
+        playbackClock.invalidate()
     }
 
     fun openSystemEqualizer(context: Context): Boolean {
