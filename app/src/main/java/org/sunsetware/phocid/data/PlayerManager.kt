@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.audiofx.AudioEffect
 import android.os.Bundle
+import android.os.Looper
 import android.os.SystemClock
 import androidx.compose.runtime.Stable
 import androidx.core.content.ContextCompat
@@ -48,6 +49,12 @@ class PlayerManager(
      */
     val playbackClock =
         PlaybackClock(scope) {
+            // MediaController may only be read on its application looper. Every current caller
+            // is on main, so this fails fast for a future off-main one instead of racing the
+            // controller. The clock itself stays pure so it remains JVM-testable.
+            check(Looper.myLooper() == Looper.getMainLooper()) {
+                "PlaybackClock must be sampled on the main thread"
+            }
             if (!::mediaController.isInitialized) {
                 null
             } else {
