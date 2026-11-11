@@ -52,7 +52,9 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
         get() = GlobalData.statsManager
 
     val lyricsCache = AtomicReference(null as Pair<Long, Lyrics>?)
-    val carouselArtworkCache = ArtworkCache(viewModelScope, 4)
+    // Three pages are on screen at once and the neighbours are kept warm ahead of a swipe; the
+    // extra headroom stops a prefetch from evicting a page that is about to be displayed.
+    val carouselArtworkCache = ArtworkCache(viewModelScope, 6)
     val playlistIoDirectory = MutableStateFlow(null as Uri?)
     private val _libraryScanState = MutableStateFlow(null as Boolean?)
     /**
