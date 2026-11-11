@@ -420,7 +420,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                             components.lyricsView.Compose(
                                 lyrics = currentTrackLyrics,
                                 autoScroll = { lyricsViewAutoScroll },
-                                currentPosition = { playerManager.currentPosition },
+                                currentPosition = { playerManager.playbackClock.positionAt() },
                                 preferences = preferences,
                                 isPlaying = isPlaying,
                                 isVisible = useLyricsView,
@@ -430,7 +430,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                         Box {
                             components.lyricsOverlay.Compose(
                                 lyrics = (currentTrackLyrics as? PlayerScreenLyrics.Synced)?.value,
-                                currentPosition = { playerManager.currentPosition },
+                                currentPosition = { playerManager.playbackClock.positionAt() },
                                 preferences = preferences,
                                 containerColor = containerColor,
                                 contentColor = contentColor,
@@ -445,7 +445,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 isPlaying = isPlaying,
                                 repeat = repeat,
                                 shuffle = shuffle,
-                                currentPosition = { playerManager.currentPosition },
+                                playbackClock = playerManager.playbackClock,
                                 overflowMenuItems =
                                     playerMenuItems(
                                         playerManager,

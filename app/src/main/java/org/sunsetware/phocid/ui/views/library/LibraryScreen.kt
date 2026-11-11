@@ -81,7 +81,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -106,6 +105,7 @@ import androidx.media3.common.Player
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import org.sunsetware.phocid.DEFAULT_SWIPE_THRESHOLD
@@ -778,10 +778,9 @@ private fun BottomBar(
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val isResumed = lifecycleState == Lifecycle.State.RESUMED
 
-    // Update progress only while the mini player is visible and the app is resumed.
-    // The frame clock is used while playing so the loop stops with the app's frames;
-    // when paused, a one-second poll is enough to reflect seeks without keeping
-    // the CPU busy at the display refresh rate.
+    // Update progress only while the mini player is visible and the app is resumed. The
+    // shared clock publishes at 10 Hz while playing and 1 Hz while paused, so the mini
+    // player no longer queries the controller once per frame.
     LaunchedEffect(currentTrack, isObscured, isResumed, isPlaying) {
         if (isObscured || !isResumed) return@LaunchedEffect
 
@@ -791,21 +790,12 @@ private fun BottomBar(
             return@LaunchedEffect
         }
 
-        fun updateProgress() {
-            progress = playerManager.currentPosition.toFloat() / track.duration.inWholeMilliseconds
+        fun updateProgress(position: Long) {
+            progress = position.toFloat() / track.duration.inWholeMilliseconds
         }
 
-        updateProgress()
-        if (isPlaying) {
-            while (isActive) {
-                withFrameNanos { updateProgress() }
-            }
-        } else {
-            while (isActive) {
-                delay(1.seconds)
-                updateProgress()
-            }
-        }
+        updateProgress(playerManager.playbackClock.positionAt())
+        playerManager.playbackClock.position.collect { updateProgress(it) }
     }
 
     AnimatedContent(

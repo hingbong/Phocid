@@ -31,7 +31,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -48,10 +47,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.Player
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.collect
 import org.sunsetware.phocid.R
 import org.sunsetware.phocid.TNUM
+import org.sunsetware.phocid.data.PlaybackClock
 import org.sunsetware.phocid.data.Track
 import org.sunsetware.phocid.globals.Strings
 import org.sunsetware.phocid.globals.format
@@ -76,7 +75,7 @@ sealed class PlayerScreenControls {
         isPlaying: Boolean,
         repeat: Int,
         shuffle: Boolean,
-        currentPosition: () -> Long,
+        playbackClock: PlaybackClock,
         overflowMenuItems: List<MenuItem>,
         dragModifier: Modifier,
         containerColor: Color,
@@ -234,7 +233,7 @@ class PlayerScreenControlsDefaultBase(
         isPlaying: Boolean,
         repeat: Int,
         shuffle: Boolean,
-        currentPosition: () -> Long,
+        playbackClock: PlaybackClock,
         overflowMenuItems: List<MenuItem>,
         dragModifier: Modifier,
         containerColor: Color,
@@ -265,14 +264,13 @@ class PlayerScreenControlsDefaultBase(
 
         // Only update while the player screen is at least started (visible), which
         // keeps a multi-window or paused-but-visible player showing correct progress.
-        // While playing, follow the frame clock so the loop stops together with the
-        // app's frames; while paused, a one-second poll keeps the slider correct
-        // without 120 Hz wakeups. Progress is preserved while the screen is hidden.
+        // The shared clock publishes at 10 Hz while playing and 1 Hz while paused, so
+        // the slider no longer queries the controller once per frame. Progress is
+        // preserved while the screen is hidden.
         LaunchedEffect(currentTrack, isPlaying, isStarted) {
             if (!isStarted) return@LaunchedEffect
 
-            fun updateProgress() {
-                val position = currentPosition()
+            fun updateProgress(position: Long) {
                 if (!isDraggingProgressSlider) {
                     progress =
                         (position.toFloat() / currentTrack.duration.inWholeMilliseconds).takeIf {
@@ -281,17 +279,8 @@ class PlayerScreenControlsDefaultBase(
                 }
             }
 
-            updateProgress()
-            if (isPlaying) {
-                while (isActive) {
-                    withFrameNanos { updateProgress() }
-                }
-            } else {
-                while (isActive) {
-                    delay(1.seconds)
-                    updateProgress()
-                }
-            }
+            updateProgress(playbackClock.positionAt())
+            playbackClock.position.collect { updateProgress(it) }
         }
 
         Surface(color = containerColor, contentColor = contentColor, modifier = dragModifier) {
