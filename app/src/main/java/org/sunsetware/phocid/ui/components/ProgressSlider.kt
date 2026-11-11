@@ -179,6 +179,9 @@ fun ProgressSliderTrack(
 
 private const val TWO_PI = (Math.PI * 2f).toFloat()
 
+/** Upper bound for one wave step, so a stall or a pause cannot advance the phase in one jump. */
+private const val MAX_FRAME_STEP_MS = 100L
+
 /**
  * [Source](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android14-release/packages/SystemUI/src/com/android/systemui/media/controls/ui/SquigglyProgress.kt)
  *
@@ -236,7 +239,11 @@ private class SquigglyProgress {
         frameTimeMs: Long,
     ) {
         if (animate) {
-            phaseOffset += (frameTimeMs - lastFrameTime) / 1000f * phaseSpeed
+            // The wave only redraws while the animation runs, so a pause leaves a large gap
+            // between two drawn frames. Clamp the step: resuming must not integrate that gap in
+            // one frame, which would visibly jump the phase.
+            val deltaMs = (frameTimeMs - lastFrameTime).coerceIn(0L, MAX_FRAME_STEP_MS)
+            phaseOffset += deltaMs / 1000f * phaseSpeed
             phaseOffset %= waveLength
             lastFrameTime = frameTimeMs
         }
