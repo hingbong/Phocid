@@ -74,6 +74,9 @@ inline fun <reified T> TrackCarousel(
     val dispatcher = Dispatchers.Main.limitedParallelism(1)
 
     var horizontalDragTotal by remember { mutableFloatStateOf(0f) }
+    // Drags own the offset; a track change during a drag must not start a settle animation that
+    // fights the finger.
+    var isDragging by remember { mutableStateOf(false) }
 
     var stateBatch by remember {
         val count = countSelector(state)
@@ -114,7 +117,8 @@ inline fun <reified T> TrackCarousel(
             count = countSelector(state)
             repeat = repeatSelector(state)
             val currentIndexEquality = indexEqualitySelector(state, index)
-            if (lastIndexEquality == currentIndexEquality) {
+            val indexChanged = lastIndexEquality != currentIndexEquality
+            if (!indexChanged) {
                 isLastAdjacent = true
             } else if (previousIndex == nextIndex && index == previousIndex) {
                 isLastAdjacent = true
@@ -157,8 +161,12 @@ inline fun <reified T> TrackCarousel(
                     nextIndex,
                 )
 
-            // TODO: make animation smooth
-            offset.animateTo(0f, emphasizedExit())
+            // Only settle when the index actually moved. Several version bumps arrive per track
+            // transition, and re-running the settle on each of them restarts it mid-flight, which
+            // reads as stutter. A bump that leaves the index alone must not touch the offset.
+            if (indexChanged && !isDragging) {
+                offset.animateTo(0f, emphasizedExit())
+            }
         }
     }
 
@@ -174,13 +182,18 @@ inline fun <reified T> TrackCarousel(
                         onDragStart = {
                             horizontalDragTotal = 0f
                             isLastAdjacent = true
+                            isDragging = true
                         },
                         onDragCancel = {
+                            isDragging = false
                             coroutineScope.launch { offset.animateTo(0f) }
                             horizontalDragTotal = 0f
                             isLastAdjacent = true
                         },
                         onDragEnd = {
+                            // Cleared before the swipe commits, so the transition it triggers is
+                            // allowed to settle the offset.
+                            isDragging = false
                             coroutineScope.launch(dispatcher) {
                                 val positionalThreshold =
                                     updatedSwipeThreshold.roundToPx().coerceAtMost(size.width / 2)
