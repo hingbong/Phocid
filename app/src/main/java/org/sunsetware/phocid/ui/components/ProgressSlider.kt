@@ -24,8 +24,11 @@ import androidx.compose.material3.SliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -42,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlinx.coroutines.isActive
 import org.sunsetware.phocid.ui.theme.INACTIVE_ALPHA
 import org.sunsetware.phocid.utils.coerceInOrMin
 
@@ -142,6 +146,17 @@ fun ProgressSliderTrack(
         }
     val heightFraction by animateFloatAsState(targetValue = if (animate) 1f else 0f)
 
+    // The wave advances inside the draw block, so it needs a redraw source of its own.
+    // Position now arrives at 10 Hz; driving the wave from the frame clock keeps it at the
+    // display refresh rate instead of stepping with the progress value.
+    var frameTimeMs by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
+    LaunchedEffect(animate) {
+        if (!animate) return@LaunchedEffect
+        while (isActive) {
+            withFrameNanos { frameTimeMs = it / 1_000_000 }
+        }
+    }
+
     Canvas(modifier = modifier.fillMaxWidth().height(16.dp)) {
         progress.draw(
             this,
@@ -157,6 +172,7 @@ fun ProgressSliderTrack(
             },
             colors.activeTrackColor,
             colors.inactiveTrackColor,
+            frameTimeMs,
         )
     }
 }
@@ -217,12 +233,12 @@ private class SquigglyProgress {
         progress: Float,
         waveColor: Color,
         lineColor: Color,
+        frameTimeMs: Long,
     ) {
         if (animate) {
-            val now = SystemClock.uptimeMillis()
-            phaseOffset += (now - lastFrameTime) / 1000f * phaseSpeed
+            phaseOffset += (frameTimeMs - lastFrameTime) / 1000f * phaseSpeed
             phaseOffset %= waveLength
-            lastFrameTime = now
+            lastFrameTime = frameTimeMs
         }
         val totalWidth = drawScope.size.width
         val totalProgressPx = totalWidth * progress
