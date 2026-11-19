@@ -206,9 +206,10 @@ tasks.register("customSetup") { dependsOn("licenseReleaseReport") }
 tasks.preBuild { dependsOn("customSetup") }
 
 // The license test reads the generated report from src/main/assets: depend on it explicitly
-// instead of relying on CI invoking :app:customSetup before the test task. (The previous
-// assembleUnitTest hook used a non-standard task name that could break on AGP upgrades.)
-tasks.named("testDebugUnitTest") { dependsOn("customSetup") }
+// instead of relying on CI invoking :app:customSetup before the test task. AGP registers
+// the variant test task only after script evaluation, so the wiring must be lazy: a plain
+// tasks.named("testDebugUnitTest") fails at configuration time with 'task not found'.
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn("customSetup") }
 
 composeCompiler {
     stabilityConfigurationFiles =
