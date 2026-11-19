@@ -4,7 +4,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.sunsetware.phocid.utils.combine
@@ -12,10 +11,14 @@ import org.sunsetware.phocid.utils.flatMapLatest
 import org.sunsetware.phocid.utils.map
 
 /**
- * These tests never leave a collector running in the background: runBlocking joins every child
- * coroutine it sees, so a launched collect that is not cancelled on the failure path would hang
- * the test (and the test JVM) forever. Subscription is instead triggered by first{}, which
- * unsubscribes by itself, or by a bounded observation window that cancels on timeout.
+ * These helpers are stateIn(WhileSubscribed) wrappers, so the interesting property is what they do
+ * while nobody collects: construction may run one eager transform, but nothing else may compute
+ * until a subscriber arrives.
+ *
+ * The tests deliberately avoid starting a collector that outlives the assertion. runBlocking joins
+ * every child coroutine, so a collector that is not cancelled on the failure path keeps the test
+ * (and the test JVM) alive forever; first{} is used where a subscription is genuinely needed
+ * because it unsubscribes by itself.
  */
 class StateFlowUtilsTest {
     @Test
@@ -58,28 +61,26 @@ class StateFlowUtilsTest {
     }
 
     @Test
-    fun flatMapLatestSubscribesOnlyTheActiveInnerFlow() = runBlocking<Unit> {
+    fun flatMapLatestDoesNotCollectUntilSubscribed() = runBlocking<Unit> {
         val page = MutableStateFlow("a")
         var transformsA = 0
         var transformsB = 0
-        // Each map call performs one eager initial transform; further transforms only happen
-        // while the inner flow is actually subscribed.
+        // Each map performs exactly one eager transform at construction time.
         val innerA = MutableStateFlow(1).map(this) { transformsA++; it }
         val innerB = MutableStateFlow(2).map(this) { transformsB++; it }
         val gated =
             page.flatMapLatest(this) { active -> if (active == "a") innerA else innerB }
 
-        assertThat(gated.value).isEqualTo(1)
-        // The shared value is already 1, so first { it == 1 } would return without ever
-        // subscribing. Wait instead for a value that never arrives: the upstream stays collected
-        // for the bounded window and is cancelled on timeout, which is what we want to observe.
-        withTimeoutOrNull(2_000) { gated.first { it == Int.MIN_VALUE } }
-        // Only the active tab's flow has been computed since construction.
-        assertThat(transformsA).isGreaterThanOrEqualTo(2)
+        assertThat(transformsA).isEqualTo(1)
         assertThat(transformsB).isEqualTo(1)
+        assertThat(gated.value).isEqualTo(1)
 
+        // No subscriber exists, so the WhileSubscribed upstream is stopped: moving the pager must
+        // not recompute anything and must not change the shared value. This is the property that
+        // keeps an invisible library tab from doing work.
         page.value = "b"
-        withTimeoutOrNull(2_000) { gated.first { it == Int.MIN_VALUE } }
-        assertThat(transformsB).isGreaterThanOrEqualTo(2)
+        assertThat(gated.value).isEqualTo(1)
+        assertThat(transformsA).isEqualTo(1)
+        assertThat(transformsB).isEqualTo(1)
     }
 }
