@@ -283,10 +283,47 @@ jobs:
       # uploaded as distributable artifacts. A debug-signed artifact would let anyone holding
       # that keystore forge a same-signature companion against AGENT_QUERY.
 
-      - name: Publish release APK (overwrite)
+      - name: Stage and upload signed release APKs (main only)
         if: github.ref == 'refs/heads/main'
-        permissions:
-          contents: write
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/*.apk dist/
+          cp agent-bridge/build/outputs/apk/release/*.apk dist/
+      - name: Upload signed release APKs (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-apks
+          path: dist/*
+          retention-days: 1
+          if-no-files-found: error
+
+  # Publishing needs a write token, so it is a separate job with its own narrow grant; the
+  # build job - and every PR run - only ever sees a read token. (Step-level permissions are
+  # not valid in GitHub Actions; this job split is the supported way to narrow the token.)
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # The tag move pushes with an explicitly scoped step token instead of a
+          # persisted repo-wide credential.
+          persist-credentials: false
+
+      - name: Download signed release APKs
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-apks
+          path: dist
+
+      - name: Publish release APK (overwrite)
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         with:
           tag: phocid-next-latest
@@ -302,8 +339,8 @@ jobs:
 
             Old APKs in this release are replaced on every build.
           artifacts: |
-            app/build/outputs/apk/release/*.apk
-            agent-bridge/build/outputs/apk/release/*.apk
+            dist/app-release.apk
+            dist/agent-bridge-release.apk
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
@@ -314,9 +351,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Move release tag to this commit
-        if: github.ref == 'refs/heads/main'
-        permissions:
-          contents: write
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
