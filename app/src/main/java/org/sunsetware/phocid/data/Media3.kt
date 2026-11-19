@@ -368,6 +368,10 @@ fun getChildMediaItems(
                                     null
                                 }]
                             ?.entries
+                            // Entries whose file is gone have a null track; drop them before
+                            // the sort instead of crashing the whole browse. The library UI
+                            // list filters them the same way.
+                            ?.filter { it.track != null }
                             ?.sortedBy(
                                 preferences.sortCollator,
                                 collectionSortingKeys,
