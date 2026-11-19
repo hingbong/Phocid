@@ -290,4 +290,58 @@ class SortKeyDatabaseTest {
             assertThat(db.sortKeyDao().findByLocalUriKey("a")?.sortKey).isEqualTo("one")
         }
     }
+
+    @Test
+    fun apply_repeatedLocalUriKeyInOneBatchStaysConsistent() {
+        runBlocking {
+            val real =
+                assertDryRunMatchesReal(
+                    initial = emptyList(),
+                    targets =
+                        listOf(
+                            target("a", null, "one"),
+                            target("a", "t", "two"),
+                        ),
+                )
+
+            // The second target resolves to the row the first one inserted, so the unique
+            // index on local_uri_key must never reject the batch.
+            assertThat(real.errors).isEmpty()
+            assertThat(real.updated).isEqualTo(2)
+            assertThat(rows()).hasSize(1)
+            assertThat(db.sortKeyDao().findByLocalUriKey("a")?.sortKey).isEqualTo("two")
+            assertThat(db.sortKeyDao().findByLocalUriKey("a")?.tagKey).isEqualTo("t")
+        }
+    }
+
+    @Test
+    fun apply_tagKeyCollisionAfterIdentityReassignmentReportsAmbiguity() {
+        runBlocking {
+            val real =
+                assertDryRunMatchesReal(
+                    initial =
+                        listOf(
+                            entity("y", null, "one"),
+                            entity("x", "t", "two"),
+                        ),
+                    targets = listOf(target("y", "t", "three")),
+                )
+            assertThat(real.errors).isEmpty()
+            assertThat(real.updated).isEqualTo(1)
+            assertThat(rows().map { it.localUriKey }).containsExactly("x", "y")
+
+            // Both rows now carry tag "t"; a later tag-only batch must report the ambiguity as
+            // a per-item error and leave both rows untouched instead of corrupting either.
+            val ambiguous =
+                assertDryRunMatchesReal(
+                    initial = emptyList(),
+                    targets = listOf(target("z", "t", "four")),
+                    nowMillis = 2,
+                )
+            assertThat(ambiguous.errors.single().code).isEqualTo("ambiguous_identity")
+            assertThat(db.sortKeyDao().findByLocalUriKey("z")).isNull()
+            assertThat(rows().map { it.localUriKey to it.sortKey })
+                .containsExactly("x" to "two", "y" to "three")
+        }
+    }
 }
