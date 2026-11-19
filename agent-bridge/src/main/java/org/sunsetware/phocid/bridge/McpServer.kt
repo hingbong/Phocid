@@ -42,6 +42,25 @@ class McpServer(
     private val allowWrites: Boolean = false,
     /** Total per-request deadline; overridable so tests can exercise the slow-drip guard. */
     private val requestTimeoutMs: Long = REQUEST_TOTAL_TIMEOUT_MS,
+    /**
+     * Monotonic millisecond clock for uptime/heartbeat metadata only; never for request deadlines.
+     * Defaults to the Android clock on device; plain JVM tests inject their own because unmocked
+     * framework methods throw (isReturnDefaultValues = false).
+     */
+    private val clockMs: () -> Long = { SystemClock.elapsedRealtime() },
+    /**
+     * Diagnostic log sink (android.util.Log priority, message, optional error). Defaults to
+     * android.util.Log on device; plain JVM tests inject a recording sink so error paths are
+     * observable instead of silently stubbed out.
+     */
+    private val log: (priority: Int, message: String, error: Throwable?) -> Unit =
+        { priority, message, error ->
+            Log.println(
+                priority,
+                TAG,
+                if (error == null) message else message + "\n" + Log.getStackTraceString(error),
+            )
+        },
 ) {
     private val running = AtomicBoolean(false)
     private val startedAt = AtomicLong(0)
@@ -84,7 +103,7 @@ class McpServer(
             socket.reuseAddress = true
             socket.bind(InetSocketAddress(address, port), 50)
             serverSocket = socket
-            startedAt.set(SystemClock.elapsedRealtime())
+            startedAt.set(clockMs())
             Thread({ acceptLoop(socket) }, "mcp-accept").start()
             startHeartbeat()
         } catch (t: Throwable) {
@@ -117,7 +136,7 @@ class McpServer(
                     {
                         while (running.get()) {
                             heartbeatCount.incrementAndGet()
-                            lastHeartbeatAt.set(SystemClock.elapsedRealtime())
+                            lastHeartbeatAt.set(clockMs())
                             try {
                                 Thread.sleep(1_000)
                             } catch (_: InterruptedException) {
@@ -143,7 +162,7 @@ class McpServer(
                     if (running.get()) rejectOverloaded(client) else closeQuietly(client)
                 }
             } catch (e: IOException) {
-                if (running.get()) Log.w(TAG, "accept failed", e)
+                if (running.get()) log(Log.WARN, "accept failed", e)
             }
         }
     }
@@ -155,10 +174,9 @@ class McpServer(
             // A per-read timeout alone does not bound a slow-drip client: each individual read can
             // succeed just under the timeout while the total request stretches forever and holds
             // one of the few worker threads. Enforce an absolute deadline on every read.
-            // Use System.nanoTime(), not SystemClock.elapsedRealtime(): the latter is an Android
-            // framework method that unit tests stub to 0 (isReturnDefaultValues), which would
-            // disable the guard exactly where the slow-drip test exercises it. nanoTime is a real
-            // monotonic JVM clock on device and in tests alike.
+            // Use System.nanoTime(), not the injected clockMs (android.os.SystemClock on
+            // device): the deadline must run on a real monotonic JVM clock in tests and on
+            // device alike, and must never depend on a test-controlled or framework clock.
             val deadline = System.nanoTime() + requestTimeoutMs * 1_000_000L
             val input = BufferedInputStream(DeadlineInputStream(client.getInputStream(), deadline))
             val request = readRequestHead(input)
@@ -171,9 +189,9 @@ class McpServer(
                 e.message.toByteArray(StandardCharsets.UTF_8),
             )
         } catch (e: IOException) {
-            Log.d(TAG, "client closed", e)
+            log(Log.DEBUG, "client closed", e)
         } catch (e: Exception) {
-            Log.e(TAG, "request failed", e)
+            log(Log.ERROR, "request failed", e)
         } finally {
             if (!transferred) closeQuietly(client)
         }
@@ -217,12 +235,12 @@ class McpServer(
                     .put("version", BuildConfig.VERSION_NAME)
                     .put("commit", BuildConfig.BUILD_COMMIT.take(12))
                     .put("stateless", true)
-                    .put("uptimeMs", SystemClock.elapsedRealtime() - startedAt.get())
+                    .put("uptimeMs", clockMs() - startedAt.get())
                     .put("heartbeatCount", heartbeatCount.get())
                     .put(
                         "heartbeatLagMs",
                         lastHeartbeatAt.get().let { last ->
-                            if (last == 0L) 0L else SystemClock.elapsedRealtime() - last
+                            if (last == 0L) 0L else clockMs() - last
                         },
                     )
                     .toString()
@@ -449,9 +467,10 @@ class McpServer(
         // verified; clients compare what we return and downgrade deliberately.
         val requested = params?.optString("protocolVersion")?.takeIf { it.isNotBlank() }
         if (requested != null && requested != SUPPORTED_PROTOCOL_VERSION) {
-            Log.i(
-                TAG,
+            log(
+                Log.INFO,
                 "Client requested protocol version $requested; serving $SUPPORTED_PROTOCOL_VERSION",
+                null,
             )
         }
         return JSONObject()

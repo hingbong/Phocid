@@ -1,11 +1,14 @@
 package org.sunsetware.phocid.bridge
 
+import android.util.Log
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -20,15 +23,35 @@ class McpServerTest {
 
     private lateinit var server: McpServer
 
+    private data class LogEntry(val priority: Int, val message: String, val error: Throwable?)
+
+    private val logs = ConcurrentLinkedQueue<LogEntry>()
+
+    /**
+     * Recording sink for the server's diagnostics. android.util.Log is not mocked in plain JVM
+     * tests (isReturnDefaultValues = false), and a silent no-op sink would hide handler crashes the
+     * same way the old default-return stubs did; recording lets @After fail on them.
+     */
+    private val logSink: (Int, String, Throwable?) -> Unit = { priority, message, error ->
+        logs.add(LogEntry(priority, message, error))
+    }
+
+    /** A real monotonic JVM clock, so uptime/heartbeat metadata is exercised realistically. */
+    private val clockMs: () -> Long = { System.nanoTime() / 1_000_000L }
+
     @Before
     fun startServer() {
-        server = McpServer("127.0.0.1", 0, tokenProvider = { TOKEN })
+        logs.clear()
+        server =
+            McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, clockMs = clockMs, log = logSink)
         server.start()
     }
 
     @After
     fun stopServer() {
         server.stop()
+        val errors = logs.filter { it.priority == Log.ERROR }
+        assertTrue("request handler logged unexpected errors: $errors", errors.isEmpty())
     }
 
     @Test
@@ -75,6 +98,52 @@ class McpServerTest {
         assertEquals(200, response.status)
         val text = response.body.toString(StandardCharsets.UTF_8)
         assertTrue(text, text.contains("\"status\":\"ok\""))
+    }
+
+    @Test
+    fun healthUptimeIsComputedFromTheMonotonicClock() {
+        // Under the old isReturnDefaultValues=true stubs, SystemClock.elapsedRealtime() always
+        // returned 0, so uptimeMs/heartbeatLagMs were always 0 and the subtraction order was
+        // never verified. A controllable fake clock makes the health metadata math observable.
+        val nowMs = AtomicLong(1_000L)
+        val healthServer =
+            McpServer(
+                "127.0.0.1",
+                0,
+                tokenProvider = { TOKEN },
+                clockMs = { nowMs.get() },
+                log = logSink,
+            )
+        healthServer.start()
+        try {
+            val deadline = System.nanoTime() + 5_000_000_000L
+            var health: JSONObject
+            while (true) {
+                health =
+                    JSONObject(
+                        request("GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", healthServer)
+                            .body
+                            .toString(StandardCharsets.UTF_8)
+                    )
+                if (health.getLong("heartbeatCount") >= 1) break
+                assertTrue("heartbeat never fired", System.nanoTime() < deadline)
+                Thread.sleep(20)
+            }
+            nowMs.set(6_000L)
+            health =
+                JSONObject(
+                    request("GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", healthServer)
+                        .body
+                        .toString(StandardCharsets.UTF_8)
+                )
+            assertEquals(5_000L, health.getLong("uptimeMs"))
+            // A second heartbeat may legitimately have fired at the new clock value, resetting
+            // the lag to 0; it must never go negative nor exceed the elapsed fake time.
+            val lag = health.getLong("heartbeatLagMs")
+            assertTrue("heartbeatLagMs=$lag", lag in 0..5_000L)
+        } finally {
+            healthServer.stop()
+        }
     }
 
     @Test
@@ -287,7 +356,8 @@ class McpServerTest {
 
     @Test
     fun nonLoopbackBindRejectsBrowserOrigins() {
-        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        val lanServer =
+            McpServer("0.0.0.0", 0, tokenProvider = { TOKEN }, clockMs = clockMs, log = logSink)
         lanServer.start()
         try {
             val response =
@@ -309,7 +379,8 @@ class McpServerTest {
     fun nonLoopbackBindAcceptsLoopbackHosts() {
         // adb-forward clients reach a 0.0.0.0 bind with a loopback Host; that is legitimate,
         // not a rebinding signal. The guard must accept loopback literals and localhost.
-        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        val lanServer =
+            McpServer("0.0.0.0", 0, tokenProvider = { TOKEN }, clockMs = clockMs, log = logSink)
         lanServer.start()
         try {
             for (host in listOf("127.0.0.1", "localhost", "127.0.0.1:8765", "[::1]:8765", "::1")) {
@@ -329,7 +400,8 @@ class McpServerTest {
     fun nonLoopbackBindRejectsRebindingHostnames() {
         // DNS rebinding: an attacker hostname resolves to this device, and the browser page
         // keeps that hostname in Host. Even with a valid token, foreign hostnames get 421.
-        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        val lanServer =
+            McpServer("0.0.0.0", 0, tokenProvider = { TOKEN }, clockMs = clockMs, log = logSink)
         lanServer.start()
         try {
             for (host in
@@ -348,7 +420,8 @@ class McpServerTest {
 
     @Test
     fun nonLoopbackBindRejectsRebindingHostOnMcpBeforeAuth() {
-        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        val lanServer =
+            McpServer("0.0.0.0", 0, tokenProvider = { TOKEN }, clockMs = clockMs, log = logSink)
         lanServer.start()
         try {
             val payload = """{"jsonrpc":"2.0","id":1,"method":"ping"}"""
@@ -371,7 +444,8 @@ class McpServerTest {
 
     @Test
     fun nonLoopbackBindRejectsMissingHost() {
-        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        val lanServer =
+            McpServer("0.0.0.0", 0, tokenProvider = { TOKEN }, clockMs = clockMs, log = logSink)
         lanServer.start()
         try {
             val response =
@@ -387,7 +461,8 @@ class McpServerTest {
 
     @Test
     fun nonLoopbackBindServesNetworkAgentHosts() {
-        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        val lanServer =
+            McpServer("0.0.0.0", 0, tokenProvider = { TOKEN }, clockMs = clockMs, log = logSink)
         lanServer.start()
         try {
             for (host in listOf("192.168.1.50", "192.168.1.50:8765")) {
@@ -437,12 +512,21 @@ class McpServerTest {
         val text = response.body.toString(StandardCharsets.UTF_8)
         assertTrue(text, text.contains("\"protocolVersion\":\"2025-03-26\""))
         assertFalse(text, text.contains("1999-09-09"))
+        // The version-downgrade notice must reach the injected log sink, not a silent stub.
+        assertTrue(logs.any { it.priority == Log.INFO && it.message.contains("1999-09-09") })
     }
 
     @Test
     fun slowDripIsCutByTheRequestDeadline() {
         val dripServer =
-            McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, requestTimeoutMs = 300)
+            McpServer(
+                "127.0.0.1",
+                0,
+                tokenProvider = { TOKEN },
+                requestTimeoutMs = 300,
+                clockMs = clockMs,
+                log = logSink,
+            )
         dripServer.start()
         try {
             openSocket(dripServer).use { socket ->
@@ -484,6 +568,8 @@ class McpServerTest {
                 tokenProvider = { TOKEN },
                 dataSource = FakeDataSource(6),
                 allowWrites = false,
+                clockMs = clockMs,
+                log = logSink,
             )
         server.start()
         try {
@@ -505,6 +591,8 @@ class McpServerTest {
                 tokenProvider = { TOKEN },
                 dataSource = source,
                 allowWrites = true,
+                clockMs = clockMs,
+                log = logSink,
             )
         server.start()
         try {
@@ -534,7 +622,14 @@ class McpServerTest {
     fun batchResponseBytesAreCapped() {
         // Each fake search result is ~100 KiB; six of them cross the 512 KiB response cap.
         val server =
-            McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, dataSource = BulkDataSource())
+            McpServer(
+                "127.0.0.1",
+                0,
+                tokenProvider = { TOKEN },
+                dataSource = BulkDataSource(),
+                clockMs = clockMs,
+                log = logSink,
+            )
         server.start()
         try {
             val payload =
@@ -590,6 +685,8 @@ class McpServerTest {
                 0,
                 tokenProvider = { TOKEN },
                 dataSource = FakeDataSource(apiVersion),
+                clockMs = clockMs,
+                log = logSink,
             )
             .apply { start() }
 

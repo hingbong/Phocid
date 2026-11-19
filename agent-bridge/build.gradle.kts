@@ -113,7 +113,10 @@ android {
         baseline = file("lint-baseline.xml")
     }
 
-    testOptions { unitTests.isReturnDefaultValues = true }
+    // Unmocked Android framework calls must throw "not mocked" instead of silently returning
+    // 0/null/false: a default return once masked a disabled request-deadline guard. The few
+    // Android seams the tests exercise (McpServer's clock and log sink) are injected explicitly.
+    testOptions { unitTests.isReturnDefaultValues = false }
 }
 
 kotlin {
