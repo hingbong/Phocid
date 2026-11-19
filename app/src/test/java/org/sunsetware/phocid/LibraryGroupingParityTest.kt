@@ -84,7 +84,7 @@ class LibraryGroupingParityTest {
             assertThat(index.artists[name]!!.tracks.map { it.id })
                 .containsExactlyInAnyOrderElementsOf(expected)
             // Album slices are a subset of the artist's tracks (null albums form no slice).
-            assertThat(index.artists[name]!!.albums.flatMap { it.tracks }.map { it.id }.toSet())
+            assertThat(index.artists[name]!!.albumSlices.flatMap { it.tracks }.map { it.id }.toSet())
                 .isSubsetOf(expected)
         }
 
@@ -110,7 +110,7 @@ class LibraryGroupingParityTest {
             for (artist in index.artists.values) {
                 val expectedSlice =
                     idsOf(artist.tracks.filter { it.genres.any { g -> g.equals(name, true) } })
-                val slice = index.genres[name]!!.artists.firstOrNull { it.artist === artist }
+                val slice = index.genres[name]!!.artistSlices.firstOrNull { it.artist === artist }
                 if (expectedSlice.isEmpty()) {
                     assertThat(slice).isNull()
                 } else {

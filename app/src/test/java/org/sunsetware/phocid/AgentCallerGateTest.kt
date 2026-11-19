@@ -9,6 +9,12 @@ class AgentCallerGateTest {
     private val myUid = 10_000
     private val callerUid = 10_043
 
+    /**
+     * The PackageManager constant for differing signatures is a hidden API and not part of
+     * the public SDK, so the value is kept as a literal. Any non-match result denies.
+     */
+    private val SIGNATURE_NOT_MATCH = -3
+
     @Test
     fun sameProcessCallerIsAlwaysTrusted() {
         // A local (same-process) caller needs no package lookup at all.
@@ -60,7 +66,7 @@ class AgentCallerGateTest {
                     myUid = myUid,
                     packagesForUid = arrayOf("com.hostile.agent"),
                 ) {
-                    PackageManager.SIGNATURE_NOT_MATCH
+                    SIGNATURE_NOT_MATCH
                 }
             )
             .isFalse()
@@ -76,7 +82,7 @@ class AgentCallerGateTest {
                     myUid = myUid,
                     packagesForUid = arrayOf("org.sunsetware.phocid.bridge", "com.hostile.agent"),
                 ) { callingPackage ->
-                    if (callingPackage == "com.hostile.agent") PackageManager.SIGNATURE_NOT_MATCH
+                    if (callingPackage == "com.hostile.agent") SIGNATURE_NOT_MATCH
                     else PackageManager.SIGNATURE_MATCH
                 }
             )
