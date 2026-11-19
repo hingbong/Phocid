@@ -193,9 +193,8 @@ jobs:
           ./scripts/scan-deprecated-storage.sh --check
 
       - name: Check Kotlin formatting
-        # Report-only for now: the tree predates ktfmt enforcement and needs a formatting pass
-        # (run ./gradlew ktfmt once locally) before this step can gate builds.
-        continue-on-error: true
+        # The tree has had its ktfmt pass; formatting now gates builds. Run ./gradlew ktfmtFormat
+        # locally to fix any drift before pushing.
         run: |
           ./gradlew --no-daemon --stacktrace --console=plain :app:ktfmtCheck :agent-bridge:ktfmtCheck
 
