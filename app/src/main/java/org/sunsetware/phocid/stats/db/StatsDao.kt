@@ -30,13 +30,14 @@ data class TrackAggregate(
 data class HourBucket(val hour: Int, val plays: Int, val millis: Long)
 
 /**
- * Minimal play-event projection for [PlayEventDao.hourlyEvents].
+ * Aggregated 15-minute UTC slice of play events for [PlayEventDao.hourlyBuckets].
  *
- * Local-hour bucketing cannot happen in SQLite: a fixed UTC offset is wrong for events on the other
- * side of a DST transition, and SQLite has no zone rules. The caller groups by the zone's local
- * hour instead.
+ * The aggregation runs in SQLite, so the full event log is never loaded into memory even for the
+ * ALL range. Every post-1970 zone offset and DST transition instant is a multiple of 15 minutes,
+ * so each slice lies wholly inside one local hour of any zone; the caller maps the slice start to
+ * its local hour, which preserves per-event bucketing across DST transitions.
  */
-data class PlayEventTime(val playedAt: Long, val playedMillis: Long)
+data class PlayEventSlice(val startMillis: Long, val plays: Int, val millis: Long)
 
 data class DayBucket(
     val epochDay: Int,
@@ -101,6 +102,25 @@ interface TrackDao {
     @Query("DELETE FROM tracks WHERE id = :rowId") suspend fun delete(rowId: Long)
 
     @Query("DELETE FROM tracks") suspend fun clear()
+
+    /**
+     * Deletes tracks that carry no statistics anywhere (no raw events, no daily rows, no lifetime
+     * totals) and were created before [createdBeforeMillis]. Such rows are resolver bookkeeping
+     * for files that were never played; their aliases are removed by the foreign-key cascade. The
+     * creation-date grace keeps freshly resolved rows alive until their first play.
+     */
+    @Query(
+        """
+        DELETE FROM tracks WHERE id IN (
+            SELECT t.id FROM tracks t
+            WHERE t.createdAt < :createdBeforeMillis
+              AND NOT EXISTS (SELECT 1 FROM play_events pe WHERE pe.trackRowId = t.id)
+              AND NOT EXISTS (SELECT 1 FROM track_daily td WHERE td.trackRowId = t.id)
+              AND NOT EXISTS (SELECT 1 FROM track_totals tt WHERE tt.trackRowId = t.id)
+        )
+        """
+    )
+    suspend fun deleteOrphans(createdBeforeMillis: Long): Int
 }
 
 @Dao
@@ -146,13 +166,16 @@ interface PlayEventDao {
 
     @Query(
         """
-        SELECT playedAt AS playedAt,
-               playedMillis AS playedMillis
+        SELECT (playedAt / 900000) * 900000 AS startMillis,
+               COUNT(*) AS plays,
+               SUM(playedMillis) AS millis
         FROM play_events
         WHERE playedAt >= :sinceMillis
+        GROUP BY startMillis
+        ORDER BY startMillis
         """
     )
-    fun hourlyEvents(sinceMillis: Long): Flow<List<PlayEventTime>>
+    fun hourlyBuckets(sinceMillis: Long): Flow<List<PlayEventSlice>>
 
     @Query(
         """
@@ -607,19 +630,19 @@ interface PlaybackOutboxDao {
 
     @Query("DELETE FROM playback_outbox WHERE id = :id") suspend fun delete(id: Long)
 
-    @Query("DELETE FROM playback_outbox") suspend fun clear()
-}
+    @Query("SELECT COUNT(*) FROM playback_outbox") suspend fun count(): Long
 
-@Dao
-interface FingerprintCacheDao {
+    /** Deletes all but the newest [keep] rows; the dropped rows are stale recovery state. */
     @Query(
-        "SELECT audioHash FROM fingerprint_cache WHERE path = :path AND size = :size AND mtime = :mtime"
+        """
+        DELETE FROM playback_outbox WHERE id IN (
+            SELECT id FROM playback_outbox ORDER BY id DESC LIMIT -1 OFFSET :keep
+        )
+        """
     )
-    suspend fun hit(path: String, size: Long, mtime: Long): String?
+    suspend fun trimTo(keep: Int): Int
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(entry: FingerprintCacheEntity)
-
-    @Query("DELETE FROM fingerprint_cache") suspend fun clear()
+    @Query("DELETE FROM playback_outbox") suspend fun clear()
 }
 
 /** Cross-table transaction for resolving duplicate tracks. */

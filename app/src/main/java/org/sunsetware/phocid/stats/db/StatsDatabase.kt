@@ -17,10 +17,9 @@ import java.io.File
             TrackDailyEntity::class,
             TrackTotalsEntity::class,
             ActiveDayEntity::class,
-            FingerprintCacheEntity::class,
             PlaybackOutboxEntity::class,
         ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class StatsDatabase : RoomDatabase() {
@@ -35,8 +34,6 @@ abstract class StatsDatabase : RoomDatabase() {
     abstract fun totalsDao(): TrackTotalsDao
 
     abstract fun activeDayDao(): ActiveDayDao
-
-    abstract fun fingerprintCacheDao(): FingerprintCacheDao
 
     abstract fun outboxDao(): PlaybackOutboxDao
 
@@ -176,6 +173,18 @@ abstract class StatsDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * 7 -> 8 drops the fingerprint_cache table. It was registered with the schema but never
+         * read or written anywhere (fingerprints are recomputed per track), so the drop only
+         * reclaims space; no data is lost.
+         */
+        internal val MIGRATION_7_8 =
+            object : Migration(7, 8) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("DROP TABLE IF EXISTS fingerprint_cache")
+                }
+            }
+
         @Volatile private var instance: StatsDatabase? = null
 
         fun get(context: Context): StatsDatabase =
@@ -194,6 +203,7 @@ abstract class StatsDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
                 )
                 .addCallback(
                     object : Callback() {

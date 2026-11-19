@@ -235,7 +235,7 @@ class StatsMigrationTest {
         // The database no longer falls back to destructive migration, so a missed step would
         // crash (or, before that, silently wipe user statistics on older builds). Every version
         // from 1 up to the current one must have a registered consecutive migration.
-        val currentVersion = 7
+        val currentVersion = 8
         val migrations =
             listOf(
                 StatsDatabase.MIGRATION_1_2,
@@ -244,6 +244,7 @@ class StatsMigrationTest {
                 StatsDatabase.MIGRATION_4_5,
                 StatsDatabase.MIGRATION_5_6,
                 StatsDatabase.MIGRATION_6_7,
+                StatsDatabase.MIGRATION_7_8,
             )
         val steps = migrations.associate { it.startVersion to it.endVersion }
 
@@ -302,6 +303,25 @@ class StatsMigrationTest {
             }
     }
 
+    @Test
+    fun migration7To8DropsFingerprintCache() {
+        val db = helper.writableDatabase
+        db.execSQL(CREATE_FINGERPRINT_CACHE)
+        db.execSQL("INSERT INTO fingerprint_cache VALUES ('/a.flac', 1, 2, 'hash')")
+
+        StatsDatabase.MIGRATION_7_8.migrate(db)
+
+        // The table was registered with the schema but never used anywhere, so the migration only
+        // reclaims its space; it must be gone entirely.
+        db.query(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'fingerprint_cache'"
+        )
+            .use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.getInt(0)).isZero()
+            }
+    }
+
     private fun activeDays(db: SupportSQLiteDatabase): List<Int> =
         db.query("SELECT epochDay FROM active_days ORDER BY epochDay").use { cursor ->
             buildList { while (cursor.moveToNext()) add(cursor.getInt(0)) }
@@ -357,5 +377,13 @@ class StatsMigrationTest {
         const val CREATE_TRACK_DAILY_V6 = CREATE_TRACK_DAILY_V5
 
         const val CREATE_TRACK_TOTALS_V6 = CREATE_TRACK_TOTALS_V5
+
+        const val CREATE_FINGERPRINT_CACHE =
+            "CREATE TABLE fingerprint_cache (" +
+                "path TEXT NOT NULL, " +
+                "size INTEGER NOT NULL, " +
+                "mtime INTEGER NOT NULL, " +
+                "audioHash TEXT, " +
+                "PRIMARY KEY(path))"
     }
 }

@@ -197,16 +197,24 @@ data class PlaybackOutboxEntity(
     val createdAt: Long,
 )
 
-/** Local cache for audio hashes. Derived data, never included in backups. */
-@Entity(tableName = "fingerprint_cache")
-data class FingerprintCacheEntity(
-    @PrimaryKey val path: String,
-    val size: Long,
-    val mtime: Long,
-    @ColumnInfo(name = "audioHash") val audioHash: String?,
-)
-
 object StatsRetention {
-    const val EVENT_RETENTION_DAYS = 1095
+    /**
+     * Retention window, in days, shared by the daily aggregates and the raw play-event log: the
+     * maintenance worker anchors both cutoffs at the same local-midnight boundary of the same
+     * start day, so the two tables always cover the identical calendar window.
+     */
     const val DAILY_RETENTION_DAYS = 1095
+
+    /**
+     * Tracks with no statistics anywhere (no events, no daily rows, no lifetime totals) and older
+     * than this grace are reclaimed as orphans: they are resolver bookkeeping for files that were
+     * never played, and the grace keeps freshly resolved rows alive until their first play.
+     */
+    const val ORPHAN_TRACK_GRACE_MILLIS: Long = 30L * 24 * 60 * 60 * 1000
+
+    /**
+     * Newest outbox rows kept when the durable outbox is trimmed. Rows beyond the cap are stale
+     * recovery state from sessions that repeatedly failed to drain.
+     */
+    const val OUTBOX_MAX_ROWS = 512
 }

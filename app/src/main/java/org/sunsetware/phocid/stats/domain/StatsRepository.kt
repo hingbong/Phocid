@@ -152,20 +152,20 @@ class StatsRepository(
     /**
      * Reads play_events, so it starts from zero after restoring a backup.
      *
-     * The bucket is the event's own local hour in [zoneId], not a single current offset applied to
-     * every event. Both occurrences of a repeated fall-back hour therefore share hour 1, while a
-     * spring-forward gap simply has no events (and so no bucket beyond the ordinary zero-filled
-     * 0..23 output).
+     * The aggregation happens in SQL over 15-minute UTC slices, so even the ALL range never loads
+     * the full event log into memory. Each slice is mapped to its own local hour in [zoneId]:
+     * both occurrences of a repeated fall-back hour therefore share hour 1, while a spring-forward
+     * gap simply has no slices (and so no bucket beyond the ordinary zero-filled 0..23 output).
      */
     fun hourlyDistribution(range: StatsRange): Flow<List<HourBucket>> {
         val zone = zoneId()
-        return db.eventDao().hourlyEvents(sinceMillis(range)).map { events ->
+        return db.eventDao().hourlyBuckets(sinceMillis(range)).map { slices ->
             val plays = IntArray(HOURS_IN_DAY)
             val millis = LongArray(HOURS_IN_DAY)
-            for (event in events) {
-                val hour = Instant.ofEpochMilli(event.playedAt).atZone(zone).hour
-                plays[hour]++
-                millis[hour] += event.playedMillis
+            for (slice in slices) {
+                val hour = Instant.ofEpochMilli(slice.startMillis).atZone(zone).hour
+                plays[hour] += slice.plays
+                millis[hour] += slice.millis
             }
             List(HOURS_IN_DAY) { hour -> HourBucket(hour, plays[hour], millis[hour]) }
         }

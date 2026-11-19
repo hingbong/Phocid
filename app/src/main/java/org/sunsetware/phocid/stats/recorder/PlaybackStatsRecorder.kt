@@ -33,6 +33,7 @@ import org.sunsetware.phocid.stats.db.ActiveDayEntity
 import org.sunsetware.phocid.stats.db.PlayEventEntity
 import org.sunsetware.phocid.stats.db.PlaybackOutboxEntity
 import org.sunsetware.phocid.stats.db.StatsDatabase
+import org.sunsetware.phocid.stats.db.StatsRetention
 import org.sunsetware.phocid.stats.resolver.TrackMeta
 import org.sunsetware.phocid.stats.resolver.TrackResolver
 
@@ -1228,6 +1229,9 @@ class PlaybackStatsRecorder(
                         createdAt = wallMillis(),
                     )
                 )
+            // Bound the outbox: sessions that repeatedly fail to drain are stale recovery state,
+            // and the maintenance worker that also trims may never run on some devices.
+            db.outboxDao().trimTo(StatsRetention.OUTBOX_MAX_ROWS)
             true
         } catch (ex: Exception) {
             Log.e("Phocid", "Unable to write playback statistics outbox for ${session.label}", ex)
