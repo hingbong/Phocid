@@ -96,10 +96,21 @@ fun Player.restorePlayerState(state: PlayerState, unfilteredTrackIndex: Unfilter
     // Shuffle must be set before items or items will be shuffled again
     shuffleModeEnabled = state.shuffle
     val survivingIndexes = mutableListOf<Int>()
+    // The queue can hold thousands of items: map each current index to its position in the
+    // unshuffled order once instead of an O(n) indexOf scan per item. Values are unique (the
+    // mapping is a permutation), so first-wins lookup reproduces indexOf exactly.
+    val unshuffledPositionOf =
+        state.unshuffledPlayQueueMapping?.let { mapping ->
+            val inverse = HashMap<Int, Int>(mapping.size * 2)
+            mapping.forEachIndexed { position, currentIndex ->
+                if (currentIndex !in inverse) inverse[currentIndex] = position
+            }
+            inverse
+        }
     setMediaItems(
         state.actualPlayQueue.mapIndexedNotNull { index, id ->
             unfilteredTrackIndex.tracks[id]?.getMediaItem(
-                state.unshuffledPlayQueueMapping?.indexOf(index)
+                unshuffledPositionOf?.getOrDefault(index, -1)
             )?.also { survivingIndexes += index }
         }
     )

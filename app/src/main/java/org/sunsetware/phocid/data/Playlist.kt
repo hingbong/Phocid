@@ -447,7 +447,8 @@ data class Playlist(
     /** I won't trust Android JVM's randomness. */
     fun addPaths(paths: List<String>): Playlist {
         val existingKeys = entries.map { it.key }.toSet()
-        val newKeys = mutableListOf<UUID>()
+        // A set keeps the uniqueness check O(1); the old list scan made large adds quadratic.
+        val newKeys = LinkedHashSet<UUID>()
         repeat(paths.size) {
             var key = UUID.randomUUID()
             while (existingKeys.contains(key) || newKeys.contains(key)) {

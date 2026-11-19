@@ -64,6 +64,7 @@ import org.sunsetware.phocid.sortkey.SortKeyLookup
 import org.sunsetware.phocid.utils.CaseInsensitiveMap
 import org.sunsetware.phocid.utils.CaseInsensitiveString
 import org.sunsetware.phocid.utils.ColorSerializer
+import org.sunsetware.phocid.utils.casefolder
 import org.sunsetware.phocid.utils.coerceInOrMin
 import org.sunsetware.phocid.utils.distinctCaseInsensitive
 import org.sunsetware.phocid.utils.icuFormat
@@ -1167,14 +1168,28 @@ private fun getArtists(
     albums: Map<AlbumKey, Album>,
     collator: Collator,
 ): CaseInsensitiveMap<Artist> {
-    return tracks
-        .flatMap { it.artists }
-        .distinctCaseInsensitive()
-        .associateWith { name ->
+    // Single pass: bucket every track under each of its artist names, keyed by the same NFKC
+    // casefold that groups the names, instead of re-filtering the whole library once per
+    // artist. The first list of each bucket collects every name occurrence (its mode picks the
+    // representative spelling, exactly like the old distinctCaseInsensitive); the second
+    // collects each track once per folded name, and LinkedHashMap insertion order preserves
+    // the old first-encounter ordering of the groups.
+    val groups = LinkedHashMap<String, Pair<MutableList<String>, MutableList<Track>>>()
+    for (track in tracks) {
+        val seen = HashSet<String>()
+        for (artist in track.artists) {
+            val key = casefolder.normalize(artist)
+            val bucket =
+                groups.getOrPut(key) { Pair(mutableListOf<String>(), mutableListOf<Track>()) }
+            bucket.first.add(artist)
+            if (seen.add(key)) bucket.second.add(track)
+        }
+    }
+    return groups.values
+        .map { (names, nameTracks) ->
+            val name = names.mode()
             val artistTracks =
-                tracks
-                    .filter { track -> track.artists.any { it.equals(name, true) } }
-                    .sorted(collator, Artist.TrackSortingOptions.values.first().keys, true)
+                nameTracks.sorted(collator, Artist.TrackSortingOptions.values.first().keys, true)
             val albumSlices =
                 artistTracks
                     .groupBy { if (it.album != null) AlbumKey(it.album, it.albumArtists) else null }
@@ -1192,8 +1207,9 @@ private fun getArtists(
                     .sortedBy(collator, Album.CollectionSortingOptions.values.first().keys, true) {
                         it.album
                     }
-            Artist(name, artistTracks, albumSlices)
+            name to Artist(name, artistTracks, albumSlices)
         }
+        .toMap()
         .let { CaseInsensitiveMap.noMerge(it) }
 }
 
@@ -1201,17 +1217,27 @@ private fun getAlbumArtists(
     albums: Map<AlbumKey, Album>,
     collator: Collator,
 ): CaseInsensitiveMap<AlbumArtist> {
-    return albums.values
-        .flatMap { it.albumArtists }
-        .distinctCaseInsensitive()
-        .associateWith { name ->
-            val albumArtistAlbums =
-                albums.values
-                    .filter { it.albumArtists.any { it.equals(name, true) } }
-                    .sorted(collator, Album.CollectionSortingOptions.values.first().keys, true)
-            val albumArtistTracks = albumArtistAlbums.flatMap { it.tracks }
-            AlbumArtist(name, albumArtistTracks, albumArtistAlbums)
+    // Same single-pass bucketing as getArtists, over albums and their album artist names.
+    val groups = LinkedHashMap<String, Pair<MutableList<String>, MutableList<Album>>>()
+    for (album in albums.values) {
+        val seen = HashSet<String>()
+        for (albumArtist in album.albumArtists) {
+            val key = casefolder.normalize(albumArtist)
+            val bucket =
+                groups.getOrPut(key) { Pair(mutableListOf<String>(), mutableListOf<Album>()) }
+            bucket.first.add(albumArtist)
+            if (seen.add(key)) bucket.second.add(album)
         }
+    }
+    return groups.values
+        .map { (names, nameAlbums) ->
+            val name = names.mode()
+            val albumArtistAlbums =
+                nameAlbums.sorted(collator, Album.CollectionSortingOptions.values.first().keys, true)
+            val albumArtistTracks = albumArtistAlbums.flatMap { it.tracks }
+            name to AlbumArtist(name, albumArtistTracks, albumArtistAlbums)
+        }
+        .toMap()
         .let { CaseInsensitiveMap.noMerge(it) }
 }
 
@@ -1220,21 +1246,33 @@ private fun getGenres(
     artists: CaseInsensitiveMap<Artist>,
     collator: Collator,
 ): CaseInsensitiveMap<Genre> {
-    return tracks
-        .flatMap { it.genres }
-        .distinctCaseInsensitive()
-        .associateWith { name ->
+    // Same single-pass bucketing as getArtists, over tracks and their genre names. Artist
+    // slices only need membership in this genre's track set, not a per-artist re-scan over
+    // the whole library for every genre.
+    val groups = LinkedHashMap<String, Pair<MutableList<String>, MutableList<Track>>>()
+    for (track in tracks) {
+        val seen = HashSet<String>()
+        for (genre in track.genres) {
+            val key = casefolder.normalize(genre)
+            val bucket =
+                groups.getOrPut(key) { Pair(mutableListOf<String>(), mutableListOf<Track>()) }
+            bucket.first.add(genre)
+            if (seen.add(key)) bucket.second.add(track)
+        }
+    }
+    return groups.values
+        .map { (names, nameTracks) ->
+            val name = names.mode()
             val genreTracks =
-                tracks
-                    .filter { track -> track.genres.any { it.equals(name, true) } }
-                    .sorted(collator, Genre.TrackSortingOptions.values.first().keys, true)
+                nameTracks.sorted(collator, Genre.TrackSortingOptions.values.first().keys, true)
+            val genreTrackSet = nameTracks.toHashSet()
             val artistSlices =
                 artists.values
                     .map { artist ->
                         ArtistSlice(
                             artist,
                             artist.tracks
-                                .filter { track -> track.genres.any { it.equals(name, true) } }
+                                .filter { it in genreTrackSet }
                                 .sorted(
                                     collator,
                                     Artist.TrackSortingOptions.values.first().keys,
@@ -1246,8 +1284,9 @@ private fun getGenres(
                     .sortedBy(collator, Artist.CollectionSortingOptions.values.first().keys, true) {
                         it.artist
                     }
-            Genre(name, genreTracks, artistSlices)
+            name to Genre(name, genreTracks, artistSlices)
         }
+        .toMap()
         .let { CaseInsensitiveMap.noMerge(it) }
 }
 
