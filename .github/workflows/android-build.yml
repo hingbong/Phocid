@@ -11,6 +11,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -107,7 +110,7 @@ jobs:
 
       - name: Run unit tests
         id: unit_tests
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_unit_tests == true)
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_unit_tests == true)
         env:
           PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
           PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
