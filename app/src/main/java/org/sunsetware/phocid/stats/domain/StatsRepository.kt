@@ -1,10 +1,13 @@
 package org.sunsetware.phocid.stats.domain
 
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import org.sunsetware.phocid.data.Track
 import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.DayBucket
@@ -14,6 +17,7 @@ import org.sunsetware.phocid.stats.db.RangeSummary
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.TrackAggregate
 import org.sunsetware.phocid.stats.db.TrackTotalsEntity
+import org.sunsetware.phocid.stats.fingerprint.AudioFingerprint
 import org.sunsetware.phocid.stats.fingerprint.LocalUriKey
 import org.sunsetware.phocid.stats.fingerprint.TagKey
 
@@ -191,28 +195,69 @@ class StatsRepository(
 
     suspend fun lifetimeByPath(path: String): TrackTotalsEntity? = db.totalsDao().byPath(path)
 
+    /**
+     * Lifetime totals for a library track, for display only. Recording identity is owned by
+     * [org.sunsetware.phocid.stats.resolver.TrackResolver], which never selects a row by LOCAL_URI.
+     *
+     * LOCAL_URI stays the first lookup because it can be a row's only alias (a track that was never
+     * fingerprinted or tagged). MediaStore reuses row ids, though, so the (id, size) hint can
+     * outlive its file and point at another track's totals when a different file of the same byte
+     * size lands on the same id. The hint is distrusted only on positive proof of different audio
+     * (see [provesDifferentAudio]); every unprovable case keeps the historical resolution, so no
+     * existing track changes which row its stats come from.
+     */
     suspend fun lifetimeForTrack(track: Track): TrackTotalsEntity? {
         db.totalsDao()
             .byAlias(AliasKind.LOCAL_URI, LocalUriKey.of(track.uri.toString(), track.size))
-            ?.let {
-                return it
+            ?.let { hit ->
+                if (!provesDifferentAudio(track, hit.trackRowId)) {
+                    return hit
+                }
+                // The hint provably outlived its file: fall through to the portable clues.
             }
         if (track.path.isNotBlank()) {
             db.totalsDao().byPath(track.path)?.let {
                 return it
             }
         }
-        for (key in
-            TagKey.candidates(
-                track.artists.joinToString(", "),
-                track.album,
-                track.title ?: track.fileName.substringBeforeLast('.'),
-                track.duration.inWholeMilliseconds,
-            )) {
+        for (key in tagCandidates(track)) {
             db.totalsDao().byAlias(AliasKind.TAG_KEY, key)?.let {
                 return it
             }
         }
         return null
+    }
+
+    private fun tagCandidates(track: Track): List<String> =
+        TagKey.candidates(
+            track.artists.joinToString(", "),
+            track.album,
+            track.title ?: track.fileName.substringBeforeLast('.'),
+            track.duration.inWholeMilliseconds,
+        )
+
+    /**
+     * True only when [rowId] provably holds different audio than [track].
+     *
+     * Proof requires all of: the current track yields tag candidates, none of the row's stored
+     * TAG_KEY aliases matches them, the row owns at least one AUDIO_HASH alias, and the current
+     * file's freshly computed audio hash matches none of them. Anything less keeps the LOCAL_URI
+     * hint: untagged rows, matching tags, retagged or renamed copies of the same audio (the hash
+     * strips container tags), unreadable files, and rows that were never fingerprinted all resolve
+     * exactly as before. The file is read only in the rare contradicting case, never on the normal
+     * lookup path.
+     */
+    private suspend fun provesDifferentAudio(track: Track, rowId: Long): Boolean {
+        val candidates = tagCandidates(track)
+        if (candidates.isEmpty()) return false
+        val aliases = db.aliasDao().aliasesOf(rowId)
+        if (aliases.any { it.kind == AliasKind.TAG_KEY && it.value in candidates }) return false
+        val rowHashes = aliases.filter { it.kind == AliasKind.AUDIO_HASH }.map { it.value }
+        if (rowHashes.isEmpty()) return false
+        val hash =
+            withContext(Dispatchers.IO) {
+                track.path.takeIf { it.isNotBlank() }?.let { AudioFingerprint.compute(File(it)) }
+            } ?: return false
+        return hash !in rowHashes
     }
 }
