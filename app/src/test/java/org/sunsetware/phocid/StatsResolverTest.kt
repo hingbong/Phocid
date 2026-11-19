@@ -159,7 +159,11 @@ class StatsResolverTest {
     fun relativePathFallbackStillWorksWithoutHashOrTags() =
         runBlocking<Unit> {
             val file = temporaryFolder.newFile("Song.flac")
-            val resolver = resolver { null }
+            // RelPathKey only keys paths under a known media root (an unrooted path deliberately
+            // produces no key, so same-name files in different directories never merge). Root the
+            // temp folder so the same file resolves to one row via its relative path, no hash/tags.
+            val resolver =
+                resolver(mediaRoots = { listOf(temporaryFolder.root.absolutePath) }) { null }
             val first =
                 resolver.resolve(
                     noIdentityMeta("content://media/external/audio/media/1").copy(file = file)
