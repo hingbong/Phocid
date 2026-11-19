@@ -8,6 +8,7 @@ import android.icu.number.NumberFormatter
 import android.icu.number.Precision
 import android.icu.util.MeasureUnit
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -71,8 +72,12 @@ import org.sunsetware.phocid.utils.roundToIntOrZero
 class WidgetConfigureActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
-        while (!GlobalData.initialized.get()) {
-            Thread.sleep(1)
+        super.onCreate(savedInstanceState)
+        // Bounded wait instead of an unbounded main-thread spin; fail fast if init never finished.
+        if (!GlobalData.awaitInitialized()) {
+            Log.e("PhocidWidget", "Initialization did not complete; finishing configuration")
+            finish()
+            return
         }
 
         enableEdgeToEdge(
@@ -80,8 +85,6 @@ class WidgetConfigureActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         window.isNavigationBarContrastEnforced = false
-
-        super.onCreate(savedInstanceState)
 
         val preferencesFlow = GlobalData.preferences
 

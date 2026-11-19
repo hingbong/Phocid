@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -1032,8 +1033,11 @@ class AgentQueryService : Service() {
                 }
             responseBudget.boundedResponse(response)
         } catch (t: Throwable) {
+            // Never reflect an exception message back to the caller: it can contain filesystem
+            // paths, SQL fragments, or other internals. Keep the detail in logcat only.
+            Log.e("PhocidAgent", "Query failed", t)
             responseBudget.boundedResponse(
-                errorJson("internal_error", t.message ?: t.javaClass.simpleName)
+                errorJson("internal_error", "An internal error occurred")
             )
         }
     }

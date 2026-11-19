@@ -1,6 +1,3 @@
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -27,10 +24,26 @@ val buildCommit =
             ?.takeIf { it.isNotBlank() }
         ?: "unknown"
 
+// Reproducible builds: never fall back to wall-clock time. CI derives the value from the
+// commit timestamp; local builds use the same git value so a given commit always yields the
+// same BuildConfig (and therefore the same APK bytes for the same inputs).
 val buildTime =
     System.getenv("PHOCID_BUILD_TIME")?.takeIf { it.isNotBlank() }
-        ?: OffsetDateTime.now(ZoneOffset.UTC)
-            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'"))
+        ?: runCatching {
+                providers
+                    .exec { commandLine("git", "log", "-1", "--format=%cI", "HEAD") }
+                    .standardOutput.asText.get()
+                    .trim()
+            }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+        ?: "unknown"
+
+// versionCode must grow on every published build, otherwise installed users never receive an
+// update. CI supplies the monotonically increasing run number via PHOCID_BUILD_NUMBER.
+val buildNumber = System.getenv("PHOCID_BUILD_NUMBER")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+val computedVersionCode = 20260610 + buildNumber
+val computedVersionName = "20260610.$buildNumber"
 
 android {
     namespace = "org.sunsetware.phocid"
@@ -40,8 +53,8 @@ android {
         applicationId = "org.sunsetware.phocid.next"
         minSdk = 35
         targetSdk = 37
-        versionCode = 20260610
-        versionName = "20260610"
+        versionCode = computedVersionCode
+        versionName = computedVersionName
 
         buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")

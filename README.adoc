@@ -37,7 +37,7 @@ If your problem is not covered by this page, you can create an https://github.co
 * More lyrics styles
 * Optional less-vibrant colors
 * Playback statistics with daily history, multiple ranges, and top tracks
-* Statistics backup and restore that identifies tracks by UUID, not by file path
+* Statistics backup and restore that identifies tracks by UUID plus content/tag/path-derived aliases
 * Brand new design based on Material Design 3
 
 == Optional agent bridge
@@ -48,7 +48,10 @@ clients. It is read-only by default and exposes library metadata, playback
 statistics, and the current player state over a local HTTP endpoint (loopback
 by default; the listen address and port are configurable in the bridge app).
 An opt-in write tool can store local sort keys; it never edits audio files or
-tags, controls playback, or exposes file paths.
+tags or exposes file paths. The MCP surface does not control playback (the
+separate AppFunctions surface does expose play/pause/next/previous), and the
+read-only default is enforced by the bridge, not by the main app's capability
+flag.
 
 Both APKs must be signed with the same certificate because the main app
 protects its query service with a signature-level permission. See
@@ -70,7 +73,7 @@ The optional agent bridge is a separate APK; it listens on loopback by default, 
 
 == Reporting a crash
 
-A crash report should have been saved to `Android/data/org.sunsetware.phocid/files/crash.txt` in your external storage.
+A crash report should have been saved to `Android/data/org.sunsetware.phocid.next/files/crash.txt` in your external storage.
 Please https://github.com/TJYSunset/Phocid/issues[create an issue] with the report attached.
 
 NOTE: Depending on your system, you might need to connect your phone to a computer to see this file.

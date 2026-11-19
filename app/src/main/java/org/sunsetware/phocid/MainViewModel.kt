@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -14,10 +15,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.ExperimentalSerializationApi
 import org.sunsetware.phocid.data.Lyrics
 import org.sunsetware.phocid.data.PlayerManager
@@ -27,6 +31,9 @@ import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.ui.components.ArtworkCache
 import org.sunsetware.phocid.ui.views.library.LibraryScreenTabInfo
 import org.sunsetware.phocid.utils.externalStorageRoots
+
+private const val MEDIA_SCAN_TIMEOUT_MILLIS = 30_000L
+private const val LIBRARY_INDEX_SYNC_TIMEOUT_MILLIS = 30_000L
 
 class MainViewModel(private val application: Application) : AndroidViewModel(application) {
     private val _initialized = MutableStateFlow(false)
@@ -115,28 +122,35 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
     fun scanLibrary(force: Boolean): Job {
         return viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                if (scanMutex.tryLock()) {
+                // withLock suspends instead of busy-waiting on a contended scan, and always
+                // releases the mutex even if the scan throws.
+                scanMutex.withLock {
                     Log.d("Phocid", "Library scan started")
                     try {
                         _libraryScanProgress.update { null }
                         _libraryScanState.update { force }
 
                         if (force || preferences.value.alwaysRescanMediaStore) {
-                            val mediaScannerSignal = AtomicBoolean(false)
                             val storages =
                                 application.applicationContext
                                     .externalStorageRoots()
                                     .map { it.path }
                                     .toTypedArray()
+                            // scanFile invokes the callback once per path. Wait for *all* roots,
+                            // with an absolute timeout so a missing callback cannot wedge the scan
+                            // (and hold the mutex / the RESUMED intent) forever.
+                            val remaining = AtomicInteger(storages.size)
                             MediaScannerConnection.scanFile(
                                 application.applicationContext,
                                 storages,
                                 arrayOf("audio/*"),
                             ) { _, _ ->
-                                mediaScannerSignal.set(true)
+                                remaining.decrementAndGet()
                             }
-                            while (!mediaScannerSignal.get()) {
-                                delay(1)
+                            withTimeoutOrNull(MEDIA_SCAN_TIMEOUT_MILLIS) {
+                                while (remaining.get() > 0) {
+                                    delay(10)
+                                }
                             }
                         }
 
@@ -155,11 +169,13 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
                             }
                         if (newTrackIndex != null) {
                             GlobalData.unfilteredTrackIndex.update { newTrackIndex }
-                            while (
-                                GlobalData.libraryIndex.value.flowVersion <
-                                    newTrackIndex.flowVersion
-                            ) {
-                                delay(1)
+                            // Suspend until the derived LibraryIndex has caught up instead of
+                            // spinning on its value. Subscribing here also ensures the cold
+                            // combine recomputes even when no UI is currently collecting it.
+                            withTimeoutOrNull(LIBRARY_INDEX_SYNC_TIMEOUT_MILLIS) {
+                                GlobalData.libraryIndex.first {
+                                    it.flowVersion >= newTrackIndex.flowVersion
+                                }
                             }
                             Log.d("Phocid", "Library scan completed")
                         } else {
@@ -167,12 +183,7 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
                         }
                         playlistManager.syncPlaylists()
                     } finally {
-                        scanMutex.unlock()
                         _libraryScanState.update { null }
-                    }
-                } else {
-                    while (scanMutex.isLocked) {
-                        delay(1)
                     }
                 }
             }

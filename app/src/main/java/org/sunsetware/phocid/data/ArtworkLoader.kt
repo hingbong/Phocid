@@ -146,7 +146,10 @@ private fun loadWithContentResolver(
                 val shortestSide = min(it.width, it.height)
                 val x = (it.width - shortestSide) / 2
                 val y = (it.height - shortestSide) / 2
-                Bitmap.createBitmap(it, x, y, shortestSide, shortestSide)
+                val cropped = Bitmap.createBitmap(it, x, y, shortestSide, shortestSide)
+                // createBitmap allocates a new bitmap; recycle the source thumbnail.
+                if (cropped !== it) it.recycle()
+                cropped
             } else {
                 it
             }

@@ -162,13 +162,22 @@ class StatsBackupPortabilityTest {
     /** A version 1 payload has no activeDays key; the CBOR encoder omits the default value. */
     @OptIn(ExperimentalSerializationApi::class)
     private fun version1Bytes(payload: StatsBackup): ByteArray {
+        return gzippedBytes(Cbor { ignoreUnknownKeys = true }.encodeToByteArray(payload))
+    }
+
+    /** Wraps arbitrary CBOR bytes in the backup envelope (MAGIC + gzip). */
+    private fun gzippedBytes(cborBytes: ByteArray): ByteArray {
         val out = ByteArrayOutputStream()
         GZIPOutputStream(out).use { gzip ->
             gzip.write(StatsBackup.MAGIC.toByteArray(Charsets.US_ASCII))
-            gzip.write(Cbor { ignoreUnknownKeys = true }.encodeToByteArray(payload))
+            gzip.write(cborBytes)
         }
         return out.toByteArray()
     }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun backupBytes(payload: StatsBackup): ByteArray =
+        gzippedBytes(Cbor { ignoreUnknownKeys = true }.encodeToByteArray(payload))
 
     @Test
     fun exportOmitsLocalUriAlias() =
@@ -749,5 +758,117 @@ class StatsBackupPortabilityTest {
             StatsBackupManager(db).restore(payload, replace = true)
 
             assertThat(db.dailyDao().since(20_000).single().epochDay).isEqualTo(20_000)
+        }
+
+    // --- Input hardening: a backup file is untrusted input ---
+
+    @Test
+    fun readRejectsGzipBombBeyondDecompressedCap() =
+        runBlocking<Unit> {
+            // A tiny gzip stream that inflates past MAX_PAYLOAD_BYTES must be refused before CBOR
+            // decoding, without allocating the full inflated payload on the heap.
+            val inflated = ByteArray(StatsBackup.MAX_PAYLOAD_BYTES + 1)
+            java.util.Arrays.fill(inflated, 'x'.code.toByte())
+            val out = ByteArrayOutputStream()
+            GZIPOutputStream(out).use { gzip ->
+                gzip.write(StatsBackup.MAGIC.toByteArray(Charsets.US_ASCII))
+                gzip.write(inflated)
+            }
+
+            assertThatThrownBy {
+                    runBlocking { StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray())) }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("too large")
+        }
+
+    @Test
+    fun readRejectsTruncatedStream() =
+        runBlocking<Unit> {
+            val valid = backupBytes(backup(tracks = listOf(track("uuid-1"))))
+            val truncated = valid.copyOf(valid.size / 2)
+
+            assertThatThrownBy {
+                    runBlocking { StatsBackupManager(db).read(ByteArrayInputStream(truncated)) }
+                }
+                .isInstanceOf(Exception::class.java)
+        }
+
+    @Test
+    fun readRejectsUnsupportedVersions() =
+        runBlocking<Unit> {
+            for (version in listOf(-1, 0, StatsBackup.VERSION + 1, Int.MAX_VALUE)) {
+                val bytes = backupBytes(backup(tracks = listOf(track("uuid-1")), version = version))
+                assertThatThrownBy {
+                        runBlocking { StatsBackupManager(db).read(ByteArrayInputStream(bytes)) }
+                    }
+                    .isInstanceOf(IllegalArgumentException::class.java)
+            }
+            // Version 1 (legacy, no activeDays key) is still accepted.
+            val legacy =
+                version1Bytes(backup(tracks = listOf(track("uuid-1")), version = 1))
+            assertThat(StatsBackupManager(db).read(ByteArrayInputStream(legacy)).version).isEqualTo(1)
+        }
+
+    @Test
+    fun readRejectsNegativeCountersAndImplausibleNumbers() =
+        runBlocking<Unit> {
+            val invalidPayloads =
+                listOf(
+                    backup(
+                        tracks = listOf(track("uuid-1")),
+                        totals = listOf(total("uuid-1", -1, 60_000, 0, 1)),
+                    ),
+                    backup(
+                        tracks = listOf(track("uuid-1")),
+                        daily = listOf(day("uuid-1", 20_000, 1, -60_000, 1)),
+                    ),
+                    backup(
+                        tracks = listOf(track("uuid-1")),
+                        daily = listOf(day("uuid-1", Int.MAX_VALUE, 1, 60_000, 1)),
+                    ),
+                )
+            invalidPayloads.forEach { payload ->
+                assertThatThrownBy {
+                        runBlocking {
+                            StatsBackupManager(db).read(ByteArrayInputStream(backupBytes(payload)))
+                        }
+                    }
+                    .isInstanceOf(IllegalArgumentException::class.java)
+            }
+        }
+
+    @Test
+    fun mergeRestoreOnlyQueriesRelevantDailyRows() =
+        runBlocking<Unit> {
+            // Regression for H2: merging a small backup must not scan the whole track_daily
+            // table. Seed many unrelated days, then merge one day and assert the result is still
+            // the max of the overlapping row (not a full-table rebuild).
+            val row = seed(db)
+            db.dailyDao()
+                .insertAll(
+                    (0 until 50).map { offset ->
+                        org.sunsetware.phocid.stats.db.TrackDailyEntity(
+                            trackRowId = row,
+                            epochDay = 1_000 + offset,
+                            playCount = 1,
+                            playedMillis = 1_000,
+                            lastPlayedAt = 1,
+                        )
+                    }
+                )
+            val payload =
+                backup(
+                    tracks = listOf(track("uuid-1")),
+                    daily = listOf(day("uuid-1", 1_010, 4, 9_000, 10)),
+                )
+
+            StatsBackupManager(db).restore(payload, replace = false)
+
+            val merged = db.dailyDao().since(1_010).single { it.epochDay == 1_010 }
+            assertThat(merged.playCount).isEqualTo(4)
+            assertThat(merged.playedMillis).isEqualTo(9_000)
+            // Unrelated rows are untouched.
+            assertThat(db.dailyDao().since(1_000).size).isEqualTo(50)
         }
 }

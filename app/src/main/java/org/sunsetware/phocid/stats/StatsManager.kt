@@ -52,6 +52,11 @@ class StatsManager(context: Context) {
             it.startOutboxRecovery()
         }
 
+    /** Drops a recorder that belongs to a destroyed service so the list cannot grow forever. */
+    fun releaseRecorder(recorder: PlaybackStatsRecorder) {
+        recorders.remove(recorder)
+    }
+
     suspend fun clear() =
         withContext(Dispatchers.IO) {
             storeMutex.withLock {

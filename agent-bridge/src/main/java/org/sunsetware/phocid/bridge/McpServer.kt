@@ -149,7 +149,12 @@ class McpServer(
         var transferred = false
         try {
             client.soTimeout = SOCKET_TIMEOUT_MS
-            val input = BufferedInputStream(client.getInputStream())
+            // A per-read timeout alone does not bound a slow-drip client: each individual read can
+            // succeed just under the timeout while the total request stretches forever and holds
+            // one of the few worker threads. Enforce an absolute deadline on every read.
+            val deadline =
+                SystemClock.elapsedRealtime() + REQUEST_TOTAL_TIMEOUT_MS
+            val input = BufferedInputStream(DeadlineInputStream(client.getInputStream(), deadline))
             val request = readRequestHead(input)
             transferred = route(client, input, request)
         } catch (e: HttpError) {
@@ -334,10 +339,27 @@ class McpServer(
         val trimmed = payload.trim()
         if (trimmed.startsWith("[")) {
             val input = JSONArray(trimmed)
+            if (input.length() > MAX_BATCH_SIZE) {
+                return jsonRpcError(null, -32600, "Batch too large").toString()
+            }
             val output = JSONArray()
+            var toolsCalls = 0
+            var responseBytes = 2 // account for the enclosing []
             for (i in 0 until input.length()) {
                 val item = input.optJSONObject(i) ?: continue
-                processObject(item)?.let { output.put(it) }
+                if (item.optString("method", "") == "tools/call") {
+                    if (++toolsCalls > MAX_BATCH_TOOLS_CALLS) {
+                        return jsonRpcError(null, -32600, "Too many tools/call entries").toString()
+                    }
+                }
+                val result = processObject(item) ?: continue
+                val encoded = result.toString()
+                val encodedBytes = encoded.toByteArray(StandardCharsets.UTF_8).size
+                if (responseBytes + encodedBytes + 1 > MAX_BATCH_RESPONSE_BYTES) {
+                    return jsonRpcError(null, -32600, "Batch response too large").toString()
+                }
+                responseBytes += encodedBytes + 1
+                output.put(result)
             }
             return if (output.length() == 0) null else output.toString()
         }
@@ -951,6 +973,11 @@ class McpServer(
 
     private fun readBody(input: InputStream, headers: Map<String, String>): ByteArray =
         when {
+            // RFC 7230 3.3.3: a message with both Transfer-Encoding and Content-Length is
+            // ambiguous and must be rejected (request-smuggling vector).
+            headers["transfer-encoding"]?.contains("chunked", ignoreCase = true) == true &&
+                headers.containsKey("content-length") ->
+                throw HttpError(400, "Transfer-Encoding and Content-Length are both present")
             headers["transfer-encoding"]?.contains("chunked", ignoreCase = true) == true ->
                 readChunked(input)
             else -> {
@@ -1082,6 +1109,7 @@ class McpServer(
             401 -> "Unauthorized"
             404 -> "Not Found"
             405 -> "Method Not Allowed"
+            408 -> "Request Timeout"
             413 -> "Payload Too Large"
             503 -> "Service Unavailable"
             else -> "Internal Server Error"
@@ -1099,6 +1127,35 @@ class McpServer(
         val path: String,
         val headers: Map<String, String>,
     )
+
+    /**
+     * Wraps a socket input stream and fails every read once an absolute deadline has passed.
+     * Unlike Socket.soTimeout this bounds the whole request, not each individual read.
+     */
+    private class DeadlineInputStream(
+        private val delegate: InputStream,
+        private val deadlineRealtime: Long,
+    ) : InputStream() {
+        private fun checkDeadline() {
+            if (SystemClock.elapsedRealtime() > deadlineRealtime) {
+                throw HttpError(408, "Request deadline exceeded")
+            }
+        }
+
+        override fun read(): Int {
+            checkDeadline()
+            return delegate.read()
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            checkDeadline()
+            return delegate.read(b, off, len)
+        }
+
+        override fun available(): Int = delegate.available()
+
+        override fun close() = delegate.close()
+    }
 
     private class HttpError(val status: Int, override val message: String) : Exception(message)
 
@@ -1120,6 +1177,14 @@ class McpServer(
         private const val MAX_HEADER_BYTES = 64 * 1024
         private const val MAX_LINE_BYTES = 8 * 1024
         private const val MAX_BODY_BYTES = 1024 * 1024
+        /** JSON-RPC batch requests are capped so one POST cannot fan out unbounded Binder calls. */
+        private const val MAX_BATCH_SIZE = 20
+        /** Maximum tools/call entries served for a single HTTP request (no keep-alive). */
+        private const val MAX_BATCH_TOOLS_CALLS = 20
+        /** Total serialized batch response cap, aligned with the Binder transaction budget. */
+        private const val MAX_BATCH_RESPONSE_BYTES = 512 * 1024
+        /** Absolute per-request deadline; a slow drip must not hold a worker indefinitely. */
+        private const val REQUEST_TOTAL_TIMEOUT_MS = 30_000L
         private const val SOCKET_TIMEOUT_MS = 15_000
         private const val SSE_PING_INTERVAL_MS = 15_000L
         private const val REJECT_SOCKET_TIMEOUT_MS = 3_000

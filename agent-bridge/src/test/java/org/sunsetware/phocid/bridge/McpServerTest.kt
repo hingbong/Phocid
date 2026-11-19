@@ -388,6 +388,62 @@ class McpServerTest {
         }
     }
 
+    @Test
+    fun oversizedBatchIsRejected() {
+        val items = (1..21).joinToString(",") { """{"jsonrpc":"2.0","id":$it,"method":"ping"}""" }
+        val payload = "[$items]"
+        val response =
+            request(
+                "POST /mcp HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\n" +
+                    "Authorization: Bearer $TOKEN\r\n" +
+                    "Content-Type: application/json\r\n" +
+                    "Content-Length: ${payload.toByteArray(StandardCharsets.UTF_8).size}\r\n" +
+                    "\r\n" +
+                    payload
+            )
+        assertEquals(200, response.status)
+        val text = response.body.toString(StandardCharsets.UTF_8)
+        assertTrue(text, text.contains("Batch too large"))
+        assertTrue(text, text.contains("-32600"))
+    }
+
+    @Test
+    fun smallBatchIsServed() {
+        val payload =
+            """[{"jsonrpc":"2.0","id":1,"method":"ping"},{"jsonrpc":"2.0","id":2,"method":"ping"}]"""
+        val response =
+            request(
+                "POST /mcp HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\n" +
+                    "Authorization: Bearer $TOKEN\r\n" +
+                    "Content-Type: application/json\r\n" +
+                    "Content-Length: ${payload.toByteArray(StandardCharsets.UTF_8).size}\r\n" +
+                    "\r\n" +
+                    payload
+            )
+        assertEquals(200, response.status)
+        val text = response.body.toString(StandardCharsets.UTF_8)
+        assertTrue(text, text.trim().startsWith("["))
+        assertTrue(text, text.contains("\"id\":1"))
+        assertTrue(text, text.contains("\"id\":2"))
+    }
+
+    @Test
+    fun bothChunkedAndContentLengthAreRejected() {
+        val response =
+            request(
+                "POST /mcp HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\n" +
+                    "Authorization: Bearer $TOKEN\r\n" +
+                    "Transfer-Encoding: chunked\r\n" +
+                    "Content-Length: 2\r\n" +
+                    "\r\n" +
+                    "0\r\n\r\n"
+            )
+        assertEquals(400, response.status)
+    }
+
     private data class Response(
         val status: Int,
         val headers: Map<String, String>,

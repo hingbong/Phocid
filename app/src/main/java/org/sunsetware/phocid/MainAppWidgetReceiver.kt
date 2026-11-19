@@ -549,7 +549,16 @@ class MainAppWidget : GlanceAppWidget() {
             SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
         controllerFuture.addListener(
-            { action(controllerFuture.get()) },
+            {
+                val controller = controllerFuture.get()
+                try {
+                    action(controller)
+                } finally {
+                    // Each widget click builds a fresh controller; release it or every click
+                    // leaks a MediaController and its session connection.
+                    controller.release()
+                }
+            },
             MoreExecutors.directExecutor(),
         )
     }

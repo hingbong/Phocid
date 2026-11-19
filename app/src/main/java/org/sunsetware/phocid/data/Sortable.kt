@@ -102,7 +102,11 @@ inline fun <T> Iterable<T>.sortedBy(
             val a = selector(genericA)
             val b = selector(genericB)
             val isFolderResult =
-                a.sortIsFolder?.compareTo(b.sortIsFolder!!)?.let { -it }?.takeIf { it != 0 }
+                a.sortIsFolder?.let { aIsFolder ->
+                    b.sortIsFolder?.let { bIsFolder ->
+                        (-aIsFolder.compareTo(bIsFolder)).takeIf { it != 0 }
+                    }
+                }
             if (isFolderResult != null) return@Comparator isFolderResult
             sortingKeys.forEachIndexed { index, item ->
                 val result =

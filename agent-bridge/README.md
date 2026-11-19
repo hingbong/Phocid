@@ -48,7 +48,7 @@ MCP tools:
 - `library_list_facets` (artists, albums, album_artists, genres)
 - `stats_summary`
 - `stats_top_tracks`
-- `stats_tracks`
+- `stats_tracks` (an alias of `stats_top_tracks`; there is no separate AIDL method)
 - `stats_daily`
 - `resolve_stats_uuid`
 - `player_state` (read-only, optional live position)
@@ -308,7 +308,11 @@ frozen client from a frozen server.
 - The bridge does not make outbound network requests.
 - The bridge is a separate UID; the main APK still has no `INTERNET` permission.
 - Sort-key writes are off by default. When enabled, only the local `sort_keys`
-  table is written; audio files, tags, and statistics are untouched.
+  table is written; audio files, tags, and statistics are untouched. The main
+  app's `capabilities()` always reports `writeSortKeys: true`; the opt-in gate
+  lives entirely on the bridge side. `library_update_sort_keys` defaults to
+  `overwrite=false`, so an existing sort key is left untouched (including an
+  attempt to clear it with `sortKey: null`).
 
 ## API version
 

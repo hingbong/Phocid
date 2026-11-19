@@ -66,6 +66,7 @@ import org.sunsetware.phocid.utils.ColorSerializer
 import org.sunsetware.phocid.utils.coerceInOrMin
 import org.sunsetware.phocid.utils.distinctCaseInsensitive
 import org.sunsetware.phocid.utils.icuFormat
+import org.sunsetware.phocid.utils.matchesBounded
 import org.sunsetware.phocid.utils.mode
 import org.sunsetware.phocid.utils.modeOrNull
 import org.sunsetware.phocid.utils.trimAndNormalize
@@ -1106,8 +1107,8 @@ fun LibraryIndex(
     val tracks =
         unfilteredTrackIndex.tracks
             .filter { (_, track) ->
-                blacklist.none { it.containsMatchIn(track.path) } ||
-                    whitelist.any { it.containsMatchIn(track.path) }
+                blacklist.none { it.matchesBounded(track.path) } ||
+                    whitelist.any { it.matchesBounded(track.path) }
             }
             .mapValues { (_, track) ->
                 val key = sortKeys.keyFor(track)

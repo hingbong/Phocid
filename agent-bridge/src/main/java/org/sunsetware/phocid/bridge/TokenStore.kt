@@ -8,6 +8,7 @@ object TokenStore {
     private const val KEY_TOKEN = "token"
     private const val HEX = "0123456789abcdef"
 
+    @Synchronized
     fun getOrCreate(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.getString(KEY_TOKEN, null)?.let {
@@ -16,6 +17,7 @@ object TokenStore {
         return regenerate(context)
     }
 
+    @Synchronized
     fun regenerate(context: Context): String {
         val bytes = ByteArray(24)
         SecureRandom().nextBytes(bytes)

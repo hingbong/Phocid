@@ -184,8 +184,12 @@ jobs:
           PHOCID_KEY_ALIAS: ${{ secrets.PHOCID_KEY_ALIAS }}
           PHOCID_KEY_PASSWORD: ${{ secrets.PHOCID_KEY_PASSWORD }}
           PHOCID_BUILD_COMMIT: ${{ github.sha }}
+          # Monotonically increasing per workflow so versionCode always grows.
+          PHOCID_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          export PHOCID_BUILD_TIME="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          # Derive the build label from the commit, not wall-clock time: the same commit must
+          # produce byte-identical BuildConfig values (and therefore reproducible APKs).
+          export PHOCID_BUILD_TIME="$(git log -1 --format=%cI HEAD)"
           # R8 needs more heap than the local/unit-test cap in gradle.properties.
           ./gradlew --no-daemon --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx4g -XX:MaxMetaspaceSize=1g -XX:ReservedCodeCacheSize=256m -Dfile.encoding=UTF-8' \

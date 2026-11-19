@@ -1,6 +1,7 @@
 package org.sunsetware.phocid.stats.backup
 
 import androidx.room.withTransaction
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.DateTimeException
@@ -48,7 +49,17 @@ data class StatsBackup(
         // per-day boundaries captured when each day was written, and the earliest observed
         // playback instant. Local-only aliases are still filtered from the payload.
         const val VERSION = 3
+        const val MIN_VERSION = 1
         const val MAGIC = "MSTATS1\u0000"
+        /** Upper bound on the decompressed CBOR payload. Guards against gzip bombs. */
+        const val MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
+        /** Upper bound on any single list in a payload, so decode cannot fan out unchecked. */
+        const val MAX_LIST_ENTRIES = 1_000_000
+        /** Plausible epoch-day range (roughly ±8,000 years); blocks Int.MIN/MAX overflow. */
+        const val MIN_EPOCH_DAY = -3_000_000
+        const val MAX_EPOCH_DAY = 3_000_000
+        /** UTC offsets never exceed 18 hours in either direction. */
+        const val MAX_UTC_OFFSET_MINUTES = 18 * 60
     }
 }
 
@@ -203,13 +214,90 @@ class StatsBackupManager(
                 require(String(magic, Charsets.US_ASCII) == StatsBackup.MAGIC) {
                     "Not a Phocid statistics backup"
                 }
-                val payload = cbor.decodeFromByteArray<StatsBackup>(gzip.readBytes())
-                require(payload.version <= StatsBackup.VERSION) {
-                    "Backup was created by a newer version"
+                // A gzip stream can expand by orders of magnitude. Read into a bounded buffer
+                // instead of gzip.readBytes(), which would inflate an arbitrary amount into the
+                // heap before CBOR decoding even starts.
+                val bounded = ByteArrayOutputStream()
+                val buffer = ByteArray(8 * 1024)
+                var total = 0
+                while (true) {
+                    val read = gzip.read(buffer)
+                    if (read < 0) break
+                    if (read == 0) continue
+                    total += read
+                    require(total <= StatsBackup.MAX_PAYLOAD_BYTES) {
+                        "Backup is too large after decompression"
+                    }
+                    bounded.write(buffer, 0, read)
                 }
+                val payload = cbor.decodeFromByteArray<StatsBackup>(bounded.toByteArray())
+                require(payload.version in StatsBackup.MIN_VERSION..StatsBackup.VERSION) {
+                    if (payload.version > StatsBackup.VERSION) "Backup was created by a newer version"
+                    else "Backup has an unsupported version ${payload.version}"
+                }
+                payload.validate()
                 payload
             }
         }
+
+    /** Rejects semantically invalid numeric fields before they reach the database. */
+    private fun StatsBackup.validate() {
+        fun requireNonNegative(value: Long, field: String) {
+            require(value >= 0) { "Backup has a negative $field: $value" }
+        }
+
+        require(tracks.size <= StatsBackup.MAX_LIST_ENTRIES) { "Backup has too many tracks" }
+        require(aliases.size <= StatsBackup.MAX_LIST_ENTRIES) { "Backup has too many aliases" }
+        require(totals.size <= StatsBackup.MAX_LIST_ENTRIES) { "Backup has too many totals" }
+        require(daily.size <= StatsBackup.MAX_LIST_ENTRIES) { "Backup has too many daily rows" }
+        require(activeDays.size <= StatsBackup.MAX_LIST_ENTRIES) {
+            "Backup has too many active days"
+        }
+        requireNonNegative(exportedAt, "exportedAt")
+
+        tracks.forEach { track ->
+            requireNonNegative(track.durationMillis, "track durationMillis")
+            requireNonNegative(track.createdAt, "track createdAt")
+        }
+        totals.forEach { total ->
+            requireNonNegative(total.totalCount.toLong(), "totalCount")
+            requireNonNegative(total.totalMillis, "totalMillis")
+            requireNonNegative(total.firstPlayedAt, "firstPlayedAt")
+            requireNonNegative(total.lastPlayedAt, "lastPlayedAt")
+            requireNonNegative(total.startedCount.toLong(), "startedCount")
+            requireNonNegative(total.completedCount.toLong(), "completedCount")
+            requireNonNegative(total.skipCount.toLong(), "skipCount")
+            requireNonNegative(total.completedMillis, "completedMillis")
+        }
+        daily.forEach { day ->
+            require(day.epochDay in StatsBackup.MIN_EPOCH_DAY..StatsBackup.MAX_EPOCH_DAY) {
+                "Backup daily row has an implausible epochDay ${day.epochDay}"
+            }
+            requireNonNegative(day.playCount.toLong(), "playCount")
+            requireNonNegative(day.playedMillis, "playedMillis")
+            requireNonNegative(day.lastPlayedAt, "lastPlayedAt")
+            requireNonNegative(day.startedCount.toLong(), "startedCount")
+            requireNonNegative(day.completedCount.toLong(), "completedCount")
+            requireNonNegative(day.skipCount.toLong(), "skipCount")
+            requireNonNegative(day.completedMillis, "completedMillis")
+            day.firstPlayedAt?.let { requireNonNegative(it, "firstPlayedAt") }
+            day.dayStartMs?.let { requireNonNegative(it, "dayStartMs") }
+            day.dayEndMs?.let { requireNonNegative(it, "dayEndMs") }
+            if (day.dayStartMs != null && day.dayEndMs != null) {
+                require(day.dayStartMs <= day.dayEndMs) { "Backup daily row has dayStartMs > dayEndMs" }
+            }
+            day.utcOffsetMinutes?.let { offset ->
+                require(offset in -StatsBackup.MAX_UTC_OFFSET_MINUTES..StatsBackup.MAX_UTC_OFFSET_MINUTES) {
+                    "Backup daily row has an implausible utcOffsetMinutes $offset"
+                }
+            }
+        }
+        activeDays.forEach { day ->
+            require(day in StatsBackup.MIN_EPOCH_DAY..StatsBackup.MAX_EPOCH_DAY) {
+                "Backup has an implausible active day $day"
+            }
+        }
+    }
 
     /**
      * [replace] clears the local database first. Merge keeps the larger value for overlapping
@@ -473,8 +561,20 @@ class StatsBackupManager(
             if (replace) {
                 grouped.values.toList()
             } else {
-                val existing =
-                    db.dailyDao().since(Int.MIN_VALUE).associateBy { it.trackRowId to it.epochDay }
+                // Only load the daily rows this backup can actually overlap, in bounded chunks.
+                // The old since(Int.MIN_VALUE) scanned the entire track_daily table into a Map on
+                // every merge restore, which is unbounded for long-lived libraries.
+                val existing = HashMap<Pair<Long, Int>, TrackDailyEntity>()
+                val rowIds = grouped.values.map { it.trackRowId }.distinct()
+                val epochDays = grouped.values.map { it.epochDay }.distinct()
+                // Keep each generated IN clause well below SQLite's 999 bind-parameter limit.
+                for (rowChunk in rowIds.chunked(400)) {
+                    for (dayChunk in epochDays.chunked(400)) {
+                        db.dailyDao()
+                            .byKeys(rowChunk, dayChunk)
+                            .forEach { existing[it.trackRowId to it.epochDay] = it }
+                    }
+                }
                 grouped.values.map { group ->
                     val current = existing[group.trackRowId to group.epochDay] ?: return@map group
                     val firstPlayedAt =

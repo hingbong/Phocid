@@ -1,6 +1,7 @@
 package org.sunsetware.phocid.stats.maintenance
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -10,6 +11,7 @@ import androidx.work.WorkerParameters
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.StatsRetention
 
@@ -45,7 +47,13 @@ class StatsMaintenanceWorker(
         db.openHelper.writableDatabase.execSQL("PRAGMA optimize")
         Result.success()
     }
-        .getOrElse { Result.retry() }
+        .getOrElse { error ->
+            // Cancellation is not a failure: WorkManager must be allowed to stop us without the
+            // job being retried forever.
+            if (error is CancellationException) throw error
+            Log.e("StatsMaintenanceWorker", "Maintenance failed, scheduling retry", error)
+            Result.retry()
+        }
 
     companion object {
         private const val UNIQUE_NAME = "stats-maintenance"

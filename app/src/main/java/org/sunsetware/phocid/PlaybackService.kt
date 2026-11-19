@@ -8,6 +8,7 @@ import android.media.AudioManager
 import android.media.audiofx.AudioEffect
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.core.os.bundleOf
 import androidx.media3.common.C
@@ -90,8 +91,12 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
-        while (!GlobalData.initialized.get()) {
-            Thread.sleep(16)
+        // Bounded wait: a failed MainApplication init must not wedge the service on the main
+        // thread forever (ANR). Bail out cleanly; Android will recreate the service later.
+        if (!GlobalData.awaitInitialized()) {
+            Log.e("PhocidPlayback", "Initialization did not complete; aborting service start")
+            stopSelf()
+            return
         }
 
         val player = CustomizedPlayer(this)
@@ -184,6 +189,7 @@ class PlaybackService : MediaLibraryService() {
         isRunning = false
         if (::statisticsRecorder.isInitialized) {
             statisticsRecorder.onShutdown()
+            GlobalData.statsManager.releaseRecorder(statisticsRecorder)
         }
         getSystemService(AudioManager::class.java)
             .unregisterAudioDeviceCallback(audioDeviceCallback)

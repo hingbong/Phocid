@@ -118,6 +118,8 @@ class PlaybackStatsRecorder(
         private const val MIN_PLAY_MILLIS = 30_000L
         private const val SHUTDOWN_RESOLUTION_TIMEOUT_MILLIS = 1_000L
         private const val COMPLETION_TOLERANCE_MILLIS = 1_000L
+        /** A 1 ms "track" is a corrupt file, not a completed play. */
+        private const val MIN_COMPLETION_MILLIS = 1_000L
         private const val MAX_RE_RESOLVE_ATTEMPTS = 2
     }
 
@@ -622,7 +624,7 @@ class PlaybackStatsRecorder(
      * tolerance capped at half the duration so a short track cannot be completed immediately.
      */
     private fun isCompleted(session: Session, endedByPlayer: Boolean): Boolean {
-        if (session.accumulatedMillis <= 0L) return false
+        if (session.accumulatedMillis < MIN_COMPLETION_MILLIS) return false
         if (endedByPlayer && !session.seekedToEnd) return true
         if (session.durationMillis <= 0L) return false
         val tolerance =

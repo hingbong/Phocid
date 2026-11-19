@@ -1,6 +1,3 @@
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -21,10 +18,18 @@ val buildCommit =
             ?.takeIf { it.isNotBlank() }
         ?: "unknown"
 
+// Reproducible builds: never fall back to wall-clock time. See app/build.gradle.kts.
 val buildTime =
     System.getenv("PHOCID_BUILD_TIME")?.takeIf { it.isNotBlank() }
-        ?: OffsetDateTime.now(ZoneOffset.UTC)
-            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'"))
+        ?: runCatching {
+                providers
+                    .exec { commandLine("git", "log", "-1", "--format=%cI", "HEAD") }
+                    .standardOutput.asText.get()
+                    .trim()
+            }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+        ?: "unknown"
 
 android {
     namespace = "org.sunsetware.phocid.bridge"

@@ -19,6 +19,22 @@ import org.sunsetware.phocid.stats.StatsManager
  */
 object GlobalData {
     val initialized = AtomicBoolean(false)
+    /** Set when the initialization coroutine failed, so consumers can fail fast instead of spinning. */
+    val initializationFailed = AtomicBoolean(false)
+
+    /**
+     * Waits (briefly) for initialization, but never forever. Returns false if initialization
+     * failed or did not complete within [timeoutMillis]. Callers must handle the false case.
+     */
+    fun awaitInitialized(timeoutMillis: Long = 10_000L): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (!initialized.get()) {
+            if (initializationFailed.get()) return false
+            if (System.currentTimeMillis() > deadline) return false
+            Thread.sleep(16)
+        }
+        return true
+    }
 
     @Volatile lateinit var preferences: MutableStateFlow<Preferences>
     @Volatile lateinit var unfilteredTrackIndex: MutableStateFlow<UnfilteredTrackIndex>

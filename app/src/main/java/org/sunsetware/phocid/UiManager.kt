@@ -20,14 +20,17 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -94,13 +97,22 @@ class UiManager(
 
     val libraryScreenSearchQuery = MutableStateFlow("")
 
+    /**
+     * Debounced search query. All seven home-tab search transforms recompute on every keystroke
+     * otherwise (full-library filter + sort + hint per tab), so hold off until typing pauses.
+     */
+    val debouncedLibraryScreenSearchQuery: StateFlow<String> =
+        libraryScreenSearchQuery
+            .debounce(300)
+            .stateIn(coroutineScope, SharingStarted.Eagerly, "")
+
     val libraryScreenHomeViewState =
         LibraryScreenHomeViewState(
             coroutineScope,
             preferences,
             libraryIndex,
             playlistManager,
-            libraryScreenSearchQuery,
+            debouncedLibraryScreenSearchQuery,
         )
 
     private val _libraryScreenCollectionViewStack =
@@ -114,10 +126,14 @@ class UiManager(
                 last?.info?.map { if (it == null) last else null } ?: MutableStateFlow(null)
             }
             .onEach { purgeTarget ->
-                if (purgeTarget != null)
+                if (purgeTarget != null) {
+                    // A purged view is gone for good; release its scope just like back() does,
+                    // otherwise every auto-purge leaks a MainScope and its collectors.
                     _libraryScreenCollectionViewStack.update { stack ->
                         stack.filter { it !== purgeTarget }
                     }
+                    purgeTarget.close()
+                }
             }
             .collect()
     }

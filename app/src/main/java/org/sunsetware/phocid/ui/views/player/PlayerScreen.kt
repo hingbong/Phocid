@@ -54,10 +54,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.Player
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import org.sunsetware.phocid.DEFAULT_SWIPE_THRESHOLD
 import org.sunsetware.phocid.MainViewModel
@@ -136,27 +138,34 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
     val playlists by viewModel.playlistManager.playlists.collectAsStateWithLifecycle()
     val currentTrackIsFavorite =
         remember(currentTrack, playlists) { playlists.isFavorite(currentTrack) }
-    val currentTrackLyrics =
-        remember(currentTrack) {
-            val cachedLyrics = viewModel.lyricsCache.get()
-            if (cachedLyrics != null && cachedLyrics.first == currentTrack.id) {
-                PlayerScreenLyrics.Synced(cachedLyrics.second)
-            } else {
-                val externalLyrics = loadLyrics(currentTrack, preferences.charsetName)
-                if (externalLyrics != null)
-                    viewModel.lyricsCache.set(Pair(currentTrack.id, externalLyrics))
-                externalLyrics?.let { PlayerScreenLyrics.Synced(it) }
-                    ?: if (preferences.treatEmbeddedLyricsAsLrc) {
-                        currentTrack.unsyncedLyrics
-                            ?.let { parseLrc(it) }
-                            ?.takeIf { it.lines.isNotEmpty() }
-                            ?.let { PlayerScreenLyrics.Synced(it) }
-                            ?: currentTrack.unsyncedLyrics?.let { PlayerScreenLyrics.Unsynced(it) }
-                    } else {
-                        currentTrack.unsyncedLyrics?.let { PlayerScreenLyrics.Unsynced(it) }
-                    }
+    // Lyrics loading touches the filesystem: it must never run during composition. Compute it
+    // off the main thread in a LaunchedEffect and publish the result as state. The keys include
+    // every preference the loader reads, so a charset / embedded-lyrics change recomputes.
+    var currentTrackLyrics by
+        remember(currentTrack) { mutableStateOf(null as PlayerScreenLyrics?) }
+    LaunchedEffect(currentTrack, preferences.charsetName, preferences.treatEmbeddedLyricsAsLrc) {
+        currentTrackLyrics =
+            withContext(Dispatchers.IO) {
+                val cachedLyrics = viewModel.lyricsCache.get()
+                if (cachedLyrics != null && cachedLyrics.first == currentTrack.id) {
+                    PlayerScreenLyrics.Synced(cachedLyrics.second)
+                } else {
+                    val externalLyrics = loadLyrics(currentTrack, preferences.charsetName)
+                    if (externalLyrics != null)
+                        viewModel.lyricsCache.set(Pair(currentTrack.id, externalLyrics))
+                    externalLyrics?.let { PlayerScreenLyrics.Synced(it) }
+                        ?: if (preferences.treatEmbeddedLyricsAsLrc) {
+                            currentTrack.unsyncedLyrics
+                                ?.let { parseLrc(it) }
+                                ?.takeIf { it.lines.isNotEmpty() }
+                                ?.let { PlayerScreenLyrics.Synced(it) }
+                                ?: currentTrack.unsyncedLyrics?.let { PlayerScreenLyrics.Unsynced(it) }
+                        } else {
+                            currentTrack.unsyncedLyrics?.let { PlayerScreenLyrics.Unsynced(it) }
+                        }
+                }
             }
-        }
+    }
     val isPlaying by
         playerManager.transientState
             .map(coroutineScope) { it.isPlaying }
@@ -271,16 +280,25 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    // Change colors
-    // TODO: Fix this synchronization
+    // Change colors. getArtworkColor decodes a bitmap, so it must not run on the composition
+    // thread; artworkColorPreference is a key so a preference change recolors immediately.
     val disposing = remember { AtomicBoolean(false) }
-    LaunchedEffect(currentTrack, preferences.coloredPlayer, preferences.colorfulPlayerBackground) {
+    LaunchedEffect(
+        currentTrack,
+        preferences.coloredPlayer,
+        preferences.colorfulPlayerBackground,
+        preferences.artworkColorPreference,
+    ) {
         if (!disposing.get()) {
             val color =
-                if (preferences.coloredPlayer)
-                    currentTrack.getArtworkColor(preferences.artworkColorPreference)
-                else defaultColor
-            coroutineScope.launch { artworkColor.animateTo(color) }
+                withContext(Dispatchers.IO) {
+                    if (preferences.coloredPlayer)
+                        currentTrack.getArtworkColor(preferences.artworkColorPreference)
+                    else defaultColor
+                }
+            // animateTo is a suspend function: calling it directly in this effect avoids the
+            // nested launch that could race with a newer color while animating.
+            artworkColor.animateTo(color)
             if (preferences.colorfulPlayerBackground) {
                 uiManager.overrideStatusBarLightColor.update { color.luminance() >= 0.5 }
             }
@@ -438,6 +456,24 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 isPlaying = isPlaying,
                             )
                         }
+                        // The overflow menu (including ICU-formatted strings) is only rebuilt when
+                        // its inputs actually change, instead of on every recomposition.
+                        val overflowMenuItems =
+                            remember(
+                                playerManager,
+                                uiManager,
+                                libraryIndex,
+                                currentTrack,
+                                currentTrackIndex,
+                            ) {
+                                playerMenuItems(
+                                    playerManager,
+                                    uiManager,
+                                    libraryIndex,
+                                    currentTrack,
+                                    currentTrackIndex,
+                                )
+                            }
                         Box {
                             components.controls.Compose(
                                 currentTrack = currentTrack,
@@ -446,14 +482,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 repeat = repeat,
                                 shuffle = shuffle,
                                 playbackClock = playerManager.playbackClock,
-                                overflowMenuItems =
-                                    playerMenuItems(
-                                        playerManager,
-                                        uiManager,
-                                        libraryIndex,
-                                        currentTrack,
-                                        currentTrackIndex,
-                                    ),
+                                overflowMenuItems = overflowMenuItems,
                                 dragModifier = controlsDragModifier,
                                 containerColor = containerColor,
                                 contentColor = contentColor,

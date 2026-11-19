@@ -2,6 +2,8 @@ package org.sunsetware.phocid
 
 import android.app.Application
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.glance.appwidget.updateAll
@@ -54,72 +56,85 @@ class MainApplication : Application() {
         with(GlobalData) {
             val context = this@MainApplication
             ioScope.launch {
-                preferences =
-                    MutableStateFlow(
-                        loadCbor<Preferences>(context, PREFERENCES_FILE_NAME, false)?.upgrade()
-                            ?: Preferences()
-                    )
-                unfilteredTrackIndex =
-                    MutableStateFlow(
-                        loadCbor<UnfilteredTrackIndex>(context, TRACK_INDEX_FILE_NAME, false)
-                            ?.upgrade() ?: UnfilteredTrackIndex(null, emptyMap())
-                    )
-                playerState =
-                    MutableStateFlow(
-                        loadCbor<PlayerState>(context, PLAYER_STATE_FILE_NAME, isCache = false)
-                            ?: PlayerState()
-                    )
-                StatsDatabase.discardLegacyStats(context)
-                statsManager = StatsManager(context)
-                sortKeyManager = SortKeyManager(context, defaultScope)
-                runBlocking { sortKeyManager.loadInitial() }
-                runCatching { StatsMaintenanceWorker.schedule(context) }
-                    .onFailure { Log.e("Phocid", "Unable to schedule stats maintenance", it) }
-
-                // LibraryIndex() is expensive, so extracting only the relevant
-                // preferences first would avoid unnecessary computation
-                libraryIndex =
-                    unfilteredTrackIndex.combine(
-                        defaultScope,
-                        preferences.map(defaultScope) {
-                            object {
-                                val collator = it.sortCollator
-                                val blacklist = it.blacklistRegexes
-                                val whitelist = it.whitelistRegexes
-                            }
-                        },
-                        sortKeyManager.keys,
-                    ) { trackIndex, tuple, sortKeys ->
-                        LibraryIndex(
-                            trackIndex,
-                            tuple.collator,
-                            tuple.blacklist,
-                            tuple.whitelist,
-                            sortKeys,
+                // A coroutine failure here is invisible to the default uncaught handler and would
+                // leave GlobalData.initialized false forever, wedging every consumer. Record the
+                // failure explicitly so bounded waiters can fail fast.
+                try {
+                    preferences =
+                        MutableStateFlow(
+                            loadCbor<Preferences>(context, PREFERENCES_FILE_NAME, false)?.upgrade()
+                                ?: Preferences()
                         )
+                    unfilteredTrackIndex =
+                        MutableStateFlow(
+                            loadCbor<UnfilteredTrackIndex>(context, TRACK_INDEX_FILE_NAME, false)
+                                ?.upgrade() ?: UnfilteredTrackIndex(null, emptyMap())
+                        )
+                    playerState =
+                        MutableStateFlow(
+                            loadCbor<PlayerState>(context, PLAYER_STATE_FILE_NAME, isCache = false)
+                                ?: PlayerState()
+                        )
+                    StatsDatabase.discardLegacyStats(context)
+                    statsManager = StatsManager(context)
+                    sortKeyManager = SortKeyManager(context, defaultScope)
+                    runBlocking { sortKeyManager.loadInitial() }
+                    runCatching { StatsMaintenanceWorker.schedule(context) }
+                        .onFailure { Log.e("Phocid", "Unable to schedule stats maintenance", it) }
+
+                    // LibraryIndex() is expensive, so extracting only the relevant
+                    // preferences first would avoid unnecessary computation
+                    libraryIndex =
+                        unfilteredTrackIndex.combine(
+                            defaultScope,
+                            preferences.map(defaultScope) {
+                                object {
+                                    val collator = it.sortCollator
+                                    val blacklist = it.blacklistRegexes
+                                    val whitelist = it.whitelistRegexes
+                                }
+                            },
+                            sortKeyManager.keys,
+                            // The global library index must stay hot: it is a process-wide source of
+                            // truth that other components (scans, shortcuts, agent queries) read via
+                            // .value even when no UI is subscribed. A cold WhileSubscribed combine
+                            // would never recompute, wedging flowVersion-based sync waits.
+                            hot = true,
+                        ) { trackIndex, tuple, sortKeys ->
+                            LibraryIndex(
+                                trackIndex,
+                                tuple.collator,
+                                tuple.blacklist,
+                                tuple.whitelist,
+                                sortKeys,
+                            )
+                        }
+
+                    playlistManager = PlaylistManager(context, defaultScope, preferences, libraryIndex)
+                    playlistManager.initialize()
+
+                    saveManagers +=
+                        SaveManager(context, ioScope, preferences, PREFERENCES_FILE_NAME, false)
+                    saveManagers +=
+                        SaveManager(
+                            context,
+                            ioScope,
+                            unfilteredTrackIndex,
+                            TRACK_INDEX_FILE_NAME,
+                            false,
+                        )
+                    saveManagers +=
+                        SaveManager(context, ioScope, playerState, PLAYER_STATE_FILE_NAME, false)
+
+                    defaultScope.launch {
+                        playerState.onEach { MainAppWidget().updateAll(context) }.collect()
                     }
 
-                playlistManager = PlaylistManager(context, defaultScope, preferences, libraryIndex)
-                playlistManager.initialize()
-
-                saveManagers +=
-                    SaveManager(context, ioScope, preferences, PREFERENCES_FILE_NAME, false)
-                saveManagers +=
-                    SaveManager(
-                        context,
-                        ioScope,
-                        unfilteredTrackIndex,
-                        TRACK_INDEX_FILE_NAME,
-                        false,
-                    )
-                saveManagers +=
-                    SaveManager(context, ioScope, playerState, PLAYER_STATE_FILE_NAME, false)
-
-                defaultScope.launch {
-                    playerState.onEach { MainAppWidget().updateAll(context) }.collect()
+                    initialized.set(true)
+                } catch (t: Throwable) {
+                    Log.e("Phocid", "Initialization failed", t)
+                    initializationFailed.set(true)
                 }
-
-                initialized.set(true)
             }
         }
     }
@@ -151,12 +166,12 @@ class MainApplication : Application() {
             }
         }
 
-        Toast.makeText(
-                this,
-                Strings[R.string.toast_crash_saved_to].icuFormat(file.path),
-                Toast.LENGTH_LONG,
-            )
-            .show()
+        // The default uncaught handler can run on any thread (including an IO thread with no
+        // Looper). Toast requires a main-looper handler, so post it instead of showing it here.
+        val message = Strings[R.string.toast_crash_saved_to].icuFormat(file.path)
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
 
         exitProcess(1)
     }

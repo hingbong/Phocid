@@ -42,7 +42,9 @@ import org.sunsetware.phocid.ui.components.DialogBase
 import org.sunsetware.phocid.ui.components.SingleLineText
 import org.sunsetware.phocid.ui.components.UtilityListItem
 import org.sunsetware.phocid.ui.theme.Typography
+import org.sunsetware.phocid.utils.SafeRegex
 import org.sunsetware.phocid.utils.icuFormat
+import org.sunsetware.phocid.utils.matchesBounded
 import org.sunsetware.phocid.utils.removeAt
 
 @Stable
@@ -324,22 +326,11 @@ class PreferencesIndexingHelpDialog() : Dialog() {
     }
 }
 
-private fun regexValidate(string: String): Boolean {
-    return try {
-        Regex(string, RegexOption.IGNORE_CASE)
-        true
-    } catch (_: Exception) {
-        false
-    }
-}
+private fun regexValidate(string: String): Boolean = SafeRegex.isValid(string)
 
 private fun regexMatchCount(string: String, unfilteredTrackIndex: UnfilteredTrackIndex): Int {
-    return try {
-        val regex = Regex(string, RegexOption.IGNORE_CASE)
-        unfilteredTrackIndex.tracks.values.count { regex.containsMatchIn(it.path) }
-    } catch (_: Exception) {
-        0
-    }
+    val regex = SafeRegex.compile(string) ?: return 0
+    return unfilteredTrackIndex.tracks.values.count { regex.matchesBounded(it.path) }
 }
 
 @Composable

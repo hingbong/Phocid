@@ -75,5 +75,7 @@ inline fun listDependencies(
 
 @Stable
 fun listDependencies(context: Context): List<Pair<DependencyInfo, List<String>>> {
-    return listDependencies { context.assets.open(it).readBytes().decodeToString() }
+    return listDependencies {
+        context.assets.open(it).use { stream -> stream.readBytes().decodeToString() }
+    }
 }

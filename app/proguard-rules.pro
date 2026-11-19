@@ -12,14 +12,15 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Preserve line numbers so crash reports remain actionable.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
-
+# Intentional R8 trade-off (do not "fix" without a full regression pass):
+# -dontobfuscate plus the two broad -keep rules below mean minifyEnabled=true effectively only
+# performs resource shrinking (shrinkResources) and limited unused-code removal inside libraries.
+# Real code shrinking would require replacing the keep-all rules with narrow entry-point keeps,
+# which is risky with Compose, jaudiotagger reflection and generated AppFunctions classes.
 # Obfuscation provides absolutely zero size reduction.
 -dontobfuscate
 

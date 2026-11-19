@@ -94,10 +94,11 @@ class SortKeyManager(
                     skippedItems += SortKeySkipped(target.libraryId, "already_absent")
                 }
                 existing == null -> {
-                    if (!dryRun && dao.findByLocalUriKey(target.localUriKey) != null) {
-                        // The batch model is a snapshot; a row created after it (a concurrent
-                        // writer) would trip the unique index and abort the whole transaction.
-                        // Report the conflict per item instead.
+                    // The batch model is a snapshot; a row created after it (a concurrent
+                    // writer) would trip the unique index and abort the whole transaction.
+                    // Report the conflict per item instead. This must also run for dry runs so
+                    // validate() preflights the same errors a real apply would produce.
+                    if (dao.findByLocalUriKey(target.localUriKey) != null) {
                         errors +=
                             SortKeyApplyError(
                                 target.libraryId,
@@ -133,14 +134,11 @@ class SortKeyManager(
                     cleared++
                 }
                 else -> {
-                    if (
-                        !dryRun &&
-                            local == null &&
-                            dao.findByLocalUriKey(target.localUriKey) != null
-                    ) {
-                        // Reassigning the identity (existing was matched by tag) overwrites
-                        // localUriKey; the live table may already own the new key outside the
-                        // batch snapshot. See the insert branch above.
+                    // Reassigning the identity (existing was matched by tag) overwrites
+                    // localUriKey; the live table may already own the new key outside the
+                    // batch snapshot. See the insert branch above. This check also runs for
+                    // dry runs so validate() reports the same result as a real apply.
+                    if (local == null && dao.findByLocalUriKey(target.localUriKey) != null) {
                         errors +=
                             SortKeyApplyError(
                                 target.libraryId,

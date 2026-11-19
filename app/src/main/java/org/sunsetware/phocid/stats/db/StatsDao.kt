@@ -233,6 +233,15 @@ interface TrackDailyDao {
     @Query("SELECT * FROM track_daily WHERE epochDay >= :sinceDay")
     suspend fun since(sinceDay: Int): List<TrackDailyEntity>
 
+    /**
+     * Loads only the daily rows relevant to a merge restore, in bounded chunks so the generated
+     * IN clauses stay below SQLite's parameter limit. Avoids scanning the whole track_daily table.
+     */
+    @Query(
+        "SELECT * FROM track_daily WHERE trackRowId IN (:rowIds) AND epochDay IN (:epochDays)"
+    )
+    suspend fun byKeys(rowIds: List<Long>, epochDays: List<Int>): List<TrackDailyEntity>
+
     /** Merge loser's days into winner. Overlapping days are summed. */
     @Query(
         """
@@ -351,7 +360,9 @@ interface TrackDailyDao {
                SUM(skipCount) AS skipCount,
                SUM(completedMillis) AS completedMillis,
                MIN(dayStartMs) AS dayStartMs,
-               MIN(dayEndMs) AS dayEndMs,
+               -- Mixed-timezone restores can produce different local-day boundaries for the
+               -- same epochDay. The union ends at the latest end, not the earliest one.
+               MAX(dayEndMs) AS dayEndMs,
                MIN(utcOffsetMinutes) AS utcOffsetMinutes
         FROM track_daily
         WHERE epochDay >= :sinceDay AND epochDay <= :untilDay
