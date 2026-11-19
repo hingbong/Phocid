@@ -64,17 +64,50 @@ fun Player.capturePlayerState(): PlayerState {
     )
 }
 
+/**
+ * Maps the captured play-queue position onto the restored queue.
+ *
+ * Ids dropped from [UnfilteredTrackIndex] (their files disappeared since the state was captured)
+ * shift every later item, so the captured index cannot be reused directly: prefer the captured
+ * item itself, then the first surviving item after it (what would have played next), then the
+ * nearest one before it. The second component is true only when the captured item itself
+ * survived, in which case its captured position is still meaningful.
+ */
+internal fun computeRestoredSeek(
+    survivingOriginalIndexes: List<Int>,
+    capturedIndex: Int,
+): Pair<Int, Boolean> {
+    val captured = survivingOriginalIndexes.indexOf(capturedIndex)
+    if (captured >= 0) {
+        return captured to true
+    }
+    val next = survivingOriginalIndexes.indexOfFirst { it > capturedIndex }
+    if (next >= 0) {
+        return next to false
+    }
+    val previous = survivingOriginalIndexes.indexOfLast { it < capturedIndex }
+    if (previous >= 0) {
+        return previous to false
+    }
+    return 0 to false
+}
+
 fun Player.restorePlayerState(state: PlayerState, unfilteredTrackIndex: UnfilteredTrackIndex) {
     // Shuffle must be set before items or items will be shuffled again
     shuffleModeEnabled = state.shuffle
+    val survivingIndexes = mutableListOf<Int>()
     setMediaItems(
         state.actualPlayQueue.mapIndexedNotNull { index, id ->
             unfilteredTrackIndex.tracks[id]?.getMediaItem(
                 state.unshuffledPlayQueueMapping?.indexOf(index)
-            )
+            )?.also { survivingIndexes += index }
         }
     )
-    seekTo(state.currentIndex, state.currentPosition)
+    // Dropped tracks shift the queue; seek to where the captured item (or its nearest
+    // survivor) landed instead of trusting the captured index blindly.
+    val (seekIndex, capturedItemSurvived) =
+        computeRestoredSeek(survivingIndexes, state.currentIndex)
+    seekTo(seekIndex, if (capturedItemSurvived) state.currentPosition else 0)
     repeatMode = state.repeat
     playbackParameters = PlaybackParameters(state.speed, state.pitch)
 }
@@ -368,6 +401,10 @@ fun getChildMediaItems(
                                     null
                                 }]
                             ?.entries
+                            // Entries whose file is gone have a null track; drop them before
+                            // the sort instead of crashing the whole browse. The library UI
+                            // list filters them the same way.
+                            ?.filter { it.track != null }
                             ?.sortedBy(
                                 preferences.sortCollator,
                                 collectionSortingKeys,

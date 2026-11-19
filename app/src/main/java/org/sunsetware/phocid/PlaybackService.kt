@@ -73,6 +73,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private var mediaSession: MediaLibrarySession? = null
+    private var player: CustomizedPlayer? = null
     private val mainScope = MainScope()
     private val timerMutex = Mutex()
     @Volatile private var timerTarget = -1L
@@ -94,6 +95,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val player = CustomizedPlayer(this)
+        this.player = player
         statisticsRecorder = GlobalData.statsManager.createRecorder()
 
         // Integrate with system equalizer.
@@ -116,12 +118,11 @@ class PlaybackService : MediaLibraryService() {
             GlobalData.playerState.value,
             GlobalData.unfilteredTrackIndex.value,
         )
-        // The listener may already have started a session while restoring player state. This call
-        // only fills the gap when restore did not trigger a transition. Opening a session for a
-        // merely restored (paused or buffered) player would inflate startedCount even when the
-        // user never presses play this launch, so require actual playback; the first
-        // onIsPlayingChanged(true) opens the session otherwise. A restored ENDED player has no
-        // active playback to attribute either.
+        // Restore normally happens paused, and syncStatsSession only opens a session during
+        // actual playback, so the first onIsPlayingChanged(true) owns the open. This call only
+        // fills the gap when playback is already active but no transition was announced (e.g. an
+        // output device connected and started playback between restore and here). A restored
+        // ENDED player has no active playback to attribute either.
         if (player.playbackState != Player.STATE_ENDED && player.isPlaying) {
             syncStatsSession(player.currentMediaItem, transitionReason = null)
         }
@@ -181,11 +182,24 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         isRunning = false
-        statisticsRecorder.onShutdown()
+        if (::statisticsRecorder.isInitialized) {
+            statisticsRecorder.onShutdown()
+        }
         getSystemService(AudioManager::class.java)
             .unregisterAudioDeviceCallback(audioDeviceCallback)
-        mediaSession?.run {
+        // Release the player even when onCreate failed before the session was built, and close
+        // the audio effect control session that was opened for it in onCreate.
+        player?.let { player ->
+            sendBroadcast(
+                Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                    putExtra(AudioEffect.EXTRA_AUDIO_SESSION, player.inner.audioSessionId)
+                    putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                }
+            )
             player.release()
+        }
+        player = null
+        mediaSession?.run {
             release()
             mediaSession = null
         }
@@ -329,6 +343,11 @@ class PlaybackService : MediaLibraryService() {
             statsSessions.onFinished()
             return
         }
+        // A transition while playback is paused (restoring a saved queue, editing the queue
+        // before pressing play) must not open a session: the first onIsPlayingChanged(true)
+        // owns the open, so a cold start that never plays does not inflate startedCount. The
+        // previous session, if any, stays pending and is settled by the next start or shutdown.
+        if (player?.isPlaying != true) return
         statisticsRecorder.onTrackStarted(
             track.toTrackMeta(),
             previousEndedByPlayer = previousEndedByPlayer,

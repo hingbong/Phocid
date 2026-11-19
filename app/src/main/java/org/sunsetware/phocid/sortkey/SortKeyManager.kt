@@ -94,6 +94,18 @@ class SortKeyManager(
                     skippedItems += SortKeySkipped(target.libraryId, "already_absent")
                 }
                 existing == null -> {
+                    if (!dryRun && dao.findByLocalUriKey(target.localUriKey) != null) {
+                        // The batch model is a snapshot; a row created after it (a concurrent
+                        // writer) would trip the unique index and abort the whole transaction.
+                        // Report the conflict per item instead.
+                        errors +=
+                            SortKeyApplyError(
+                                target.libraryId,
+                                "local_uri_key_conflict",
+                                "Another track already owns this file identity",
+                            )
+                        continue
+                    }
                     val row =
                         SortKeyEntity(
                             localUriKey = target.localUriKey,
@@ -121,6 +133,22 @@ class SortKeyManager(
                     cleared++
                 }
                 else -> {
+                    if (
+                        !dryRun &&
+                            local == null &&
+                            dao.findByLocalUriKey(target.localUriKey) != null
+                    ) {
+                        // Reassigning the identity (existing was matched by tag) overwrites
+                        // localUriKey; the live table may already own the new key outside the
+                        // batch snapshot. See the insert branch above.
+                        errors +=
+                            SortKeyApplyError(
+                                target.libraryId,
+                                "local_uri_key_conflict",
+                                "Another track already owns this file identity",
+                            )
+                        continue
+                    }
                     val row =
                         existing.copy(
                             localUriKey = target.localUriKey,

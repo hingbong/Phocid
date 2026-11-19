@@ -92,26 +92,39 @@ class CustomizedPlayer(val inner: ExoPlayer) : ForwardingPlayer(inner) {
                 (0..<itemCount).map { getMediaItemAt(it).setUnshuffledIndex(null) },
             )
         } else {
+            // UNSHUFFLED_INDEX_KEY labels can have holes after playlist edits (see
+            // capturePlayerState), so the current item's label value cannot serve as a position
+            // in the label-sorted queue. Rank the labeled items and use the current item's rank.
             val unshuffledPlayQueue =
                 (0..<itemCount)
-                    .map { getMediaItemAt(it) }
-                    .mapNotNull { mediaItem ->
-                        mediaItem.getUnshuffledIndex()?.let { Pair(mediaItem, it) }
+                    .mapNotNull { index ->
+                        getMediaItemAt(index).getUnshuffledIndex()?.let { Pair(index, it) }
                     }
                     .sortedBy { it.second }
-                    .map { it.first }
+            val currentUnshuffledPosition =
+                unshuffledPlayQueue.indexOfFirst { it.first == currentIndex }
+            if (currentUnshuffledPosition < 0) {
+                Log.e(
+                    "Phocid",
+                    "Current track not found in the labeled queue when disabling shuffle",
+                )
+                return
+            }
+            val unshuffledPlayQueueItems = unshuffledPlayQueue.map { getMediaItemAt(it.first) }
             replaceMediaItem(currentIndex, currentMediaItem!!.setUnshuffledIndex(null))
             replaceMediaItems(
                 currentIndex + 1,
                 itemCount,
-                unshuffledPlayQueue.subList(unshuffledIndex + 1, unshuffledPlayQueue.size).map {
-                    it.setUnshuffledIndex(null)
-                },
+                unshuffledPlayQueueItems
+                    .subList(currentUnshuffledPosition + 1, unshuffledPlayQueueItems.size)
+                    .map { it.setUnshuffledIndex(null) },
             )
             replaceMediaItems(
                 0,
                 currentIndex,
-                unshuffledPlayQueue.subList(0, unshuffledIndex).map { it.setUnshuffledIndex(null) },
+                unshuffledPlayQueueItems
+                    .subList(0, currentUnshuffledPosition)
+                    .map { it.setUnshuffledIndex(null) },
             )
         }
     }

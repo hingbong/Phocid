@@ -5,6 +5,7 @@ package org.sunsetware.phocid.data
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.io.IOException
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 import kotlin.time.Duration.Companion.seconds
@@ -75,8 +76,14 @@ fun loadCbor(type: KType, context: Context, fileName: String, isCache: Boolean):
         Cbor { ignoreUnknownKeys = true }
             .decodeFromByteArray(Cbor.serializersModule.serializer(type), file.readBytes())
     } catch (ex: Exception) {
-        if (ex is SerializationException || ex is IllegalArgumentException) {
-            Log.e("loadCbor", "$fileName is corrupted, loading backup")
+        // A truncated or unreadable main file (interrupted write, external cleanup) falls back
+        // to the backup exactly like a decode failure does.
+        if (
+            ex is SerializationException ||
+                ex is IllegalArgumentException ||
+                ex is IOException
+        ) {
+            Log.e("loadCbor", "$fileName is corrupted or unreadable, loading backup")
             try {
                 Cbor { ignoreUnknownKeys = true }
                     .decodeFromByteArray(
@@ -108,17 +115,40 @@ fun saveCbor(
     val directory = if (isCache) context.cacheDir else context.filesDir
     val file = File(directory, fileName)
     val backupFile = File(directory, "$fileName.bak")
+    val bytes =
+        try {
+            Cbor.encodeToByteArray(Cbor.serializersModule.serializer(type), value)
+        } catch (ex: Exception) {
+            Log.e("saveCbor", "Can't encode $fileName", ex)
+            return false
+        }
+    // A failed backup aborts the save: overwriting the last good copy without one could lose
+    // the stored state to a crash mid-write.
     try {
-        file.copyTo(backupFile, true)
+        if (file.exists()) {
+            file.copyTo(backupFile, true)
+        }
     } catch (ex: Exception) {
-        Log.e("saveCbor", "Can't create backup for $fileName", ex)
-    }
-    try {
-        file.writeBytes(Cbor.encodeToByteArray(Cbor.serializersModule.serializer(type), value))
-        return true
-    } catch (ex: Exception) {
-        Log.e("saveCbor", "Can't save $fileName", ex)
+        Log.e("saveCbor", "Can't create backup for $fileName, aborting save", ex)
         return false
+    }
+    // Write through a temp file and rename over the original: the rename replaces it atomically
+    // once the new bytes are on disk, so an interrupted write can never truncate the stored
+    // file.
+    val tempFile = File(directory, "$fileName.tmp")
+    return try {
+        tempFile.writeBytes(bytes)
+        if (tempFile.renameTo(file)) {
+            true
+        } else {
+            tempFile.delete()
+            Log.e("saveCbor", "Can't replace $fileName")
+            false
+        }
+    } catch (ex: Exception) {
+        tempFile.delete()
+        Log.e("saveCbor", "Can't save $fileName", ex)
+        false
     }
 }
 
