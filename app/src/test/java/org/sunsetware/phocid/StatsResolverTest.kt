@@ -45,12 +45,10 @@ class StatsResolverTest {
         db.close()
     }
 
-    private fun resolver(fingerprint: (TrackMeta) -> String?) =
-        TrackResolver(
-            db = db,
-            fingerprint = fingerprint,
-            mediaRoots = { emptyList() },
-        )
+    private fun resolver(
+        fingerprint: (TrackMeta) -> String?,
+        mediaRoots: () -> List<String> = { emptyList() },
+    ) = TrackResolver(db = db, fingerprint = fingerprint, mediaRoots = mediaRoots)
 
     private fun meta(
         uri: String = "content://media/external/audio/media/1",
@@ -373,22 +371,47 @@ class StatsResolverTest {
         runBlocking<Unit> {
             val keys = tagKeys()
             val file = temporaryFolder.newFile("Song.flac")
-            val relPath = RelPathKey.of(file.absolutePath, emptyList())
+            val roots = listOf(temporaryFolder.root.absolutePath)
+            val relPath = RelPathKey.of(file.absolutePath, roots)
             val hashRow = insertTrack("Hash")
             putAlias(AliasKind.AUDIO_HASH, "hash", hashRow)
             val tagRow = insertTrack("Tag")
             putAlias(AliasKind.TAG_KEY, keys[0], tagRow)
             val relRow = insertTrack("Rel")
-            putAlias(AliasKind.REL_PATH, relPath, relRow)
+            putAlias(AliasKind.REL_PATH, relPath!!, relRow)
 
-            val resolver = resolver { "hash" }
+            val resolver = resolver({ "hash" }, mediaRoots = { roots })
             val resolved = resolver.resolve(meta(file = file))
 
             assertThat(resolved).isEqualTo(hashRow)
             assertThat(db.trackDao().byRowId(tagRow)).isNotNull()
             assertThat(db.trackDao().byRowId(relRow)).isNotNull()
             assertThat(db.aliasDao().resolve(AliasKind.TAG_KEY, keys[0])).isEqualTo(tagRow)
-            assertThat(db.aliasDao().resolve(AliasKind.REL_PATH, relPath)).isEqualTo(relRow)
+            assertThat(db.aliasDao().resolve(AliasKind.REL_PATH, relPath!!)).isEqualTo(relRow)
+        }
+
+    @Test
+    fun unrootedSameNameTracksInDifferentDirectoriesStayDistinct() =
+        runBlocking<Unit> {
+            // Without a media root the file name is not identity: "a/Song.flac" and "b/Song.flac"
+            // are different tracks, and a name-only key would silently link (and, in backups,
+            // merge) any two directories that happen to share a file name.
+            val resolver = resolver { null }
+            val first =
+                resolver.resolve(
+                    noIdentityMeta("content://media/external/audio/media/31")
+                        .copy(file = File(temporaryFolder.root, "a/Song.flac"))
+                )
+            val second =
+                resolver.resolve(
+                    noIdentityMeta("content://media/external/audio/media/32")
+                        .copy(file = File(temporaryFolder.root, "b/Song.flac"))
+                )
+
+            assertThat(second).isNotEqualTo(first)
+            assertThat(db.aliasDao().aliasesOf(first)).noneMatch { it.kind == AliasKind.REL_PATH }
+            assertThat(db.aliasDao().aliasesOf(second))
+                .noneMatch { it.kind == AliasKind.REL_PATH }
         }
 
     @Test
@@ -425,8 +448,13 @@ class StatsResolverTest {
     fun differentHashOnSameRelativePathCreatesNewRowAndIsNotMergedLater() =
         runBlocking<Unit> {
             val file = temporaryFolder.newFile("Song.flac")
-            val relPath = RelPathKey.of(file.absolutePath, emptyList())
-            val resolver = resolver { m -> if (m.modified == 1L) "old-hash" else "new-hash" }
+            val roots = listOf(temporaryFolder.root.absolutePath)
+            val relPath = RelPathKey.of(file.absolutePath, roots)
+            val resolver =
+                resolver(
+                    { m -> if (m.modified == 1L) "old-hash" else "new-hash" },
+                    mediaRoots = { roots },
+                )
             val oldMeta =
                 noIdentityMeta("content://media/external/audio/media/21", 1).copy(file = file)
             val newMeta =
@@ -440,7 +468,7 @@ class StatsResolverTest {
             assertThat(second).isNotEqualTo(first)
             assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "old-hash")).isEqualTo(first)
             assertThat(db.aliasDao().resolve(AliasKind.AUDIO_HASH, "new-hash")).isEqualTo(second)
-            assertThat(db.aliasDao().resolve(AliasKind.REL_PATH, relPath)).isEqualTo(first)
+            assertThat(db.aliasDao().resolve(AliasKind.REL_PATH, relPath!!)).isEqualTo(first)
 
             // The repeat resolve has a hash hit for the new row; the old hash row must survive.
             val repeated = resolver.resolve(newMeta)

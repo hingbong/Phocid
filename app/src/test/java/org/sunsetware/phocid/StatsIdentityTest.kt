@@ -28,6 +28,16 @@ class StatsIdentityTest {
     }
 
     @Test
+    fun unrootedPathHasNoKey() {
+        // A file name alone is not identity: two directories can hold the same name, and a
+        // name-only fallback would link unrelated tracks (then merge them in backups). A path
+        // outside every media root produces no key at all.
+        assertThat(RelPathKey.of("/downloads/Song.flac", listOf("/storage/emulated/0/Music")))
+            .isNull()
+        assertThat(RelPathKey.of("/downloads/Song.flac", emptyList())).isNull()
+    }
+
+    @Test
     fun localUriKeyIncludesSize() {
         val uri = "content://media/external/audio/media/42"
         assertThat(LocalUriKey.of(uri, 1024)).isEqualTo(LocalUriKey.of(uri, 1024))
