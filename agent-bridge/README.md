@@ -37,7 +37,9 @@ It exposes:
     address.
 - `POST /mcp` (Streamable HTTP JSON-RPC)
 - `GET /mcp` (SSE stream, ping comments)
-- `DELETE /mcp` (session teardown)
+- `DELETE /mcp` (stateless no-op returning 204; kept for Streamable HTTP clients
+  that expect a teardown endpoint. The server keeps no session state:
+  `Mcp-Session-Id` response values are per-request echoes, not registered sessions.)
 
 MCP tools:
 
@@ -306,6 +308,12 @@ frozen client from a frozen server.
 - There is no TLS. The bearer token is sent in cleartext over HTTP; avoid
   untrusted networks and untrusted proxies.
 - The bridge does not make outbound network requests.
+- The bridge is not consumable from browser pages: no endpoint sends CORS
+  headers. On non-loopback binds, requests carrying an `Origin` header are
+  rejected (403), and `Host` headers naming a loopback address are refused
+  (421), which also closes DNS-rebinding pages that resolve to this device.
+- MCP protocol negotiation returns the revision the server implements
+  (`2025-03-26`) instead of echoing whatever the client asked for.
 - The bridge is a separate UID; the main APK still has no `INTERNET` permission.
 - Sort-key writes are off by default. When enabled, only the local `sort_keys`
   table is written; audio files, tags, and statistics are untouched. The main

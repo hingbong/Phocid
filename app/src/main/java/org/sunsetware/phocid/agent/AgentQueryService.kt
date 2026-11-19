@@ -235,8 +235,11 @@ class AgentQueryService : Service() {
             )
         val sort = request.optString("sort", "title").lowercase()
         val descending = request.optBoolean("descending", false)
-        val offset = request.optInt("offset", 0).coerceAtLeast(0)
-        val limit = request.optInt("limit", DEFAULT_LIMIT).coerceIn(1, MAX_LIMIT)
+        val offset = request.optInt("offset", 0)
+        val limit = request.optInt("limit", DEFAULT_LIMIT)
+        // Search used to silently clamp out-of-range pagination, hiding client bugs behind
+        // wrong pages; stats already reported them explicitly. Unify on explicit errors.
+        pageArgumentError(offset, limit, MAX_LIMIT)?.let { return it }
 
         val matches =
             GlobalData.libraryIndex.value.tracks.values
@@ -265,8 +268,9 @@ class AgentQueryService : Service() {
         val request = JSONObject(requestJson)
         val kind = request.optString("kind", "").trim().lowercase()
         val query = request.optString("query", "").trim()
-        val limit = request.optInt("limit", DEFAULT_LIMIT).coerceIn(1, MAX_LIMIT)
-        val offset = request.optInt("offset", 0).coerceAtLeast(0)
+        val limit = request.optInt("limit", DEFAULT_LIMIT)
+        val offset = request.optInt("offset", 0)
+        pageArgumentError(offset, limit, MAX_LIMIT)?.let { return it }
         val index = GlobalData.libraryIndex.value
         val collator = GlobalData.preferences.value.sortCollator
 
@@ -588,13 +592,8 @@ class AgentQueryService : Service() {
                     "sort must be one of plays or playedMillis",
                 )
         val limit = request.optInt("limit", 20)
-        if (limit !in 1..MAX_LIMIT) {
-            return errorJson("invalid_argument", "limit must be between 1 and $MAX_LIMIT")
-        }
         val offset = request.optInt("offset", 0)
-        if (offset < 0) {
-            return errorJson("invalid_argument", "offset must be non-negative")
-        }
+        pageArgumentError(offset, limit, MAX_LIMIT)?.let { return it }
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val day =
@@ -1044,7 +1043,20 @@ class AgentQueryService : Service() {
     private fun stringArray(values: List<String>): JSONArray =
         JSONArray().apply { values.forEach { put(it) } }
 
-    private fun errorJson(code: String, message: String): String =
+    /**
+ * Pagination contract shared by search, facets, and stats endpoints: out-of-range values are an
+ * explicit invalid_argument error (or null when the arguments are valid) instead of being
+ * silently corrected.
+ */
+internal fun pageArgumentError(offset: Int, limit: Int, maxLimit: Int): String? =
+    when {
+        offset < 0 -> errorJson("invalid_argument", "offset must be non-negative")
+        limit !in 1..maxLimit ->
+            errorJson("invalid_argument", "limit must be between 1 and $maxLimit")
+        else -> null
+    }
+
+private fun errorJson(code: String, message: String): String =
         JSONObject().put("error", JSONObject().put("code", code).put("message", message)).toString()
 
     private inline fun guarded(block: () -> String): String {

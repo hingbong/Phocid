@@ -148,6 +148,31 @@ class StatsBackupPortabilityTest {
             activeDays = activeDays,
         )
 
+    @Test
+    fun restoreRejectsADayWhoseStartIsAfterItsEnd() = runBlocking<Unit> {
+        val row =
+            day("uuid-1", 20_000, 1, 1_000, 1L).copy(dayStartMs = 5_000L, dayEndMs = 4_000L)
+        val payload = backup(tracks = listOf(track("uuid-1")), daily = listOf(row))
+
+        assertThatThrownBy {
+                runBlocking { StatsBackupManager(db).read(backupBytes(payload).inputStream()) }
+            }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("dayStartMs > dayEndMs")
+    }
+
+    @Test
+    fun restoreRejectsAnImplausibleUtcOffset() = runBlocking<Unit> {
+        val row = day("uuid-1", 20_000, 1, 1_000, 1L).copy(utcOffsetMinutes = 60_000)
+        val payload = backup(tracks = listOf(track("uuid-1")), daily = listOf(row))
+
+        assertThatThrownBy {
+                runBlocking { StatsBackupManager(db).read(backupBytes(payload).inputStream()) }
+            }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("utcOffsetMinutes")
+    }
+
     private fun countRows(table: String): Int =
         db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { cursor ->
             cursor.moveToFirst()

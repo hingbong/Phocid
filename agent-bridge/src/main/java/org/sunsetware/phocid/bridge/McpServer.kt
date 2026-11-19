@@ -40,6 +40,8 @@ class McpServer(
     private val tokenProvider: () -> String,
     private val dataSource: PhocidDataSource? = null,
     private val allowWrites: Boolean = false,
+    /** Total per-request deadline; overridable so tests can exercise the slow-drip guard. */
+    private val requestTimeoutMs: Long = REQUEST_TOTAL_TIMEOUT_MS,
 ) {
     private val running = AtomicBoolean(false)
     private val startedAt = AtomicLong(0)
@@ -152,8 +154,7 @@ class McpServer(
             // A per-read timeout alone does not bound a slow-drip client: each individual read can
             // succeed just under the timeout while the total request stretches forever and holds
             // one of the few worker threads. Enforce an absolute deadline on every read.
-            val deadline =
-                SystemClock.elapsedRealtime() + REQUEST_TOTAL_TIMEOUT_MS
+            val deadline = SystemClock.elapsedRealtime() + requestTimeoutMs
             val input = BufferedInputStream(DeadlineInputStream(client.getInputStream(), deadline))
             val request = readRequestHead(input)
             transferred = route(client, input, request)
@@ -174,14 +175,31 @@ class McpServer(
     }
 
     private fun route(socket: Socket, input: InputStream, request: Request): Boolean {
+        guardNonLoopbackRequests(request)
         val path = request.path.trimEnd('/').ifEmpty { "/" }
 
         if (request.method == "OPTIONS") {
-            safeWrite(socket, 204, null, null, corsHeaders())
+            // 204 with no CORS headers: the bridge serves local agents, not browser pages,
+            // and the old wildcard Allow-Origin misadvertised browser usability that the
+            // JSON endpoints never honoured.
+            safeWrite(socket, 204, null, null)
             return false
         }
 
-        if (path == "/health" && request.method == "GET") {
+        if (path == "/health") {
+            if (request.method != "GET") {
+                safeWrite(
+                    socket,
+                    405,
+                    "text/plain; charset=utf-8",
+                    "Method not allowed".toByteArray(StandardCharsets.UTF_8),
+                    mapOf("Allow" to "GET, OPTIONS"),
+                )
+                return false
+            }
+            // Loopback health is deliberately unauthenticated: it only exposes build
+            // metadata (version, commit, uptime) that is public anyway, and adb-forward
+            // probes must work without the token. Non-loopback binds require the token.
             if (!loopbackBind && !isAuthorized(request)) {
                 unauthorized(socket)
                 return false
@@ -232,6 +250,28 @@ class McpServer(
             }
         }
         return false
+    }
+
+    /**
+     * Non-loopback binds serve local agent clients only. Browsers always send Origin on
+     * cross-origin calls and agents never do, so an Origin header means a web page; and a
+     * DNS-rebinding page resolving to this device keeps its original (non-IP or loopback)
+     * Host. Reject both instead of relying on CORS, which this server does not emit.
+     */
+    private fun guardNonLoopbackRequests(request: Request) {
+        if (loopbackBind) return
+        if (request.headers["origin"] != null) {
+            throw HttpError(403, "Browser origins are not accepted")
+        }
+        val hostPart =
+            (request.headers["host"] ?: "")
+                .substringBeforeLast(':')
+                .removePrefix("[")
+                .removeSuffix("]")
+                .lowercase(Locale.ROOT)
+        if (hostPart.isEmpty() || hostPart == "localhost" || hostPart == "127.0.0.1" || hostPart == "::1") {
+            throw HttpError(421, "Misdirected request")
+        }
     }
 
     private fun unauthorized(socket: Socket) {
@@ -339,6 +379,11 @@ class McpServer(
         val trimmed = payload.trim()
         if (trimmed.startsWith("[")) {
             val input = JSONArray(trimmed)
+            // JSON-RPC: an empty batch array is a protocol error, not a notification-only
+            // batch (which legitimately gets a 202 with no body).
+            if (input.length() == 0) {
+                return jsonRpcError(null, -32600, "Invalid Request: empty batch").toString()
+            }
             if (input.length() > MAX_BATCH_SIZE) {
                 return jsonRpcError(null, -32600, "Batch too large").toString()
             }
@@ -388,10 +433,15 @@ class McpServer(
     }
 
     private fun initializeResult(params: JSONObject?): JSONObject {
-        val requested =
-            params?.optString("protocolVersion")?.takeIf { it.isNotBlank() } ?: "2025-03-26"
+        // MCP: reply with the protocol revision we actually implement instead of echoing the
+        // requested version. Echoing an unknown version would claim support we never
+        // verified; clients compare what we return and downgrade deliberately.
+        val requested = params?.optString("protocolVersion")?.takeIf { it.isNotBlank() }
+        if (requested != null && requested != SUPPORTED_PROTOCOL_VERSION) {
+            Log.i(TAG, "Client requested protocol version $requested; serving $SUPPORTED_PROTOCOL_VERSION")
+        }
         return JSONObject()
-            .put("protocolVersion", requested)
+            .put("protocolVersion", SUPPORTED_PROTOCOL_VERSION)
             .put(
                 "capabilities",
                 JSONObject().put("tools", JSONObject().put("listChanged", false)),
@@ -1115,13 +1165,6 @@ class McpServer(
             else -> "Internal Server Error"
         }
 
-    private fun corsHeaders(): Map<String, String> =
-        mapOf(
-            "Access-Control-Allow-Origin" to "*",
-            "Access-Control-Allow-Methods" to "GET, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers" to "Authorization, Content-Type, Mcp-Session-Id",
-        )
-
     private data class Request(
         val method: String,
         val path: String,
@@ -1174,9 +1217,15 @@ class McpServer(
 
     companion object {
         private const val TAG = "PhocidMcpServer"
+        /** The only MCP protocol revision this server implements. */
+        private const val SUPPORTED_PROTOCOL_VERSION = "2025-03-26"
         private const val MAX_HEADER_BYTES = 64 * 1024
         private const val MAX_LINE_BYTES = 8 * 1024
-        private const val MAX_BODY_BYTES = 1024 * 1024
+        /**
+         * Kept below the Binder transaction budget (~512KB): a larger HTTP body would only
+         * fail later as a generic TransactionTooLargeException after all the parsing work.
+         */
+        private const val MAX_BODY_BYTES = 256 * 1024
         /** JSON-RPC batch requests are capped so one POST cannot fan out unbounded Binder calls. */
         private const val MAX_BATCH_SIZE = 20
         /** Maximum tools/call entries served for a single HTTP request (no keep-alive). */

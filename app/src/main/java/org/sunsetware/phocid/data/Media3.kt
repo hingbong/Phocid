@@ -52,6 +52,10 @@ fun Player.capturePlayerState(): PlayerState {
             .map { it.first }
     }
     val actualPlayQueue = mediaItems.map { it.mediaId.toLong() }
+    // Position 0 while playing is deliberate: the live position is derived from the
+    // PlaybackClock by extrapolation, and restoring must never auto-resume playback. A
+    // restored session starts paused at the captured boundary, so a stale mid-track value
+    // would be misleading; 0 plus the "is playing" flag keeps restore semantics simple.
     return PlayerState(
         if (shuffleModeEnabled) getUnshuffledPlayQueueMapping() else null,
         actualPlayQueue,

@@ -77,11 +77,14 @@ class McpServerTest {
     }
 
     @Test
-    fun optionsReturnsCorsHeaders() {
+    fun optionsCarriesNoCorsHeaders() {
         val response = request("OPTIONS /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         assertEquals(204, response.status)
-        assertEquals("*", response.headers["access-control-allow-origin"])
-        assertEquals("GET, POST, DELETE, OPTIONS", response.headers["access-control-allow-methods"])
+        // The bridge serves local agents, not browser pages: no response ever advertises
+        // CORS, and a preflight must not promise readability that the endpoints deny.
+        assertFalse(response.headers.containsKey("access-control-allow-origin"))
+        assertFalse(response.headers.containsKey("access-control-allow-methods"))
+        assertFalse(response.headers.containsKey("access-control-allow-headers"))
     }
 
     @Test
@@ -281,6 +284,214 @@ class McpServerTest {
         }
     }
 
+    @Test
+    fun nonLoopbackBindRejectsBrowserOrigins() {
+        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        lanServer.start()
+        try {
+            val response =
+                request(
+                    "GET /health HTTP/1.1\r\n" +
+                        "Host: 192.168.1.50\r\n" +
+                        "Origin: http://evil.example\r\n" +
+                        "Authorization: Bearer $TOKEN\r\n" +
+                        "\r\n",
+                    lanServer,
+                )
+            assertEquals(403, response.status)
+        } finally {
+            lanServer.stop()
+        }
+    }
+
+    @Test
+    fun nonLoopbackBindRejectsLoopbackHosts() {
+        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        lanServer.start()
+        try {
+            val response =
+                request(
+                    "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer $TOKEN\r\n\r\n",
+                    lanServer,
+                )
+            assertEquals(421, response.status)
+        } finally {
+            lanServer.stop()
+        }
+    }
+
+    @Test
+    fun nonLoopbackBindServesNetworkAgentHosts() {
+        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        lanServer.start()
+        try {
+            val response =
+                request(
+                    "GET /health HTTP/1.1\r\nHost: 192.168.1.50\r\nAuthorization: Bearer $TOKEN\r\n\r\n",
+                    lanServer,
+                )
+            assertEquals(200, response.status)
+        } finally {
+            lanServer.stop()
+        }
+    }
+
+    @Test
+    fun postHealthReturns405WithAllow() {
+        val response =
+            request(
+                "POST /health HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\n" +
+                    "Authorization: Bearer $TOKEN\r\n" +
+                    "Content-Length: 0\r\n" +
+                    "\r\n"
+            )
+        assertEquals(405, response.status)
+        assertEquals("GET, OPTIONS", response.headers["allow"])
+    }
+
+    @Test
+    fun emptyBatchIsRejected() {
+        val response = postJsonRpc("[]")
+        assertEquals(200, response.status)
+        val text = response.body.toString(StandardCharsets.UTF_8)
+        assertTrue(text, text.contains("-32600"))
+        assertTrue(text, text.contains("empty batch"))
+    }
+
+    @Test
+    fun initializeServesTheSupportedProtocolVersion() {
+        val payload =
+            """{"jsonrpc":"2.0","id":7,"method":"initialize",""" +
+                """"params":{"protocolVersion":"1999-09-09","capabilities":{},""" +
+                """"clientInfo":{"name":"t","version":"1"}}}"""
+        val response = postJsonRpc(payload)
+        assertEquals(200, response.status)
+        val text = response.body.toString(StandardCharsets.UTF_8)
+        assertTrue(text, text.contains("\"protocolVersion\":\"2025-03-26\""))
+        assertFalse(text, text.contains("1999-09-09"))
+    }
+
+    @Test
+    fun slowDripIsCutByTheRequestDeadline() {
+        val dripServer = McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, requestTimeoutMs = 300)
+        dripServer.start()
+        try {
+            openSocket(dripServer).use { socket ->
+                write(
+                    socket,
+                    "POST /mcp HTTP/1.1\r\n" +
+                        "Host: 127.0.0.1\r\n" +
+                        "Authorization: Bearer $TOKEN\r\n" +
+                        "Content-Type: application/json\r\n" +
+                        "Content-Length: 400\r\n" +
+                        "\r\n"
+                )
+                // Drip one byte at a time: every individual read stays far below the socket
+                // timeout, but the total request crosses the absolute deadline and is cut.
+                repeat(20) {
+                    Thread.sleep(40)
+                    runCatching {
+                        socket.getOutputStream().apply { write('{'.code); flush() }
+                    }
+                }
+                socket.soTimeout = 10_000
+                val response = readResponse(socket, readBody = true)
+                assertEquals(408, response.status)
+            }
+        } finally {
+            dripServer.stop()
+        }
+    }
+
+    @Test
+    fun updateSortKeysIsRejectedWithoutAllowWrites() {
+        val server =
+            McpServer(
+                "127.0.0.1",
+                0,
+                tokenProvider = { TOKEN },
+                dataSource = FakeDataSource(6),
+                allowWrites = false,
+            )
+        server.start()
+        try {
+            val text = callTool(server, "library_update_sort_keys", """{"dryRun":false,"items":[]}""")
+            assertTrue(text, text.contains("Writes are disabled"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun validateSortKeysForcesDryRun() {
+        val source = RecordingSortKeysSource()
+        val server =
+            McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, dataSource = source, allowWrites = true)
+        server.start()
+        try {
+            callTool(server, "library_validate_sort_keys", """{"dryRun":false,"items":[]}""")
+            // Even when the caller passes dryRun=false, validation must never reach a write.
+            assertEquals(true, JSONObject(source.capturedUpdateRequest!!).optBoolean("dryRun"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun batchToolsCallEntriesAreCapped() {
+        val payload =
+            (1..21)
+                .joinToString(",") {
+                    """{"jsonrpc":"2.0","id":$it,"method":"tools/call","params":{"name":"ping"}}"""
+                }
+                .let { "[$it]" }
+        val response = postJsonRpc(payload)
+        assertEquals(200, response.status)
+        val text = response.body.toString(StandardCharsets.UTF_8)
+        assertTrue(text, text.contains("Too many tools/call entries"))
+    }
+
+    @Test
+    fun batchResponseBytesAreCapped() {
+        // Each fake search result is ~100 KiB; six of them cross the 512 KiB response cap.
+        val server = McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, dataSource = BulkDataSource())
+        server.start()
+        try {
+            val payload =
+                (1..6)
+                    .joinToString(",") {
+                        """{"jsonrpc":"2.0","id":$it,"method":"tools/call","params":{"name":"library_search_tracks","arguments":{}}}"""
+                    }
+                    .let { "[$it]" }
+            val response = postJsonRpc(payload, server)
+            assertEquals(200, response.status)
+            val text = response.body.toString(StandardCharsets.UTF_8)
+            assertTrue(text, text.contains("Batch response too large"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    private fun postJsonRpc(payload: String, target: McpServer = server): Response =
+        request(
+            "POST /mcp HTTP/1.1\r\n" +
+                "Host: 127.0.0.1\r\n" +
+                "Authorization: Bearer $TOKEN\r\n" +
+                "Content-Type: application/json\r\n" +
+                "Content-Length: ${payload.toByteArray(StandardCharsets.UTF_8).size}\r\n" +
+                "\r\n" +
+                payload,
+            target,
+        )
+
+    private fun callTool(target: McpServer, name: String, arguments: String): String {
+        val payload =
+            """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"$name","arguments":$arguments}}"""
+        val response = postJsonRpc(payload, target)
+        assertEquals(200, response.status)
+        return response.body.toString(StandardCharsets.UTF_8)
+    }
     private fun request(raw: String, target: McpServer = server): Response =
         openSocket(target).use { socket ->
             write(socket, raw)
@@ -450,6 +661,57 @@ class McpServerTest {
         val body: ByteArray,
     )
 
+    private class RecordingSortKeysSource : PhocidDataSource {
+        var capturedUpdateRequest: String? = null
+
+        override fun capabilities(): String =
+            JSONObject().put("apiVersion", 6).put("writeSortKeys", true).toString()
+
+        override fun updateSortKeys(requestJson: String): String {
+            capturedUpdateRequest = requestJson
+            return "{}"
+        }
+
+        override fun searchTracks(requestJson: String): String = "{}"
+
+        override fun getTrack(libraryId: Long): String = "{}"
+
+        override fun statsSummary(range: String): String = "{}"
+
+        override fun statsTopTracks(requestJson: String): String = "{}"
+
+        override fun statsDaily(range: String): String = "{}"
+
+        override fun resolveStatsUuid(libraryId: Long): String = "{}"
+
+        override fun listFacets(requestJson: String): String = "{}"
+
+        override fun playerState(): String = "{}"
+    }
+
+    private class BulkDataSource : PhocidDataSource {
+        override fun capabilities(): String = JSONObject().put("apiVersion", 6).toString()
+
+        override fun searchTracks(requestJson: String): String =
+            JSONObject().put("padding", "x".repeat(100 * 1024)).toString()
+
+        override fun getTrack(libraryId: Long): String = "{}"
+
+        override fun statsSummary(range: String): String = "{}"
+
+        override fun statsTopTracks(requestJson: String): String = "{}"
+
+        override fun statsDaily(range: String): String = "{}"
+
+        override fun resolveStatsUuid(libraryId: Long): String = "{}"
+
+        override fun listFacets(requestJson: String): String = "{}"
+
+        override fun playerState(): String = "{}"
+
+        override fun updateSortKeys(requestJson: String): String = "{}"
+    }
+
     private class FakeDataSource(private val apiVersion: Int) : PhocidDataSource {
         override fun capabilities(): String = JSONObject().put("apiVersion", apiVersion).toString()
 
@@ -474,7 +736,7 @@ class McpServerTest {
 
     private companion object {
         private const val TOKEN = "test-token"
-        private const val MAX_BODY_BYTES = 1024 * 1024
+        private const val MAX_BODY_BYTES = 256 * 1024
         private val API5_PROMISES =
             listOf(
                 "API 5",
