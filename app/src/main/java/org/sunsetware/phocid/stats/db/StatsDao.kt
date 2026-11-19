@@ -33,9 +33,9 @@ data class HourBucket(val hour: Int, val plays: Int, val millis: Long)
  * Aggregated 15-minute UTC slice of play events for [PlayEventDao.hourlyBuckets].
  *
  * The aggregation runs in SQLite, so the full event log is never loaded into memory even for the
- * ALL range. Every post-1970 zone offset and DST transition instant is a multiple of 15 minutes,
- * so each slice lies wholly inside one local hour of any zone; the caller maps the slice start to
- * its local hour, which preserves per-event bucketing across DST transitions.
+ * ALL range. Every post-1970 zone offset and DST transition instant is a multiple of 15 minutes, so
+ * each slice lies wholly inside one local hour of any zone; the caller maps the slice start to its
+ * local hour, which preserves per-event bucketing across DST transitions.
  */
 data class PlayEventSlice(val startMillis: Long, val plays: Int, val millis: Long)
 
@@ -105,8 +105,8 @@ interface TrackDao {
 
     /**
      * Deletes tracks that carry no statistics anywhere (no raw events, no daily rows, no lifetime
-     * totals) and were created before [createdBeforeMillis]. Such rows are resolver bookkeeping
-     * for files that were never played; their aliases are removed by the foreign-key cascade. The
+     * totals) and were created before [createdBeforeMillis]. Such rows are resolver bookkeeping for
+     * files that were never played; their aliases are removed by the foreign-key cascade. The
      * creation-date grace keeps freshly resolved rows alive until their first play.
      */
     @Query(
@@ -257,8 +257,8 @@ interface TrackDailyDao {
     suspend fun since(sinceDay: Int): List<TrackDailyEntity>
 
     /**
-     * Loads only the daily rows relevant to a merge restore, in bounded chunks so the generated
-     * IN clauses stay below SQLite's parameter limit. Avoids scanning the whole track_daily table.
+     * Loads only the daily rows relevant to a merge restore, in bounded chunks so the generated IN
+     * clauses stay below SQLite's parameter limit. Avoids scanning the whole track_daily table.
      */
     @Query("SELECT * FROM track_daily WHERE trackRowId IN (:rowIds) AND epochDay IN (:epochDays)")
     suspend fun byKeys(rowIds: List<Long>, epochDays: List<Int>): List<TrackDailyEntity>
@@ -623,7 +623,8 @@ interface TrackTotalsDao {
 interface PlaybackOutboxDao {
     @Insert suspend fun insert(row: PlaybackOutboxEntity): Long
 
-    @Query("SELECT * FROM playback_outbox ORDER BY id") suspend fun all(): List<PlaybackOutboxEntity>
+    @Query("SELECT * FROM playback_outbox ORDER BY id")
+    suspend fun all(): List<PlaybackOutboxEntity>
 
     @Query("SELECT COUNT(*) FROM playback_outbox WHERE id = :id")
     suspend fun countById(id: Long): Int

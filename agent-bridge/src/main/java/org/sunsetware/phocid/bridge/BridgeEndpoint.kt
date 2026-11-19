@@ -50,8 +50,8 @@ object BridgeEndpoint {
 
     /**
      * Android 17 (API 37) requires ACCESS_LOCAL_NETWORK for local network traffic, and inbound
-     * connections to a non-loopback listen address count as such traffic. Loopback stays exempt,
-     * so the default bind and adb forward keep working without the permission.
+     * connections to a non-loopback listen address count as such traffic. Loopback stays exempt, so
+     * the default bind and adb forward keep working without the permission.
      */
     fun requiresLocalNetworkPermission(raw: String): Boolean = !isLoopback(raw)
 

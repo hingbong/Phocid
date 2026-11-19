@@ -164,10 +164,9 @@ class LibraryScreenHomeViewState(
 
     /** The page the pager is settling towards, as a flow, so per-tab computation can be gated. */
     private val _activePage = MutableStateFlow(0)
-    private val activePageJob =
-        coroutineScope.launch {
-            snapshotFlow { pagerState.targetPage }.collect { _activePage.value = it }
-        }
+    private val activePageJob = coroutineScope.launch {
+        snapshotFlow { pagerState.targetPage }.collect { _activePage.value = it }
+    }
 
     private val activeTabType =
         _activePage.combine(flowScope, preferences, transform = ::activeTabTypeFor)

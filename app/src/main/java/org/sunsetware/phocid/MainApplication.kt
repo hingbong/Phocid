@@ -95,8 +95,10 @@ class MainApplication : Application() {
                                 }
                             },
                             sortKeyManager.keys,
-                            // The global library index must stay hot: it is a process-wide source of
-                            // truth that other components (scans, shortcuts, agent queries) read via
+                            // The global library index must stay hot: it is a process-wide source
+                            // of
+                            // truth that other components (scans, shortcuts, agent queries) read
+                            // via
                             // .value even when no UI is subscribed. A cold WhileSubscribed combine
                             // would never recompute, wedging flowVersion-based sync waits.
                             hot = true,
@@ -110,7 +112,8 @@ class MainApplication : Application() {
                             )
                         }
 
-                    playlistManager = PlaylistManager(context, defaultScope, preferences, libraryIndex)
+                    playlistManager =
+                        PlaylistManager(context, defaultScope, preferences, libraryIndex)
                     playlistManager.initialize()
 
                     saveManagers +=

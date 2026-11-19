@@ -41,7 +41,8 @@ class BridgeService : Service() {
                     it.copy(
                         running = false,
                         starting = false,
-                        error = "Could not start the bridge: ${t.message ?: t.javaClass.simpleName}",
+                        error =
+                            "Could not start the bridge: ${t.message ?: t.javaClass.simpleName}",
                     )
                 }
             }
@@ -57,7 +58,8 @@ class BridgeService : Service() {
                 _state.update {
                     it.copy(
                         starting = false,
-                        error = "Could not restart the bridge: ${t.message ?: t.javaClass.simpleName}",
+                        error =
+                            "Could not restart the bridge: ${t.message ?: t.javaClass.simpleName}",
                     )
                 }
             }
@@ -218,8 +220,7 @@ class BridgeService : Service() {
                 Intent(this, MainActivity::class.java),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-        val stopIntent =
-            Intent(this, BridgeService::class.java).setAction(ACTION_STOP)
+        val stopIntent = Intent(this, BridgeService::class.java).setAction(ACTION_STOP)
         val stopPending =
             PendingIntent.getService(
                 this,
@@ -237,10 +238,11 @@ class BridgeService : Service() {
             .setCategory(Notification.CATEGORY_SERVICE)
             .addAction(
                 Notification.Action.Builder(
-                    android.R.drawable.ic_menu_close_clear_cancel,
-                    "Stop",
-                    stopPending,
-                ).build()
+                        android.R.drawable.ic_menu_close_clear_cancel,
+                        "Stop",
+                        stopPending,
+                    )
+                    .build()
             )
             .build()
     }

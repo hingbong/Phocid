@@ -214,8 +214,8 @@ class PlaybackStatsRecorder(
 
     /**
      * Starts a new session. [previousEndedByPlayer] is true only when the player itself reports
-     * that the previous track reached its end (automatic advance or repeat); a manual transition
-     * is a skip.
+     * that the previous track reached its end (automatic advance or repeat); a manual transition is
+     * a skip.
      */
     fun onTrackStarted(meta: TrackMeta, previousEndedByPlayer: Boolean = false) {
         var previous: Session? = null
@@ -628,8 +628,7 @@ class PlaybackStatsRecorder(
         if (session.accumulatedMillis < MIN_COMPLETION_MILLIS) return false
         if (endedByPlayer && !session.seekedToEnd) return true
         if (session.durationMillis <= 0L) return false
-        val tolerance =
-            COMPLETION_TOLERANCE_MILLIS.coerceAtMost(session.durationMillis / 2)
+        val tolerance = COMPLETION_TOLERANCE_MILLIS.coerceAtMost(session.durationMillis / 2)
         return session.accumulatedMillis >= session.durationMillis - tolerance
     }
 
@@ -741,9 +740,7 @@ class PlaybackStatsRecorder(
                 // but its pending time is still real. Put it in the outbox for the next start.
                 val saved =
                     try {
-                        storeMutex.withLock {
-                            writerMutex.withLock { persistOutbox(session) }
-                        }
+                        storeMutex.withLock { writerMutex.withLock { persistOutbox(session) } }
                     } catch (ex: CancellationException) {
                         throw ex
                     } catch (ex: Exception) {
@@ -794,8 +791,8 @@ class PlaybackStatsRecorder(
 
     /**
      * Store-cleared invalidation for callers that already hold the store-wide mutex
-     * ([org.sunsetware.phocid.stats.StatsManager]). Kotlin's [Mutex] is not reentrant, so the public
-     * entry point above must not be called from inside that critical section.
+     * ([org.sunsetware.phocid.stats.StatsManager]). Kotlin's [Mutex] is not reentrant, so the
+     * public entry point above must not be called from inside that critical section.
      */
     internal suspend fun onStoreClearedLocked() {
         // No shuttingDown early-return: this method is ordered against shutdown settling by the
@@ -1048,7 +1045,10 @@ class PlaybackStatsRecorder(
                             pending.skipCount += bucket.skipCount
                             pending.completedMillis += bucket.completedMillis
                             pending.firstPlayedAt =
-                                minOf(pending.firstPlayedAt ?: bucket.firstPlayedAt, bucket.firstPlayedAt)
+                                minOf(
+                                    pending.firstPlayedAt ?: bucket.firstPlayedAt,
+                                    bucket.firstPlayedAt,
+                                )
                             pending.lastPlayedAt = maxOf(pending.lastPlayedAt, bucket.lastPlayedAt)
                             if (pending.dayStartMs == null) pending.dayStartMs = bucket.dayStartMs
                             if (pending.dayEndMs == null) pending.dayEndMs = bucket.dayEndMs
@@ -1080,7 +1080,8 @@ class PlaybackStatsRecorder(
      */
     private suspend fun trackRowExists(rowId: Long): Boolean = runCatching {
         db.trackDao().byRowId(rowId) != null
-    }.getOrElse { true }
+    }
+        .getOrElse { true }
 
     /**
      * Re-resolve a session whose cached row id no longer points at a stored track. [staleRowId]
@@ -1239,8 +1240,7 @@ class PlaybackStatsRecorder(
         }
     }
 
-    private suspend fun outboxRowExists(id: Long): Boolean =
-        db.outboxDao().countById(id) > 0
+    private suspend fun outboxRowExists(id: Long): Boolean = db.outboxDao().countById(id) > 0
 
     // Outbox recovery --------------------------------------------------
 
@@ -1259,9 +1259,7 @@ class PlaybackStatsRecorder(
             recoveryJob = job
         }
         job.invokeOnCompletion {
-            synchronized(lock) {
-                if (recoveryJob === job) recoveryJob = null
-            }
+            synchronized(lock) { if (recoveryJob === job) recoveryJob = null }
         }
         job.start()
     }
@@ -1315,10 +1313,9 @@ class PlaybackStatsRecorder(
                 }
             // Leave the row for the next start when identity is unavailable.
             if (trackRowId == null) continue
-            val committed =
-                storeMutex.withLock {
-                    writerMutex.withLock { writeSession(payload.toSession(trackRowId), row.id) }
-                }
+            val committed = storeMutex.withLock {
+                writerMutex.withLock { writeSession(payload.toSession(trackRowId), row.id) }
+            }
             if (!committed) {
                 Log.w(
                     "Phocid",
@@ -1438,9 +1435,7 @@ class PlaybackStatsRecorder(
             val barrier = CompletableDeferred<Unit>()
             // Use the same store -> writer order as every real write so the barrier cannot sit
             // between a queued write and its transaction.
-            scope.launch {
-                storeMutex.withLock { writerMutex.withLock { barrier.complete(Unit) } }
-            }
+            scope.launch { storeMutex.withLock { writerMutex.withLock { barrier.complete(Unit) } } }
             barrier.await()
             val busy =
                 synchronized(lock) {

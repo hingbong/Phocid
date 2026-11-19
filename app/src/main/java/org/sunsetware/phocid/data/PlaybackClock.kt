@@ -35,18 +35,14 @@ class PlaybackClock(
      * only sampled while there is at least one subscriber, so no position polling happens while no
      * screen is watching.
      */
-    val position: StateFlow<Long> =
-        flow {
-                while (true) {
-                    val current = refresh()
-                    emit(current?.positionMs ?: 0L)
-                    delay(
-                        if (current?.isPlaying == true) PLAYING_INTERVAL_MS
-                        else PAUSED_INTERVAL_MS
-                    )
-                }
-            }
-            .stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0L)
+    val position: StateFlow<Long> = flow {
+        while (true) {
+            val current = refresh()
+            emit(current?.positionMs ?: 0L)
+            delay(if (current?.isPlaying == true) PLAYING_INTERVAL_MS else PAUSED_INTERVAL_MS)
+        }
+    }
+        .stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0L)
 
     /**
      * Position in milliseconds at [nowUptimeMs], extrapolated from the last sample without touching

@@ -9,13 +9,13 @@ import com.google.re2j.Pattern
  * subject length only, so a hostile or accidental pattern such as "(a|aa)+$" can no longer stall
  * the indexing thread the way java.util.regex's backtracking matcher can. RE2/J rejects a few
  * constructs that the backtracking engine accepts — notably backreferences and lookaround — and
- * [isValid] reports those as invalid so the editing dialog shows feedback instead of the rule
- * being silently dropped at compile time.
+ * [isValid] reports those as invalid so the editing dialog shows feedback instead of the rule being
+ * silently dropped at compile time.
  *
  * Two size bounds remain as defence in depth: patterns are capped at [MAX_PATTERN_LENGTH], and
- * subjects are truncated to [MAX_SUBJECT_LENGTH] before matching (which also preserves the
- * previous matching behaviour for absurdly long paths). The nested-quantifier shape check is
- * kept so patterns that were already rejected stay rejected.
+ * subjects are truncated to [MAX_SUBJECT_LENGTH] before matching (which also preserves the previous
+ * matching behaviour for absurdly long paths). The nested-quantifier shape check is kept so
+ * patterns that were already rejected stay rejected.
  */
 object SafeRegex {
     /** Long enough for real rules, short enough to bound the compiled program size. */
@@ -40,8 +40,8 @@ object SafeRegex {
     }
 
     /**
-     * Compiles an accepted rule, or null when it is invalid. Callers should use [isValid] first
-     * so invalid rules are not silently dropped without feedback.
+     * Compiles an accepted rule, or null when it is invalid. Callers should use [isValid] first so
+     * invalid rules are not silently dropped without feedback.
      */
     fun compile(pattern: String): Pattern? =
         if (!isValid(pattern)) null
@@ -56,7 +56,8 @@ object SafeRegex {
 /** Runs a match against a length-bounded subject. */
 fun Pattern.matchesBounded(subject: String): Boolean =
     matcher(
-            if (subject.length > SafeRegex.MAX_SUBJECT_LENGTH) subject.take(SafeRegex.MAX_SUBJECT_LENGTH)
+            if (subject.length > SafeRegex.MAX_SUBJECT_LENGTH)
+                subject.take(SafeRegex.MAX_SUBJECT_LENGTH)
             else subject
         )
         .find()

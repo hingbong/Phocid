@@ -7,8 +7,8 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Serialises scan requests and coalesces redundant ones.
  *
- * A request that arrives while a scan is already in flight waits for that scan to finish instead
- * of queueing another full scan behind it, so rapid repeat triggers (activity RESUMED events, a
+ * A request that arrives while a scan is already in flight waits for that scan to finish instead of
+ * queueing another full scan behind it, so rapid repeat triggers (activity RESUMED events, a
  * permission grant racing a lifecycle trigger) cannot multiply the work. Requests with [scan]'s
  * [force] flag still run after the in-flight scan completes, because a manual rescan must not be
  * silently dropped. If the in-flight scan fails, waiters run their own scan, so a failure is

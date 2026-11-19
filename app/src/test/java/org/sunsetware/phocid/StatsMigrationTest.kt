@@ -125,38 +125,36 @@ class StatsMigrationTest {
                 "firstPlayedAt, startedCount, completedCount, skipCount, completedMillis) " +
                 "VALUES (3, 20000, 0, 0, 0, NULL, 1, 0, 0, 0)"
         )
-        db.execSQL(
-            "INSERT INTO track_totals VALUES (1, 3, 3000, 1, 100, 0, 0, 0, 0)"
-        )
-        db.execSQL(
-            "INSERT INTO track_totals VALUES (2, 1, 1000, 200, 100, 0, 0, 0, 0)"
-        )
+        db.execSQL("INSERT INTO track_totals VALUES (1, 3, 3000, 1, 100, 0, 0, 0, 0)")
+        db.execSQL("INSERT INTO track_totals VALUES (2, 1, 1000, 200, 100, 0, 0, 0, 0)")
 
         StatsDatabase.MIGRATION_5_6.migrate(db)
 
         db.query(
-            "SELECT trackRowId, firstPlayedAt, lastPlayedAt, startedCount FROM track_daily " +
-                "ORDER BY trackRowId"
-        ).use { cursor ->
-            assertThat(cursor.moveToNext()).isTrue()
-            assertThat(cursor.getLong(0)).isEqualTo(1)
-            assertThat(cursor.getLong(1)).isEqualTo(100)
-            assertThat(cursor.getLong(2)).isEqualTo(100)
-            assertThat(cursor.getInt(3)).isEqualTo(3)
+                "SELECT trackRowId, firstPlayedAt, lastPlayedAt, startedCount FROM track_daily " +
+                    "ORDER BY trackRowId"
+            )
+            .use { cursor ->
+                assertThat(cursor.moveToNext()).isTrue()
+                assertThat(cursor.getLong(0)).isEqualTo(1)
+                assertThat(cursor.getLong(1)).isEqualTo(100)
+                assertThat(cursor.getLong(2)).isEqualTo(100)
+                assertThat(cursor.getInt(3)).isEqualTo(3)
 
-            assertThat(cursor.moveToNext()).isTrue()
-            assertThat(cursor.getLong(0)).isEqualTo(2)
-            assertThat(cursor.getLong(1)).isEqualTo(200)
-            assertThat(cursor.getLong(2)).isEqualTo(200)
-            assertThat(cursor.getInt(3)).isEqualTo(1)
+                assertThat(cursor.moveToNext()).isTrue()
+                assertThat(cursor.getLong(0)).isEqualTo(2)
+                assertThat(cursor.getLong(1)).isEqualTo(200)
+                assertThat(cursor.getLong(2)).isEqualTo(200)
+                assertThat(cursor.getInt(3)).isEqualTo(1)
 
-            assertThat(cursor.moveToNext()).isTrue()
-            assertThat(cursor.getLong(0)).isEqualTo(3)
-            assertThat(cursor.isNull(1)).isTrue()
-            assertThat(cursor.getLong(2)).isEqualTo(0)
-            assertThat(cursor.getInt(3)).isEqualTo(1)
-        }
-        db.query("SELECT startedCount, lastPlayedAt FROM track_totals ORDER BY trackRowId").use { cursor ->
+                assertThat(cursor.moveToNext()).isTrue()
+                assertThat(cursor.getLong(0)).isEqualTo(3)
+                assertThat(cursor.isNull(1)).isTrue()
+                assertThat(cursor.getLong(2)).isEqualTo(0)
+                assertThat(cursor.getInt(3)).isEqualTo(1)
+            }
+        db.query("SELECT startedCount, lastPlayedAt FROM track_totals ORDER BY trackRowId").use {
+            cursor ->
             assertThat(cursor.moveToNext()).isTrue()
             assertThat(cursor.getInt(0)).isEqualTo(3)
             assertThat(cursor.getLong(1)).isEqualTo(100)
@@ -192,7 +190,8 @@ class StatsMigrationTest {
 
         StatsDatabase.MIGRATION_6_7.migrate(db)
 
-        db.query("SELECT trackRowId, startedCount FROM track_daily ORDER BY trackRowId").use { cursor ->
+        db.query("SELECT trackRowId, startedCount FROM track_daily ORDER BY trackRowId").use {
+            cursor ->
             assertThat(cursor.moveToNext()).isTrue()
             assertThat(cursor.getLong(0)).isEqualTo(1)
             assertThat(cursor.getInt(1)).isEqualTo(1)
@@ -210,7 +209,8 @@ class StatsMigrationTest {
             assertThat(cursor.getInt(1)).isEqualTo(5)
             assertThat(cursor.moveToNext()).isFalse()
         }
-        db.query("SELECT trackRowId, startedCount FROM track_totals ORDER BY trackRowId").use { cursor ->
+        db.query("SELECT trackRowId, startedCount FROM track_totals ORDER BY trackRowId").use {
+            cursor ->
             assertThat(cursor.moveToNext()).isTrue()
             assertThat(cursor.getLong(0)).isEqualTo(1)
             assertThat(cursor.getInt(1)).isEqualTo(1)
@@ -266,9 +266,7 @@ class StatsMigrationTest {
         StatsDatabase.MIGRATION_3_4.migrate(db)
 
         db.query("PRAGMA table_info(track_daily)").use { cursor ->
-            val columns = buildSet {
-                while (cursor.moveToNext()) add(cursor.getString(1))
-            }
+            val columns = buildSet { while (cursor.moveToNext()) add(cursor.getString(1)) }
             assertThat(columns)
                 .contains(
                     "startedCount",
@@ -281,19 +279,22 @@ class StatsMigrationTest {
                 )
         }
         db.query(
-            "SELECT startedCount, completedCount, skipCount, completedMillis, " +
-                "dayStartMs, dayEndMs, utcOffsetMinutes FROM track_daily"
-        ).use { cursor ->
-            assertThat(cursor.moveToFirst()).isTrue()
-            assertThat(cursor.getInt(0)).isEqualTo(0)
-            assertThat(cursor.getInt(1)).isEqualTo(0)
-            assertThat(cursor.getInt(2)).isEqualTo(0)
-            assertThat(cursor.getLong(3)).isEqualTo(0L)
-            assertThat(cursor.isNull(4)).isTrue()
-            assertThat(cursor.isNull(5)).isTrue()
-            assertThat(cursor.isNull(6)).isTrue()
-        }
-        db.query("SELECT startedCount, completedCount, skipCount, completedMillis FROM track_totals")
+                "SELECT startedCount, completedCount, skipCount, completedMillis, " +
+                    "dayStartMs, dayEndMs, utcOffsetMinutes FROM track_daily"
+            )
+            .use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.getInt(0)).isEqualTo(0)
+                assertThat(cursor.getInt(1)).isEqualTo(0)
+                assertThat(cursor.getInt(2)).isEqualTo(0)
+                assertThat(cursor.getLong(3)).isEqualTo(0L)
+                assertThat(cursor.isNull(4)).isTrue()
+                assertThat(cursor.isNull(5)).isTrue()
+                assertThat(cursor.isNull(6)).isTrue()
+            }
+        db.query(
+                "SELECT startedCount, completedCount, skipCount, completedMillis FROM track_totals"
+            )
             .use { cursor ->
                 assertThat(cursor.moveToFirst()).isTrue()
                 assertThat(cursor.getInt(0)).isEqualTo(0)
@@ -314,8 +315,8 @@ class StatsMigrationTest {
         // The table was registered with the schema but never used anywhere, so the migration only
         // reclaims its space; it must be gone entirely.
         db.query(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'fingerprint_cache'"
-        )
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'fingerprint_cache'"
+            )
             .use { cursor ->
                 assertThat(cursor.moveToFirst()).isTrue()
                 assertThat(cursor.getInt(0)).isZero()

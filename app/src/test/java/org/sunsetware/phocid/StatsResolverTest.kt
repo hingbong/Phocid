@@ -416,8 +416,7 @@ class StatsResolverTest {
 
             assertThat(second).isNotEqualTo(first)
             assertThat(db.aliasDao().aliasesOf(first)).noneMatch { it.kind == AliasKind.REL_PATH }
-            assertThat(db.aliasDao().aliasesOf(second))
-                .noneMatch { it.kind == AliasKind.REL_PATH }
+            assertThat(db.aliasDao().aliasesOf(second)).noneMatch { it.kind == AliasKind.REL_PATH }
         }
 
     @Test

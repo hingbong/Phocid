@@ -200,8 +200,8 @@ data class PlaybackOutboxEntity(
 object StatsRetention {
     /**
      * Retention window, in days, shared by the daily aggregates and the raw play-event log: the
-     * maintenance worker anchors both cutoffs at the same local-midnight boundary of the same
-     * start day, so the two tables always cover the identical calendar window.
+     * maintenance worker anchors both cutoffs at the same local-midnight boundary of the same start
+     * day, so the two tables always cover the identical calendar window.
      */
     const val DAILY_RETENTION_DAYS = 1095
 

@@ -1067,10 +1067,10 @@ data class UnfilteredTrackIndex(
     val version: String?,
     val tracks: Map<Long, Track>,
     /**
-     * Fingerprint of the parse settings (separator lists, extraction flags) that produced
-     * [tracks]. Part of the scan cache key: a non-forced scan may only reuse rows whose
-     * fingerprint matches the settings in effect, so changing settings re-reads the files.
-     * Older saves decode with null and are re-read exactly once.
+     * Fingerprint of the parse settings (separator lists, extraction flags) that produced [tracks].
+     * Part of the scan cache key: a non-forced scan may only reuse rows whose fingerprint matches
+     * the settings in effect, so changing settings re-reads the files. Older saves decode with null
+     * and are re-read exactly once.
      */
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) val parseFingerprint: Long? = null,
     /**
@@ -1233,7 +1233,11 @@ private fun getAlbumArtists(
         .map { (names, nameAlbums) ->
             val name = names.mode()
             val albumArtistAlbums =
-                nameAlbums.sorted(collator, Album.CollectionSortingOptions.values.first().keys, true)
+                nameAlbums.sorted(
+                    collator,
+                    Album.CollectionSortingOptions.values.first().keys,
+                    true,
+                )
             val albumArtistTracks = albumArtistAlbums.flatMap { it.tracks }
             name to AlbumArtist(name, albumArtistTracks, albumArtistAlbums)
         }
@@ -1363,10 +1367,10 @@ private val contentResolverColumns =
 
 @Suppress("DEPRECATION")
 /**
- * Returns [old] unchanged when a scan produced exactly the same library (same MediaStore
- * generation and same tracks). Returning the identical instance keeps its
- * [UnfilteredTrackIndex] flowVersion, so no new derived [LibraryIndex] is built, no
- * flowVersion-based sync waits, and no CBOR save is re-serialised for an unchanged library.
+ * Returns [old] unchanged when a scan produced exactly the same library (same MediaStore generation
+ * and same tracks). Returning the identical instance keeps its [UnfilteredTrackIndex] flowVersion,
+ * so no new derived [LibraryIndex] is built, no flowVersion-based sync waits, and no CBOR save is
+ * re-serialised for an unchanged library.
  */
 internal fun coalesceUnchangedScan(
     old: UnfilteredTrackIndex?,
@@ -1384,8 +1388,8 @@ internal fun coalesceUnchangedScan(
 }
 
 /**
- * Fingerprint of every setting that influences how a file is parsed during a scan. Part of the
- * scan cache key: a cached row may only be reused when the old index was built with the same
+ * Fingerprint of every setting that influences how a file is parsed during a scan. Part of the scan
+ * cache key: a cached row may only be reused when the old index was built with the same
  * fingerprint, so changing separators or extraction flags invalidates the whole cache.
  */
 internal fun scanParseFingerprint(
@@ -1564,7 +1568,12 @@ suspend fun scanTracks(
         }
     }
 
-    return coalesceUnchangedScan(old, libraryVersion, tracks.associateBy { it.id }, parseFingerprint)
+    return coalesceUnchangedScan(
+        old,
+        libraryVersion,
+        tracks.associateBy { it.id },
+        parseFingerprint,
+    )
 }
 
 private val originalYearFieldNames =

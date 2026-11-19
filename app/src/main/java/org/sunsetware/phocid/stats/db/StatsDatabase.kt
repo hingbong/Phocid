@@ -154,8 +154,8 @@ abstract class StatsDatabase : RoomDatabase() {
          * 6 -> 7 repairs lifecycle counters that older writes could leave below their provable
          * lower bound. [MIGRATION_5_6] filled `startedCount` only for rows with a counted play, so
          * a row that was selected and immediately skipped kept zero forever. Every row with any
-         * listening timestamp proves at least one start; completed and skipped sessions prove
-         * their own starts. The update only raises counters, never lowers them.
+         * listening timestamp proves at least one start; completed and skipped sessions prove their
+         * own starts. The update only raises counters, never lowers them.
          */
         internal val MIGRATION_6_7 =
             object : Migration(6, 7) {

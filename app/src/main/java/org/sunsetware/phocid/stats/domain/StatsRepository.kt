@@ -114,11 +114,9 @@ class StatsRepository(
         val epochDay = day.toEpochDay().toInt()
         return when (sort) {
             StatsSort.PLAYS ->
-                db.dailyDao()
-                    .topTracksByPlays(epochDay, epochDay, limit, AliasKind.LOCAL_URI)
+                db.dailyDao().topTracksByPlays(epochDay, epochDay, limit, AliasKind.LOCAL_URI)
             StatsSort.TIME ->
-                db.dailyDao()
-                    .topTracksByTime(epochDay, epochDay, limit, AliasKind.LOCAL_URI)
+                db.dailyDao().topTracksByTime(epochDay, epochDay, limit, AliasKind.LOCAL_URI)
         }
     }
 
@@ -128,9 +126,10 @@ class StatsRepository(
         val zone = zoneId()
         val today = LocalDate.now(zone)
         val window = if (range.isAll) StatsRange.YEARS_3 else range
-        return db.dailyDao()
-            .dailyTrend(sinceDay(window, today), today.toEpochDay().toInt())
-            .map { days -> days.map { it.withDayBoundaries(zone) } }
+        return db.dailyDao().dailyTrend(sinceDay(window, today), today.toEpochDay().toInt()).map {
+            days ->
+            days.map { it.withDayBoundaries(zone) }
+        }
     }
 
     /**
@@ -153,9 +152,9 @@ class StatsRepository(
      * Reads play_events, so it starts from zero after restoring a backup.
      *
      * The aggregation happens in SQL over 15-minute UTC slices, so even the ALL range never loads
-     * the full event log into memory. Each slice is mapped to its own local hour in [zoneId]:
-     * both occurrences of a repeated fall-back hour therefore share hour 1, while a spring-forward
-     * gap simply has no slices (and so no bucket beyond the ordinary zero-filled 0..23 output).
+     * the full event log into memory. Each slice is mapped to its own local hour in [zoneId]: both
+     * occurrences of a repeated fall-back hour therefore share hour 1, while a spring-forward gap
+     * simply has no slices (and so no bucket beyond the ordinary zero-filled 0..23 output).
      */
     fun hourlyDistribution(range: StatsRange): Flow<List<HourBucket>> {
         val zone = zoneId()

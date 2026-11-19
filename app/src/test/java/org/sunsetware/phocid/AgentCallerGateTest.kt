@@ -10,8 +10,8 @@ class AgentCallerGateTest {
     private val callerUid = 10_043
 
     /**
-     * The PackageManager constant for differing signatures is a hidden API and not part of
-     * the public SDK, so the value is kept as a literal. Any non-match result denies.
+     * The PackageManager constant for differing signatures is a hidden API and not part of the
+     * public SDK, so the value is kept as a literal. Any non-match result denies.
      */
     private val SIGNATURE_NOT_MATCH = -3
 
@@ -19,7 +19,11 @@ class AgentCallerGateTest {
     fun sameProcessCallerIsAlwaysTrusted() {
         // A local (same-process) caller needs no package lookup at all.
         assertThat(
-                AgentCallerGate.isTrusted(callingUid = myUid, myUid = myUid, packagesForUid = null) {
+                AgentCallerGate.isTrusted(
+                    callingUid = myUid,
+                    myUid = myUid,
+                    packagesForUid = null,
+                ) {
                     PackageManager.SIGNATURE_MATCH
                 }
             )
@@ -43,13 +47,21 @@ class AgentCallerGateTest {
     @Test
     fun unresolvableCallerUidIsRejected() {
         assertThat(
-                AgentCallerGate.isTrusted(callingUid = callerUid, myUid = myUid, packagesForUid = null) {
+                AgentCallerGate.isTrusted(
+                    callingUid = callerUid,
+                    myUid = myUid,
+                    packagesForUid = null,
+                ) {
                     PackageManager.SIGNATURE_MATCH
                 }
             )
             .isFalse()
         assertThat(
-                AgentCallerGate.isTrusted(callingUid = callerUid, myUid = myUid, packagesForUid = emptyArray()) {
+                AgentCallerGate.isTrusted(
+                    callingUid = callerUid,
+                    myUid = myUid,
+                    packagesForUid = emptyArray(),
+                ) {
                     PackageManager.SIGNATURE_MATCH
                 }
             )

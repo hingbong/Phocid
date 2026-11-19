@@ -146,11 +146,9 @@ data class Preferences(
         )
     }
 
-    @Transient
-    val blacklistRegexes = blacklist.mapNotNull { SafeRegex.compile(it) }
+    @Transient val blacklistRegexes = blacklist.mapNotNull { SafeRegex.compile(it) }
 
-    @Transient
-    val whitelistRegexes = whitelist.mapNotNull { SafeRegex.compile(it) }
+    @Transient val whitelistRegexes = whitelist.mapNotNull { SafeRegex.compile(it) }
 
     @Transient
     val tabs =

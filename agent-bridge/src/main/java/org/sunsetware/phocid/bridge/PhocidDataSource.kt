@@ -3,14 +3,24 @@ package org.sunsetware.phocid.bridge
 /** The narrow data surface the MCP server needs from the main Phocid app. */
 interface PhocidDataSource {
     fun capabilities(): String
+
     fun searchTracks(requestJson: String): String
+
     fun getTrack(libraryId: Long): String
+
     fun statsSummary(range: String): String
+
     fun statsTopTracks(requestJson: String): String
+
     fun statsTracks(requestJson: String): String = statsTopTracks(requestJson)
+
     fun statsDaily(range: String): String
+
     fun resolveStatsUuid(libraryId: Long): String
+
     fun listFacets(requestJson: String): String
+
     fun playerState(): String
+
     fun updateSortKeys(requestJson: String): String
 }

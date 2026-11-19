@@ -33,7 +33,6 @@ private fun getVersionBundle(method: String): Bundle? =
  * state. Each test registers its own "media" provider, so the real MediaStore implementation talks
  * to the fixture and no custom shadow is needed.
  */
-
 @RunWith(RobolectricTestRunner::class)
 @Config(shadows = [ScanTracksAbortTest.TestShadowMediaStore::class])
 class ScanTracksAbortTest {
@@ -50,65 +49,71 @@ class ScanTracksAbortTest {
         }
     }
 
-
     private fun grantReadPermission() {
         Shadows.shadowOf(RuntimeEnvironment.getApplication())
             .grantPermissions(org.sunsetware.phocid.READ_PERMISSION)
     }
 
     @Test
-    fun aNullMediaStoreCursorAbortsTheScanAndKeepsTheOldIndex() = runBlocking<Unit> {
-        grantReadPermission()
-        Robolectric.buildContentProvider(NullCursorProvider::class.java).create("media")
-        val old = UnfilteredTrackIndex("v1", mapOf(InvalidTrack.id to InvalidTrack))
+    fun aNullMediaStoreCursorAbortsTheScanAndKeepsTheOldIndex() =
+        runBlocking<Unit> {
+            grantReadPermission()
+            Robolectric.buildContentProvider(NullCursorProvider::class.java).create("media")
+            val old = UnfilteredTrackIndex("v1", mapOf(InvalidTrack.id to InvalidTrack))
 
-        val result =
-            scanTracks(
-                RuntimeEnvironment.getApplication(),
-                false,
-                // Artwork colour extraction is skipped: it reaches ContentResolver.loadThumbnail,
-                // which Robolectric does not implement, and its bitmap loader owns a non-daemon
-                // executor that would keep the test JVM from exiting.
-                true,
-                old,
-                emptyList(),
-                emptyList(),
-                emptyList(),
-                emptyList(),
-            ) { _, _ -> }
+            val result =
+                scanTracks(
+                    RuntimeEnvironment.getApplication(),
+                    false,
+                    // Artwork colour extraction is skipped: it reaches
+                    // ContentResolver.loadThumbnail,
+                    // which Robolectric does not implement, and its bitmap loader owns a non-daemon
+                    // executor that would keep the test JVM from exiting.
+                    true,
+                    old,
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ) { _, _ ->
+                }
 
-        // The scan must abort rather than publish an empty library over the old index.
-        assertThat(result).isNull()
-    }
+            // The scan must abort rather than publish an empty library over the old index.
+            assertThat(result).isNull()
+        }
 
     @Test
-    fun scanProgressReachesTheTerminalState() = runBlocking<Unit> {
-        grantReadPermission()
-        Robolectric.buildContentProvider(OneCrudeRowProvider::class.java).create("media")
-        val reports = mutableListOf<Pair<Int, Int>>()
-        val old = UnfilteredTrackIndex("test-version", emptyMap())
+    fun scanProgressReachesTheTerminalState() =
+        runBlocking<Unit> {
+            grantReadPermission()
+            Robolectric.buildContentProvider(OneCrudeRowProvider::class.java).create("media")
+            val reports = mutableListOf<Pair<Int, Int>>()
+            val old = UnfilteredTrackIndex("test-version", emptyMap())
 
-        val result =
-            scanTracks(
-                RuntimeEnvironment.getApplication(),
-                false,
-                // Artwork colour extraction is skipped: it reaches ContentResolver.loadThumbnail,
-                // which Robolectric does not implement, and its bitmap loader owns a non-daemon
-                // executor that would keep the test JVM from exiting.
-                true,
-                old,
-                emptyList(),
-                emptyList(),
-                emptyList(),
-                emptyList(),
-            ) { current, total -> reports.add(current to total) }
+            val result =
+                scanTracks(
+                    RuntimeEnvironment.getApplication(),
+                    false,
+                    // Artwork colour extraction is skipped: it reaches
+                    // ContentResolver.loadThumbnail,
+                    // which Robolectric does not implement, and its bitmap loader owns a non-daemon
+                    // executor that would keep the test JVM from exiting.
+                    true,
+                    old,
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ) { current, total ->
+                    reports.add(current to total)
+                }
 
-        // The crude track's file does not exist, so the scan worker drops it; the scan still
-        // completes, and the last progress report must be the terminal (total, total) state.
-        assertThat(result).isNotNull()
-        assertThat(reports).isNotEmpty()
-        assertThat(reports.last()).isEqualTo(1 to 1)
-    }
+            // The crude track's file does not exist, so the scan worker drops it; the scan still
+            // completes, and the last progress report must be the terminal (total, total) state.
+            assertThat(result).isNotNull()
+            assertThat(reports).isNotEmpty()
+            assertThat(reports.last()).isEqualTo(1 to 1)
+        }
 
     class NullCursorProvider : ContentProvider() {
         override fun onCreate(): Boolean = true

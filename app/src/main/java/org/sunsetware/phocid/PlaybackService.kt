@@ -307,9 +307,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
-     * A seek that lands at (or very near) the end of the track makes the player report
-     * STATE_ENDED immediately. The recorder must not treat that as a real completion, so the seek
-     * is flagged and the usual accumulated-time threshold decides instead.
+     * A seek that lands at (or very near) the end of the track makes the player report STATE_ENDED
+     * immediately. The recorder must not treat that as a real completion, so the seek is flagged
+     * and the usual accumulated-time threshold decides instead.
      */
     private fun isSeekToTrackEnd(
         newPosition: Player.PositionInfo,
@@ -328,8 +328,8 @@ class PlaybackService : MediaLibraryService() {
 
     /**
      * Opens or closes the statistics session for [mediaItem]. A playlist edit or shuffle can
-     * re-announce the item that is already playing; that is not a new start and must not settle
-     * the running session as a skip.
+     * re-announce the item that is already playing; that is not a new start and must not settle the
+     * running session as a skip.
      */
     private fun syncStatsSession(mediaItem: MediaItem?, transitionReason: Int?) {
         val mediaId = mediaItem?.mediaId
@@ -697,9 +697,9 @@ class PlaybackService : MediaLibraryService() {
 /**
  * Decides whether a player callback should open a new statistics session.
  *
- * Media3 re-announces the current item for playlist edits and shuffle changes. Those callbacks
- * must not settle the running session as a skip. The tracker keeps the current item's media id
- * and active state so that only a real transition, repeat, seek, or replay opens a new session.
+ * Media3 re-announces the current item for playlist edits and shuffle changes. Those callbacks must
+ * not settle the running session as a skip. The tracker keeps the current item's media id and
+ * active state so that only a real transition, repeat, seek, or replay opens a new session.
  */
 internal class PlaybackStatsSessionTracker {
     private var activeMediaId: String? = null

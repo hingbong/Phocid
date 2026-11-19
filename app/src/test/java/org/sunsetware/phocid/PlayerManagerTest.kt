@@ -13,7 +13,8 @@ import org.sunsetware.phocid.data.PlayerTransientState
 class PlayerManagerTest {
     @Test
     fun closeWithoutInitializeIsSafe() {
-        val manager = PlayerManager(MutableStateFlow(PlayerState()), MutableStateFlow(PlayerTransientState()))
+        val manager =
+            PlayerManager(MutableStateFlow(PlayerState()), MutableStateFlow(PlayerTransientState()))
 
         // close() used to release the lateinit controller unconditionally, crashing whenever
         // teardown won the race with initialization.

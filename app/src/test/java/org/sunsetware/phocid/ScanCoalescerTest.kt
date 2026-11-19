@@ -41,7 +41,10 @@ class ScanCoalescerTest {
                 }
             scanStarted.await()
 
-            val second = launch(start = CoroutineStart.UNDISPATCHED) { coalescer.scan(false) { scans.incrementAndGet() } }
+            val second =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    coalescer.scan(false) { scans.incrementAndGet() }
+                }
             finishScan.complete(Unit)
 
             first.join()
@@ -69,7 +72,10 @@ class ScanCoalescerTest {
                 }
             scanStarted.await()
 
-            val second = launch(start = CoroutineStart.UNDISPATCHED) { coalescer.scan(true) { scans.incrementAndGet() } }
+            val second =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    coalescer.scan(true) { scans.incrementAndGet() }
+                }
             finishScan.complete(Unit)
 
             first.join()
@@ -99,7 +105,10 @@ class ScanCoalescerTest {
                 }
             scanStarted.await()
 
-            val second = launch(start = CoroutineStart.UNDISPATCHED) { coalescer.scan(false) { scans.incrementAndGet() } }
+            val second =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    coalescer.scan(false) { scans.incrementAndGet() }
+                }
             finishScan.complete(Unit)
 
             first.join()

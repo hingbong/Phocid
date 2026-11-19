@@ -14,11 +14,11 @@ import kotlinx.coroutines.withContext
 /**
  * This cache is only designed to have a very small size, due to lookup having O(n) complexity.
  *
- * The entry list is an immutable snapshot held in an [AtomicReference]. All reads and mutations
- * are lock-free CAS loops, so [get] never blocks the caller thread: it is safe to call directly
- * from composition on the main thread. The previous implementation used `runBlocking` plus a
- * `Mutex`, which could stall the main thread whenever a creation or eviction coroutine held the
- * mutex on [Dispatchers.IO].
+ * The entry list is an immutable snapshot held in an [AtomicReference]. All reads and mutations are
+ * lock-free CAS loops, so [get] never blocks the caller thread: it is safe to call directly from
+ * composition on the main thread. The previous implementation used `runBlocking` plus a `Mutex`,
+ * which could stall the main thread whenever a creation or eviction coroutine held the mutex on
+ * [Dispatchers.IO].
  */
 class AsyncCache<TKey : Any, TValue : Any>(
     private val coroutineScope: CoroutineScope,
@@ -49,7 +49,9 @@ class AsyncCache<TKey : Any, TValue : Any>(
             reordered += reordered.removeAt(index)
             if (entries.compareAndSet(snapshot, reordered)) break
         }
-        existing?.let { return it }
+        existing?.let {
+            return it
+        }
 
         val newCreationJob =
             coroutineScope.async(start = CoroutineStart.LAZY) {

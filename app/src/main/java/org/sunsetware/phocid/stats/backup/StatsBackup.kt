@@ -232,7 +232,8 @@ class StatsBackupManager(
                 }
                 val payload = cbor.decodeFromByteArray<StatsBackup>(bounded.toByteArray())
                 require(payload.version in StatsBackup.MIN_VERSION..StatsBackup.VERSION) {
-                    if (payload.version > StatsBackup.VERSION) "Backup was created by a newer version"
+                    if (payload.version > StatsBackup.VERSION)
+                        "Backup was created by a newer version"
                     else "Backup has an unsupported version ${payload.version}"
                 }
                 payload.validate()
@@ -289,7 +290,10 @@ class StatsBackupManager(
                 require(startMs <= endMs) { "Backup daily row has dayStartMs > dayEndMs" }
             }
             day.utcOffsetMinutes?.let { offset ->
-                require(offset in -StatsBackup.MAX_UTC_OFFSET_MINUTES..StatsBackup.MAX_UTC_OFFSET_MINUTES) {
+                require(
+                    offset in
+                        -StatsBackup.MAX_UTC_OFFSET_MINUTES..StatsBackup.MAX_UTC_OFFSET_MINUTES
+                ) {
                     "Backup daily row has an implausible utcOffsetMinutes $offset"
                 }
             }
@@ -572,9 +576,9 @@ class StatsBackupManager(
                 // Keep each generated IN clause well below SQLite's 999 bind-parameter limit.
                 for (rowChunk in rowIds.chunked(400)) {
                     for (dayChunk in epochDays.chunked(400)) {
-                        db.dailyDao()
-                            .byKeys(rowChunk, dayChunk)
-                            .forEach { existing[it.trackRowId to it.epochDay] = it }
+                        db.dailyDao().byKeys(rowChunk, dayChunk).forEach {
+                            existing[it.trackRowId to it.epochDay] = it
+                        }
                     }
                 }
                 grouped.values.map { group ->
@@ -658,8 +662,7 @@ private fun BackupDaily.startedCountFor(): Int =
  * Legacy backups did not record the first instant of a day. The last observed instant is the only
  * timestamp they carry, so it becomes the earliest known value. A zero-length skip stays unknown.
  */
-private fun BackupDaily.firstPlayedAtFor(): Long? =
-    firstPlayedAt ?: lastPlayedAt.takeIf { it > 0L }
+private fun BackupDaily.firstPlayedAtFor(): Long? = firstPlayedAt ?: lastPlayedAt.takeIf { it > 0L }
 
 private class BackupUuidUnionFind(uuids: Collection<String>) {
     private val parent = uuids.associateWith { it }.toMutableMap()

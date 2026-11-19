@@ -39,7 +39,8 @@ inline fun listDependencies(
     @Suppress("JSON_FORMAT_REDUNDANT")
     val dependencyInfos = Json {
         ignoreUnknownKeys = true
-    }.decodeFromString<List<DependencyInfo>>(readFile(DEPENDENCY_INFOS_FILE_NAME))
+    }
+        .decodeFromString<List<DependencyInfo>>(readFile(DEPENDENCY_INFOS_FILE_NAME))
     val licenseMappings =
         Json.decodeFromString<LicenseMappings>(readFile(LICENSE_MAPPINGS_FILE_NAME))
     val licenseTexts =
@@ -51,12 +52,11 @@ inline fun listDependencies(
     return dependencyInfos.map { dependency ->
         val licenseNames =
             licenseMappings.projectMappings[dependency.project]
-                ?: dependency.licenses
-                    ?.map {
-                        requireNotNull(licenseMappings.urlMappings[it.licenseUrl]) {
-                            "No license name found for ${dependency.project}"
-                        }
+                ?: dependency.licenses?.map {
+                    requireNotNull(licenseMappings.urlMappings[it.licenseUrl]) {
+                        "No license name found for ${dependency.project}"
                     }
+                }
                 ?: emptyList()
         Pair(
             dependency,

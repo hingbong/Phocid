@@ -524,8 +524,8 @@ class MainAppWidget : GlanceAppWidget() {
      *
      * `resources.displayMetrics` may describe a display that is not the active one, so window
      * metrics are preferred. `currentWindowMetrics` follows the configuration the widget is
-     * currently composed for, while `maximumWindowMetrics` is the largest configuration the app
-     * can get; taking the smaller of the two keeps the estimate valid when the current metrics are
+     * currently composed for, while `maximumWindowMetrics` is the largest configuration the app can
+     * get; taking the smaller of the two keeps the estimate valid when the current metrics are
      * stale or the device is folded, since the platform cap follows the active display area.
      */
     private fun widgetDisplayBounds(context: Context): Pair<Int, Int> {
@@ -570,8 +570,8 @@ class MainAppWidget : GlanceAppWidget() {
  * From Android 17 (API 37) the system rejects an [AppWidgetManager.updateAppWidget] whose
  * RemoteViews payload holds more than `6 * width * height` bytes of bitmaps with an
  * `IllegalArgumentException`. The artwork is the only bitmap this widget puts into a RemoteViews,
- * so it may use the whole budget, divided by the number of references to the same bitmap and by
- * the bytes per pixel.
+ * so it may use the whole budget, divided by the number of references to the same bitmap and by the
+ * bytes per pixel.
  *
  * https://developer.android.com/about/versions/17/behavior-changes-17#memory-limit-widget
  */

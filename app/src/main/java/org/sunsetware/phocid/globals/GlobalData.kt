@@ -20,16 +20,18 @@ import org.sunsetware.phocid.stats.StatsManager
  */
 object GlobalData {
     val initialized = AtomicBoolean(false)
-    /** Set when the initialization coroutine failed, so consumers can fail fast instead of spinning. */
+    /**
+     * Set when the initialization coroutine failed, so consumers can fail fast instead of spinning.
+     */
     val initializationFailed = AtomicBoolean(false)
 
     /**
-     * Waits (briefly) for initialization, but never forever. Returns false if initialization
-     * failed or did not complete within [timeoutMillis]. Callers must handle the false case.
+     * Waits (briefly) for initialization, but never forever. Returns false if initialization failed
+     * or did not complete within [timeoutMillis]. Callers must handle the false case.
      *
-     * The deadline counts on [SystemClock.elapsedRealtime]: the wall clock can jump backwards
-     * (NTP resync, manual time change), which would make a wall-clock deadline wait far longer
-     * than the intended bound.
+     * The deadline counts on [SystemClock.elapsedRealtime]: the wall clock can jump backwards (NTP
+     * resync, manual time change), which would make a wall-clock deadline wait far longer than the
+     * intended bound.
      */
     fun awaitInitialized(timeoutMillis: Long = 10_000L): Boolean {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis

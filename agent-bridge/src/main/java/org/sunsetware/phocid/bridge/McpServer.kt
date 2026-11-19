@@ -31,8 +31,8 @@ import org.json.JSONObject
  * A deliberately small MCP server for the local OpenMinis HTTP transport.
  *
  * The listen address defaults to 127.0.0.1 and can be changed in the bridge UI. The peer is
- * authenticated with a bearer token. The first version exposes a single ping tool; real library
- * and statistics tools are added after the transport is verified against the agent app.
+ * authenticated with a bearer token. The first version exposes a single ping tool; real library and
+ * statistics tools are added after the transport is verified against the agent app.
  */
 class McpServer(
     private val host: String,
@@ -114,22 +114,23 @@ class McpServer(
     private fun startHeartbeat() {
         heartbeatThread =
             Thread(
-                {
-                    while (running.get()) {
-                        heartbeatCount.incrementAndGet()
-                        lastHeartbeatAt.set(SystemClock.elapsedRealtime())
-                        try {
-                            Thread.sleep(1_000)
-                        } catch (_: InterruptedException) {
-                            break
+                    {
+                        while (running.get()) {
+                            heartbeatCount.incrementAndGet()
+                            lastHeartbeatAt.set(SystemClock.elapsedRealtime())
+                            try {
+                                Thread.sleep(1_000)
+                            } catch (_: InterruptedException) {
+                                break
+                            }
                         }
-                    }
-                },
-                "mcp-heartbeat",
-            ).apply {
-                isDaemon = true
-                start()
-            }
+                    },
+                    "mcp-heartbeat",
+                )
+                .apply {
+                    isDaemon = true
+                    start()
+                }
     }
 
     private fun acceptLoop(socket: ServerSocket) {
@@ -259,8 +260,8 @@ class McpServer(
     /**
      * Non-loopback binds serve local agent clients only. Browsers always send Origin on
      * cross-origin calls and agents never do, so an Origin header means a web page; and a
-     * DNS-rebinding page resolving to this device keeps its original (non-IP or loopback)
-     * Host. Reject both instead of relying on CORS, which this server does not emit.
+     * DNS-rebinding page resolving to this device keeps its original (non-IP or loopback) Host.
+     * Reject both instead of relying on CORS, which this server does not emit.
      */
     private fun guardNonLoopbackRequests(request: Request) {
         if (loopbackBind) return
@@ -273,7 +274,12 @@ class McpServer(
                 .removePrefix("[")
                 .removeSuffix("]")
                 .lowercase(Locale.ROOT)
-        if (hostPart.isEmpty() || hostPart == "localhost" || hostPart == "127.0.0.1" || hostPart == "::1") {
+        if (
+            hostPart.isEmpty() ||
+                hostPart == "localhost" ||
+                hostPart == "127.0.0.1" ||
+                hostPart == "::1"
+        ) {
             throw HttpError(421, "Misdirected request")
         }
     }
@@ -326,9 +332,8 @@ class McpServer(
                 socket,
                 405,
                 "text/plain; charset=utf-8",
-                "Use POST for JSON-RPC or Accept: text/event-stream".toByteArray(
-                    StandardCharsets.UTF_8
-                ),
+                "Use POST for JSON-RPC or Accept: text/event-stream"
+                    .toByteArray(StandardCharsets.UTF_8),
                 mapOf("Allow" to "POST, DELETE, OPTIONS"),
             )
             return false
@@ -355,14 +360,13 @@ class McpServer(
             val sessionId = request.headers["mcp-session-id"] ?: UUID.randomUUID().toString()
             val out = BufferedOutputStream(socket.getOutputStream())
             out.write(
-                (
-                    "HTTP/1.1 200 OK\r\n" +
+                ("HTTP/1.1 200 OK\r\n" +
                         "Content-Type: text/event-stream\r\n" +
                         "Cache-Control: no-cache\r\n" +
                         "Connection: keep-alive\r\n" +
                         "Mcp-Session-Id: $sessionId\r\n" +
-                        "\r\n"
-                ).toByteArray(StandardCharsets.US_ASCII)
+                        "\r\n")
+                    .toByteArray(StandardCharsets.US_ASCII)
             )
             out.write(": connected\n\n".toByteArray(StandardCharsets.UTF_8))
             out.flush()
@@ -373,8 +377,7 @@ class McpServer(
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-        } catch (_: IOException) {
-        } finally {
+        } catch (_: IOException) {} finally {
             closeQuietly(socket)
         }
     }
@@ -446,7 +449,10 @@ class McpServer(
         // verified; clients compare what we return and downgrade deliberately.
         val requested = params?.optString("protocolVersion")?.takeIf { it.isNotBlank() }
         if (requested != null && requested != SUPPORTED_PROTOCOL_VERSION) {
-            Log.i(TAG, "Client requested protocol version $requested; serving $SUPPORTED_PROTOCOL_VERSION")
+            Log.i(
+                TAG,
+                "Client requested protocol version $requested; serving $SUPPORTED_PROTOCOL_VERSION",
+            )
         }
         return JSONObject()
             .put("protocolVersion", SUPPORTED_PROTOCOL_VERSION)
@@ -635,12 +641,10 @@ class McpServer(
                     dataResult(source?.getTrack(libraryId))
                 }
             }
-            "stats_summary" ->
-                dataResult(source?.statsSummary(args.optString("range", "30d")))
+            "stats_summary" -> dataResult(source?.statsSummary(args.optString("range", "30d")))
             "stats_top_tracks" -> dataResult(source?.statsTopTracks(args.toString()))
             "stats_tracks" -> dataResult(source?.statsTracks(args.toString()))
-            "stats_daily" ->
-                dataResult(source?.statsDaily(args.optString("range", "30d")))
+            "stats_daily" -> dataResult(source?.statsDaily(args.optString("range", "30d")))
             "resolve_stats_uuid" -> {
                 val libraryId = positiveLongArgument(args, "libraryId")
                 if (libraryId == null) {
@@ -758,14 +762,8 @@ class McpServer(
                                                     .put(
                                                         "anyOf",
                                                         JSONArray()
-                                                            .put(
-                                                                JSONObject()
-                                                                    .put("type", "string")
-                                                            )
-                                                            .put(
-                                                                JSONObject()
-                                                                    .put("type", "null")
-                                                            ),
+                                                            .put(JSONObject().put("type", "string"))
+                                                            .put(JSONObject().put("type", "null")),
                                                     ),
                                             ),
                                     )
@@ -792,9 +790,7 @@ class McpServer(
 
     private fun topTracksSchema(api6: Boolean, api5: Boolean): JSONObject {
         val properties =
-            JSONObject()
-                .put("range", rangeProp())
-                .put("limit", integerProp("1..200, default 20"))
+            JSONObject().put("range", rangeProp()).put("limit", integerProp("1..200, default 20"))
         if (api5 || api6) {
             properties.put(
                 "offset",
@@ -841,8 +837,9 @@ class McpServer(
                             .put(
                                 "enum",
                                 JSONArray().apply {
-                                    listOf("artists", "albums", "album_artists", "genres")
-                                        .forEach { put(it) }
+                                    listOf("artists", "albums", "album_artists", "genres").forEach {
+                                        put(it)
+                                    }
                                 },
                             ),
                     )
@@ -884,7 +881,12 @@ class McpServer(
             .put(
                 "properties",
                 JSONObject()
-                    .put("query", stringProp("Full-text match across title, artist, album, genre, and file name"))
+                    .put(
+                        "query",
+                        stringProp(
+                            "Full-text match across title, artist, album, genre, and file name"
+                        ),
+                    )
                     .put("title", stringProp("Title contains"))
                     .put("artist", stringProp("Any artist contains"))
                     .put("album", stringProp("Album contains"))
@@ -981,10 +983,7 @@ class McpServer(
             .put("isError", isError)
 
     private fun jsonRpcResult(id: Any?, result: JSONObject): JSONObject =
-        JSONObject()
-            .put("jsonrpc", "2.0")
-            .put("id", id ?: JSONObject.NULL)
-            .put("result", result)
+        JSONObject().put("jsonrpc", "2.0").put("id", id ?: JSONObject.NULL).put("result", result)
 
     private fun jsonRpcError(id: Any?, code: Int, message: String): JSONObject =
         JSONObject()
@@ -1142,7 +1141,12 @@ class McpServer(
     ) {
         val out = BufferedOutputStream(socket.getOutputStream())
         val header = StringBuilder()
-        header.append("HTTP/1.1 ").append(status).append(' ').append(statusText(status)).append("\r\n")
+        header
+            .append("HTTP/1.1 ")
+            .append(status)
+            .append(' ')
+            .append(statusText(status))
+            .append("\r\n")
         if (contentType != null) {
             header.append("Content-Type: ").append(contentType).append("\r\n")
         }
@@ -1181,8 +1185,8 @@ class McpServer(
     )
 
     /**
-     * Wraps a socket input stream and fails every read once an absolute deadline has passed.
-     * Unlike Socket.soTimeout this bounds the whole request, not each individual read.
+     * Wraps a socket input stream and fails every read once an absolute deadline has passed. Unlike
+     * Socket.soTimeout this bounds the whole request, not each individual read.
      */
     private class DeadlineInputStream(
         private val delegate: InputStream,
@@ -1231,8 +1235,8 @@ class McpServer(
         private const val MAX_HEADER_BYTES = 64 * 1024
         private const val MAX_LINE_BYTES = 8 * 1024
         /**
-         * Kept below the Binder transaction budget (~512KB): a larger HTTP body would only
-         * fail later as a generic TransactionTooLargeException after all the parsing work.
+         * Kept below the Binder transaction budget (~512KB): a larger HTTP body would only fail
+         * later as a generic TransactionTooLargeException after all the parsing work.
          */
         private const val MAX_BODY_BYTES = 256 * 1024
         /** JSON-RPC batch requests are capped so one POST cannot fan out unbounded Binder calls. */
@@ -1257,9 +1261,7 @@ class McpServer(
         private fun daemonThreadFactory(prefix: String): ThreadFactory {
             val counter = AtomicInteger(0)
             return ThreadFactory { runnable ->
-                Thread(runnable, "$prefix-${counter.incrementAndGet()}").apply {
-                    isDaemon = true
-                }
+                Thread(runnable, "$prefix-${counter.incrementAndGet()}").apply { isDaemon = true }
             }
         }
     }

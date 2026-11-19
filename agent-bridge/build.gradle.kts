@@ -1,6 +1,6 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import java.time.Duration
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -12,11 +12,13 @@ plugins {
 val buildCommit =
     System.getenv("PHOCID_BUILD_COMMIT")?.takeIf { it.isNotBlank() }
         ?: runCatching {
-                providers
-                    .exec { commandLine("git", "rev-parse", "--short=12", "HEAD") }
-                    .standardOutput.asText.get()
-                    .trim()
-            }
+            providers
+                .exec { commandLine("git", "rev-parse", "--short=12", "HEAD") }
+                .standardOutput
+                .asText
+                .get()
+                .trim()
+        }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
         ?: "unknown"
@@ -25,11 +27,13 @@ val buildCommit =
 val buildTime =
     System.getenv("PHOCID_BUILD_TIME")?.takeIf { it.isNotBlank() }
         ?: runCatching {
-                providers
-                    .exec { commandLine("git", "log", "-1", "--format=%cI", "HEAD") }
-                    .standardOutput.asText.get()
-                    .trim()
-            }
+            providers
+                .exec { commandLine("git", "log", "-1", "--format=%cI", "HEAD") }
+                .standardOutput
+                .asText
+                .get()
+                .trim()
+        }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
         ?: "unknown"
@@ -59,8 +63,7 @@ android {
             storePassword =
                 System.getenv("PHOCID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
             keyAlias =
-                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() }
-                    ?: "androiddebugkey"
+                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "androiddebugkey"
             keyPassword =
                 System.getenv("PHOCID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
             storeType = "PKCS12"
@@ -70,8 +73,7 @@ android {
             storePassword =
                 System.getenv("PHOCID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
             keyAlias =
-                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() }
-                    ?: "androiddebugkey"
+                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "androiddebugkey"
             keyPassword =
                 System.getenv("PHOCID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
             storeType = "PKCS12"
@@ -111,16 +113,12 @@ android {
         baseline = file("lint-baseline.xml")
     }
 
-    testOptions {
-        unitTests.isReturnDefaultValues = true
-    }
+    testOptions { unitTests.isReturnDefaultValues = true }
 }
 
 kotlin {
     jvmToolchain(21)
-    compilerOptions {
-        jvmTarget = JvmTarget.JVM_21
-    }
+    compilerOptions { jvmTarget = JvmTarget.JVM_21 }
 }
 
 dependencies {

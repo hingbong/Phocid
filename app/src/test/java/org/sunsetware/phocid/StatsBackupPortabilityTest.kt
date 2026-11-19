@@ -149,29 +149,31 @@ class StatsBackupPortabilityTest {
         )
 
     @Test
-    fun restoreRejectsADayWhoseStartIsAfterItsEnd() = runBlocking<Unit> {
-        val row =
-            day("uuid-1", 20_000, 1, 1_000, 1L).copy(dayStartMs = 5_000L, dayEndMs = 4_000L)
-        val payload = backup(tracks = listOf(track("uuid-1")), daily = listOf(row))
+    fun restoreRejectsADayWhoseStartIsAfterItsEnd() =
+        runBlocking<Unit> {
+            val row =
+                day("uuid-1", 20_000, 1, 1_000, 1L).copy(dayStartMs = 5_000L, dayEndMs = 4_000L)
+            val payload = backup(tracks = listOf(track("uuid-1")), daily = listOf(row))
 
-        assertThatThrownBy {
-                runBlocking { StatsBackupManager(db).read(backupBytes(payload).inputStream()) }
-            }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("dayStartMs > dayEndMs")
-    }
+            assertThatThrownBy {
+                    runBlocking { StatsBackupManager(db).read(backupBytes(payload).inputStream()) }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("dayStartMs > dayEndMs")
+        }
 
     @Test
-    fun restoreRejectsAnImplausibleUtcOffset() = runBlocking<Unit> {
-        val row = day("uuid-1", 20_000, 1, 1_000, 1L).copy(utcOffsetMinutes = 60_000)
-        val payload = backup(tracks = listOf(track("uuid-1")), daily = listOf(row))
+    fun restoreRejectsAnImplausibleUtcOffset() =
+        runBlocking<Unit> {
+            val row = day("uuid-1", 20_000, 1, 1_000, 1L).copy(utcOffsetMinutes = 60_000)
+            val payload = backup(tracks = listOf(track("uuid-1")), daily = listOf(row))
 
-        assertThatThrownBy {
-                runBlocking { StatsBackupManager(db).read(backupBytes(payload).inputStream()) }
-            }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("utcOffsetMinutes")
-    }
+            assertThatThrownBy {
+                    runBlocking { StatsBackupManager(db).read(backupBytes(payload).inputStream()) }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("utcOffsetMinutes")
+        }
 
     private fun countRows(table: String): Int =
         db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { cursor ->
@@ -801,7 +803,9 @@ class StatsBackupPortabilityTest {
             }
 
             assertThatThrownBy {
-                    runBlocking { StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray())) }
+                    runBlocking {
+                        StatsBackupManager(db).read(ByteArrayInputStream(out.toByteArray()))
+                    }
                 }
                 .isInstanceOf(IllegalArgumentException::class.java)
                 .hasMessageContaining("too large")
@@ -830,9 +834,9 @@ class StatsBackupPortabilityTest {
                     .isInstanceOf(IllegalArgumentException::class.java)
             }
             // Version 1 (legacy, no activeDays key) is still accepted.
-            val legacy =
-                version1Bytes(backup(tracks = listOf(track("uuid-1")), version = 1))
-            assertThat(StatsBackupManager(db).read(ByteArrayInputStream(legacy)).version).isEqualTo(1)
+            val legacy = version1Bytes(backup(tracks = listOf(track("uuid-1")), version = 1))
+            assertThat(StatsBackupManager(db).read(ByteArrayInputStream(legacy)).version)
+                .isEqualTo(1)
         }
 
     @Test

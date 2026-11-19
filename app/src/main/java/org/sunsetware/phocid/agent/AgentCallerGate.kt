@@ -18,8 +18,8 @@ internal object AgentCallerGate {
      * @param myUid our own process uid; a same-process caller is always trusted
      * @param packagesForUid packages sharing [callingUid] as reported by PackageManager, or null
      *   when the uid cannot be resolved to any package
-     * @param checkSignatures maps a caller package name to the
-     *   [PackageManager.checkSignatures] result against our own package
+     * @param checkSignatures maps a caller package name to the [PackageManager.checkSignatures]
+     *   result against our own package
      */
     fun isTrusted(
         callingUid: Int,

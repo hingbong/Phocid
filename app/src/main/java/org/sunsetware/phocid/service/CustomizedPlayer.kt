@@ -101,8 +101,9 @@ class CustomizedPlayer(val inner: ExoPlayer) : ForwardingPlayer(inner) {
                         getMediaItemAt(index).getUnshuffledIndex()?.let { Pair(index, it) }
                     }
                     .sortedBy { it.second }
-            val currentUnshuffledPosition =
-                unshuffledPlayQueue.indexOfFirst { it.first == currentIndex }
+            val currentUnshuffledPosition = unshuffledPlayQueue.indexOfFirst {
+                it.first == currentIndex
+            }
             if (currentUnshuffledPosition < 0) {
                 Log.e(
                     "Phocid",
@@ -122,9 +123,9 @@ class CustomizedPlayer(val inner: ExoPlayer) : ForwardingPlayer(inner) {
             replaceMediaItems(
                 0,
                 currentIndex,
-                unshuffledPlayQueueItems
-                    .subList(0, currentUnshuffledPosition)
-                    .map { it.setUnshuffledIndex(null) },
+                unshuffledPlayQueueItems.subList(0, currentUnshuffledPosition).map {
+                    it.setUnshuffledIndex(null)
+                },
             )
         }
     }

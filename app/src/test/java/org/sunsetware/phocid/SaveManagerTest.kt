@@ -12,8 +12,7 @@ import org.sunsetware.phocid.data.saveCbor
 
 @RunWith(RobolectricTestRunner::class)
 class SaveManagerTest {
-    @Serializable
-    data class Payload(val value: Int)
+    @Serializable data class Payload(val value: Int)
 
     @Test
     fun saveIsAtomicAndKeepsABackup() {

@@ -72,10 +72,10 @@ fun Player.capturePlayerState(): PlayerState {
  * Maps the captured play-queue position onto the restored queue.
  *
  * Ids dropped from [UnfilteredTrackIndex] (their files disappeared since the state was captured)
- * shift every later item, so the captured index cannot be reused directly: prefer the captured
- * item itself, then the first surviving item after it (what would have played next), then the
- * nearest one before it. The second component is true only when the captured item itself
- * survived, in which case its captured position is still meaningful.
+ * shift every later item, so the captured index cannot be reused directly: prefer the captured item
+ * itself, then the first surviving item after it (what would have played next), then the nearest
+ * one before it. The second component is true only when the captured item itself survived, in which
+ * case its captured position is still meaningful.
  */
 internal fun computeRestoredSeek(
     survivingOriginalIndexes: List<Int>,
@@ -113,9 +113,9 @@ fun Player.restorePlayerState(state: PlayerState, unfilteredTrackIndex: Unfilter
         }
     setMediaItems(
         state.actualPlayQueue.mapIndexedNotNull { index, id ->
-            unfilteredTrackIndex.tracks[id]?.getMediaItem(
-                unshuffledPositionOf?.getOrDefault(index, -1)
-            )?.also { survivingIndexes += index }
+            unfilteredTrackIndex.tracks[id]
+                ?.getMediaItem(unshuffledPositionOf?.getOrDefault(index, -1))
+                ?.also { survivingIndexes += index }
         }
     )
     // Dropped tracks shift the queue; seek to where the captured item (or its nearest

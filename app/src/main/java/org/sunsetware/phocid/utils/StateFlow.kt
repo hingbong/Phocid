@@ -51,10 +51,10 @@ inline fun <T1, T2, T3, R> StateFlow<T1>.combine(
     flow3: StateFlow<T3>,
     hot: Boolean = false,
     /**
-     * Initial shared value. Pass a cheap placeholder (for example an empty list) to avoid
-     * computing [transform] eagerly on the calling thread at construction time; the real value
-     * is computed on [coroutineScope] when the first subscriber arrives. Null (the default)
-     * keeps the old eager-initial behaviour.
+     * Initial shared value. Pass a cheap placeholder (for example an empty list) to avoid computing
+     * [transform] eagerly on the calling thread at construction time; the real value is computed on
+     * [coroutineScope] when the first subscriber arrives. Null (the default) keeps the old
+     * eager-initial behaviour.
      */
     initial: R? = null,
     crossinline transform: (a: T1, b: T2, c: T3) -> R,

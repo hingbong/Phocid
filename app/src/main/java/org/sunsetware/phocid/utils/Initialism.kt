@@ -25,7 +25,8 @@ private val letterSet = UnicodeSet("[:Letter:]").freeze()
 
 private val pinyinTransliterator = runCatching {
     Transliterator.getInstance("Han-Latin; NFD; [:Mark:] Remove; NFC; Lower")
-}.getOrNull()
+}
+    .getOrNull()
 
 private fun String.initialHan(locale: Locale): String {
     // ICU only has Han -> Pinyin conversion, so we can't get a meaningful result for

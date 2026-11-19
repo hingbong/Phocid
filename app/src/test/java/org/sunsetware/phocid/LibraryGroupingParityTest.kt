@@ -28,13 +28,14 @@ class LibraryGroupingParityTest {
         genres: List<String>,
         album: String?,
         albumArtist: String?,
-    ) = InvalidTrack.copy(
-        id = id,
-        artists = artists,
-        genres = genres,
-        album = album,
-        albumArtists = listOfNotNull(albumArtist),
-    )
+    ) =
+        InvalidTrack.copy(
+            id = id,
+            artists = artists,
+            genres = genres,
+            album = album,
+            albumArtists = listOfNotNull(albumArtist),
+        )
 
     private val corpus =
         listOf(
@@ -60,7 +61,13 @@ class LibraryGroupingParityTest {
                 album = "Album Y",
                 albumArtist = "AA",
             ),
-            track(id = 4, artists = listOf("b"), genres = listOf("Rock"), album = null, albumArtist = null),
+            track(
+                id = 4,
+                artists = listOf("b"),
+                genres = listOf("Rock"),
+                album = null,
+                albumArtist = null,
+            ),
         )
 
     private val index =
@@ -84,7 +91,9 @@ class LibraryGroupingParityTest {
             assertThat(index.artists[name]!!.tracks.map { it.id })
                 .containsExactlyInAnyOrderElementsOf(expected)
             // Album slices are a subset of the artist's tracks (null albums form no slice).
-            assertThat(index.artists[name]!!.albumSlices.flatMap { it.tracks }.map { it.id }.toSet())
+            assertThat(
+                    index.artists[name]!!.albumSlices.flatMap { it.tracks }.map { it.id }.toSet()
+                )
                 .isSubsetOf(expected)
         }
 

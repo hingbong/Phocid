@@ -78,11 +78,7 @@ fun loadCbor(type: KType, context: Context, fileName: String, isCache: Boolean):
     } catch (ex: Exception) {
         // A truncated or unreadable main file (interrupted write, external cleanup) falls back
         // to the backup exactly like a decode failure does.
-        if (
-            ex is SerializationException ||
-                ex is IllegalArgumentException ||
-                ex is IOException
-        ) {
+        if (ex is SerializationException || ex is IllegalArgumentException || ex is IOException) {
             Log.e("loadCbor", "$fileName is corrupted or unreadable, loading backup")
             try {
                 Cbor { ignoreUnknownKeys = true }

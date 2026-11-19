@@ -327,8 +327,7 @@ class PlaybackStatsRecorderTest {
             recorder.onTrackFinished(endedByPlayer = true)
             awaitSettled(recorder)
 
-            val totals =
-                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            val totals = db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
             assertThat(totals.completedCount).isEqualTo(1)
             assertThat(totals.completedMillis).isEqualTo(5_000L)
         }
@@ -341,9 +340,7 @@ class PlaybackStatsRecorderTest {
             val file = temporaryFolder.newFile("SeekedToEnd.flac")
 
             recorder.onResumed()
-            recorder.onTrackStarted(
-                meta("content://seek-end/1", file, durationMillis = 300_000L)
-            )
+            recorder.onTrackStarted(meta("content://seek-end/1", file, durationMillis = 300_000L))
             // The user drags the seek bar to the last second after 5 s of listening. The player
             // reports STATE_ENDED, but the session must fall back to the accumulated threshold.
             clock.advance(5_000L)
@@ -351,8 +348,7 @@ class PlaybackStatsRecorderTest {
             recorder.onTrackFinished(endedByPlayer = true)
             awaitSettled(recorder)
 
-            val totals =
-                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            val totals = db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
             assertThat(totals.startedCount).isEqualTo(1)
             assertThat(totals.completedCount).isEqualTo(0)
             assertThat(totals.skipCount).isEqualTo(1)
@@ -378,8 +374,7 @@ class PlaybackStatsRecorderTest {
             recorder.onTrackFinished(endedByPlayer = true)
             awaitSettled(recorder)
 
-            val totals =
-                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            val totals = db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
             assertThat(totals.completedCount).isEqualTo(1)
             assertThat(totals.skipCount).isEqualTo(0)
             assertThat(totals.completedMillis).isEqualTo(59_500L)
@@ -393,16 +388,13 @@ class PlaybackStatsRecorderTest {
             val file = temporaryFolder.newFile("PlainSeek.flac")
 
             recorder.onResumed()
-            recorder.onTrackStarted(
-                meta("content://seek-middle/1", file, durationMillis = 60_000L)
-            )
+            recorder.onTrackStarted(meta("content://seek-middle/1", file, durationMillis = 60_000L))
             clock.advance(5_000L)
             recorder.onSeek()
             recorder.onTrackFinished(endedByPlayer = true)
             awaitSettled(recorder)
 
-            val totals =
-                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            val totals = db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
             assertThat(totals.completedCount).isEqualTo(1)
             assertThat(totals.skipCount).isEqualTo(0)
         }
@@ -421,19 +413,15 @@ class PlaybackStatsRecorderTest {
             )
             clock.advance(5_000L)
             recorder.onTrackFinished()
-            recorder.onTrackStarted(
-                meta("content://unknown/ended", endedFile, durationMillis = 0L)
-            )
+            recorder.onTrackStarted(meta("content://unknown/ended", endedFile, durationMillis = 0L))
             clock.advance(5_000L)
             recorder.onTrackFinished(endedByPlayer = true)
             awaitSettled(recorder)
 
-            val skipped = db.totalsDao().byRowId(
-                db.trackDao().rowIdOfPath(skippedFile.absolutePath)!!
-            )!!
-            val ended = db.totalsDao().byRowId(
-                db.trackDao().rowIdOfPath(endedFile.absolutePath)!!
-            )!!
+            val skipped =
+                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(skippedFile.absolutePath)!!)!!
+            val ended =
+                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(endedFile.absolutePath)!!)!!
             assertThat(skipped.completedCount).isEqualTo(0)
             assertThat(skipped.skipCount).isEqualTo(1)
             assertThat(ended.completedCount).isEqualTo(1)
@@ -449,14 +437,11 @@ class PlaybackStatsRecorderTest {
             val file = temporaryFolder.newFile("Short.flac")
 
             recorder.onResumed()
-            recorder.onTrackStarted(
-                meta("content://short/1", file, durationMillis = 2_000L)
-            )
+            recorder.onTrackStarted(meta("content://short/1", file, durationMillis = 2_000L))
             recorder.onTrackFinished()
             awaitSettled(recorder)
 
-            val totals =
-                db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
+            val totals = db.totalsDao().byRowId(db.trackDao().rowIdOfPath(file.absolutePath)!!)!!
             assertThat(totals.completedCount).isEqualTo(0)
             assertThat(totals.skipCount).isEqualTo(1)
             assertThat(totals.completedMillis).isEqualTo(0L)
@@ -764,9 +749,10 @@ class PlaybackStatsRecorderTest {
             // Retiring the session must move that time to the outbox instead of deleting it.
             val rows = db.outboxDao().all()
             assertThat(rows).hasSize(1)
-            val payload =
-                Cbor { ignoreUnknownKeys = true }
-                    .decodeFromByteArray<PlaybackOutboxPayload>(rows.single().payload)
+            val payload = Cbor {
+                ignoreUnknownKeys = true
+            }
+                .decodeFromByteArray<PlaybackOutboxPayload>(rows.single().payload)
             assertThat(payload.pending.sumOf { it.millis }).isEqualTo(5_000L)
             assertThat(totalMillis()).isEqualTo(0L)
             assertThat(recorder.snapshotForTest().pendingMillis).isEqualTo(0L)
@@ -901,9 +887,7 @@ class PlaybackStatsRecorderTest {
             // wins the store mutex during that window must invalidate the pending time before
             // shutdown can settle or outbox it.
             val shutdown = async(Dispatchers.Default) { recorder.onShutdown() }
-            withTimeout(5_000L) {
-                while (!recorder.isShuttingDownForTest()) delay(1L)
-            }
+            withTimeout(5_000L) { while (!recorder.isShuttingDownForTest()) delay(1L) }
             recorder.storeMutexForTest.withLock {
                 db.outboxDao().clear()
                 recorder.onStoreClearedLocked()
@@ -973,8 +957,7 @@ class PlaybackStatsRecorderTest {
 
             // UNDISPATCHED runs the invalidation until it suspends on the held store lock, so
             // this is a deterministic ordering test rather than a sleep-based guess.
-            val clear =
-                launch(start = CoroutineStart.UNDISPATCHED) { recorder.onStoreCleared() }
+            val clear = launch(start = CoroutineStart.UNDISPATCHED) { recorder.onStoreCleared() }
             assertThat(clear.isCompleted).isFalse()
             assertThat(recorder.snapshotForTest().pendingMillis).isEqualTo(5_000L)
 

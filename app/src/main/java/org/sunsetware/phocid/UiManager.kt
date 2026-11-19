@@ -102,9 +102,7 @@ class UiManager(
      * otherwise (full-library filter + sort + hint per tab), so hold off until typing pauses.
      */
     val debouncedLibraryScreenSearchQuery: StateFlow<String> =
-        libraryScreenSearchQuery
-            .debounce(300)
-            .stateIn(coroutineScope, SharingStarted.Eagerly, "")
+        libraryScreenSearchQuery.debounce(300).stateIn(coroutineScope, SharingStarted.Eagerly, "")
 
     val libraryScreenHomeViewState =
         LibraryScreenHomeViewState(

@@ -206,9 +206,9 @@ internal object PhocidAppFunctionDataSource {
     private fun readNowPlaying(controller: MediaController): NowPlayingState {
         val hasMedia = controller.mediaItemCount > 0
         val track =
-            controller.currentMediaItem?.mediaId
-                ?.toLongOrNull()
-                ?.let { GlobalData.libraryIndex.value.tracks[it] }
+            controller.currentMediaItem?.mediaId?.toLongOrNull()?.let {
+                GlobalData.libraryIndex.value.tracks[it]
+            }
         return NowPlayingState(
             active = true,
             isPlaying = controller.isPlaying,
@@ -247,15 +247,14 @@ internal object PhocidAppFunctionDataSource {
         )
 
     private fun matches(track: Track, tokens: List<String>): Boolean {
-        val haystack =
-            buildList {
-                add(track.displayTitle)
-                add(track.fileName)
-                addAll(track.artists)
-                track.album?.let { add(it) }
-                addAll(track.albumArtists)
-                addAll(track.genres)
-            }
+        val haystack = buildList {
+            add(track.displayTitle)
+            add(track.fileName)
+            addAll(track.artists)
+            track.album?.let { add(it) }
+            addAll(track.albumArtists)
+            addAll(track.genres)
+        }
         return tokens.all { token -> haystack.any { it.contains(token, ignoreCase = true) } }
     }
 

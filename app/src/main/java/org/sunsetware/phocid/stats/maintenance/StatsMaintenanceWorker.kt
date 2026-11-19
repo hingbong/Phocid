@@ -45,7 +45,9 @@ class StatsMaintenanceWorker(
         // keeps freshly resolved rows alive until their first play.
         val deletedOrphans =
             db.trackDao()
-                .deleteOrphans(System.currentTimeMillis() - StatsRetention.ORPHAN_TRACK_GRACE_MILLIS)
+                .deleteOrphans(
+                    System.currentTimeMillis() - StatsRetention.ORPHAN_TRACK_GRACE_MILLIS
+                )
 
         // Cap the outbox so a device that never drains it stays bounded. Recorder inserts trim as
         // well; this pass also covers overflow left by older builds.

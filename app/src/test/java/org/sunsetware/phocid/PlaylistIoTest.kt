@@ -156,8 +156,7 @@ class PlaylistIoTest {
         // Some Windows exporters write a UTF-8 BOM; the explicit-charset decode path must
         // strip it like the auto-detected path, or the first entry loses its location match.
         testParseM3u(
-            m3u =
-                "\uFEFF" + listOf("/dir/a", "/dir/dir2/b").joinToString("\r\n"),
+            m3u = "\uFEFF" + listOf("/dir/a", "/dir/dir2/b").joinToString("\r\n"),
             libraryTrackPaths = parseM3uLibraryTrackPaths,
             settings = PlaylistIoSettings(ignoreLocation = false),
             expected = listOf("/dir/a", "/dir/dir2/b"),

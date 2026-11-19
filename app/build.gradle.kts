@@ -1,6 +1,6 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import java.time.Duration
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -32,11 +32,13 @@ val buildCommit =
 val buildTime =
     System.getenv("PHOCID_BUILD_TIME")?.takeIf { it.isNotBlank() }
         ?: runCatching {
-                providers
-                    .exec { commandLine("git", "log", "-1", "--format=%cI", "HEAD") }
-                    .standardOutput.asText.get()
-                    .trim()
-            }
+            providers
+                .exec { commandLine("git", "log", "-1", "--format=%cI", "HEAD") }
+                .standardOutput
+                .asText
+                .get()
+                .trim()
+        }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
         ?: "unknown"

@@ -20,14 +20,13 @@ object BridgeSettings {
     fun load(context: Context): BridgeConfig {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val host =
-            prefs.getString(KEY_HOST, null)
-                ?.let(BridgeEndpoint::normalizeHost)
-                ?.takeIf { BridgeEndpoint.hostError(it) == null }
-                ?: BridgeEndpoint.DEFAULT_HOST
+            prefs.getString(KEY_HOST, null)?.let(BridgeEndpoint::normalizeHost)?.takeIf {
+                BridgeEndpoint.hostError(it) == null
+            } ?: BridgeEndpoint.DEFAULT_HOST
         val port =
-            prefs.getInt(KEY_PORT, BridgeEndpoint.DEFAULT_PORT)
-                .takeIf { it in BridgeEndpoint.PORT_RANGE }
-                ?: BridgeEndpoint.DEFAULT_PORT
+            prefs.getInt(KEY_PORT, BridgeEndpoint.DEFAULT_PORT).takeIf {
+                it in BridgeEndpoint.PORT_RANGE
+            } ?: BridgeEndpoint.DEFAULT_PORT
         val allowWrites = prefs.getBoolean(KEY_ALLOW_WRITES, false)
         return BridgeConfig(host, port, allowWrites)
     }
@@ -46,8 +45,8 @@ object BridgeSettings {
 /**
  * Android 17 (API 37) blocks local network traffic - including inbound TCP connections to a
  * ServerSocket - unless ACCESS_LOCAL_NETWORK is granted. Android 16 and earlier grant that access
- * implicitly from INTERNET and do not know the permission, so checking or requesting it must
- * never happen below [SDK_LEVEL].
+ * implicitly from INTERNET and do not know the permission, so checking or requesting it must never
+ * happen below [SDK_LEVEL].
  */
 object LocalNetworkPermission {
     /** API 37 (Android 17); Build.VERSION_CODES has no stable name for it yet. */
@@ -63,6 +62,5 @@ object LocalNetworkPermission {
             PackageManager.PERMISSION_GRANTED
     }
 
-    fun isMissing(context: Context, host: String): Boolean =
-        isRequired(host) && !isGranted(context)
+    fun isMissing(context: Context, host: String): Boolean = isRequired(host) && !isGranted(context)
 }

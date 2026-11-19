@@ -98,7 +98,9 @@ class AgentQueryService : Service() {
             callingUid = callingUid,
             myUid = Process.myUid(),
             packagesForUid = packageManager.getPackagesForUid(callingUid),
-        ) { callingPackage -> packageManager.checkSignatures(callingPackage, packageName) }
+        ) { callingPackage ->
+            packageManager.checkSignatures(callingPackage, packageName)
+        }
     }
 
     private val responseBudget = ResponseJsonBudget()
@@ -154,15 +156,17 @@ class AgentQueryService : Service() {
 
     private fun librarySignature(index: LibraryIndex): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        index.tracks.values.sortedBy { it.id }.forEach { track ->
-            digest.updateField(track.id.toString())
-            digest.updateField(track.version.toString())
-            digest.updateField(track.path)
-            digest.updateField(track.title ?: "")
-            digest.updateField(track.artists.joinToString("\u0000"))
-            digest.updateField(track.album ?: "")
-            digest.updateField(track.duration.inWholeMilliseconds.toString())
-        }
+        index.tracks.values
+            .sortedBy { it.id }
+            .forEach { track ->
+                digest.updateField(track.id.toString())
+                digest.updateField(track.version.toString())
+                digest.updateField(track.path)
+                digest.updateField(track.title ?: "")
+                digest.updateField(track.artists.joinToString("\u0000"))
+                digest.updateField(track.album ?: "")
+                digest.updateField(track.duration.inWholeMilliseconds.toString())
+            }
         return digest.digest().joinToString("") { byte ->
             (byte.toInt() and 0xff).toString(16).padStart(2, '0')
         }
@@ -239,7 +243,9 @@ class AgentQueryService : Service() {
         val limit = request.optInt("limit", DEFAULT_LIMIT)
         // Search used to silently clamp out-of-range pagination, hiding client bugs behind
         // wrong pages; stats already reported them explicitly. Unify on explicit errors.
-        pageArgumentError(offset, limit, MAX_LIMIT)?.let { return it }
+        pageArgumentError(offset, limit, MAX_LIMIT)?.let {
+            return it
+        }
 
         val matches =
             GlobalData.libraryIndex.value.tracks.values
@@ -270,7 +276,9 @@ class AgentQueryService : Service() {
         val query = request.optString("query", "").trim()
         val limit = request.optInt("limit", DEFAULT_LIMIT)
         val offset = request.optInt("offset", 0)
-        pageArgumentError(offset, limit, MAX_LIMIT)?.let { return it }
+        pageArgumentError(offset, limit, MAX_LIMIT)?.let {
+            return it
+        }
         val index = GlobalData.libraryIndex.value
         val collator = GlobalData.preferences.value.sortCollator
 
@@ -593,7 +601,9 @@ class AgentQueryService : Service() {
                 )
         val limit = request.optInt("limit", 20)
         val offset = request.optInt("offset", 0)
-        pageArgumentError(offset, limit, MAX_LIMIT)?.let { return it }
+        pageArgumentError(offset, limit, MAX_LIMIT)?.let {
+            return it
+        }
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val day =
@@ -618,16 +628,14 @@ class AgentQueryService : Service() {
         val fetchLimit =
             (offset.toLong() + limit).coerceAtMost(MAX_TOP_TRACKS_WINDOW.toLong()).toInt()
         val repository = GlobalData.statsManager.repository
-        val summary =
-            runBlocking {
-                if (day != null) repository.summaryForDay(day).first()
-                else repository.summary(parsed!!).first()
-            }
-        val rows =
-            runBlocking {
-                if (day != null) repository.topTracks(day, sort, fetchLimit).first()
-                else repository.topTracks(parsed!!, sort, fetchLimit).first()
-            }
+        val summary = runBlocking {
+            if (day != null) repository.summaryForDay(day).first()
+            else repository.summary(parsed!!).first()
+        }
+        val rows = runBlocking {
+            if (day != null) repository.topTracks(day, sort, fetchLimit).first()
+            else repository.topTracks(parsed!!, sort, fetchLimit).first()
+        }
         val libraryIdByPath =
             GlobalData.libraryIndex.value.tracks.values
                 .asSequence()
@@ -723,9 +731,7 @@ class AgentQueryService : Service() {
         if (track == null) {
             return errorJson("not_found", "No library track with id " + libraryId)
         }
-        return JSONObject()
-            .put("trackRef", trackRefJson(libraryId, statsUuidFor(track)))
-            .toString()
+        return JSONObject().put("trackRef", trackRefJson(libraryId, statsUuidFor(track))).toString()
     }
 
     private fun updateSortKeysJson(requestJson: String): String {
@@ -1021,12 +1027,10 @@ class AgentQueryService : Service() {
             end = day.plusDays(1).atStartOfDay(zone).toInstant(),
         )
 
-    private fun zoneOffset(zone: ZoneId): String =
-        zone.rules.getOffset(Instant.now()).id
+    private fun zoneOffset(zone: ZoneId): String = zone.rules.getOffset(Instant.now()).id
 
     private fun instantText(instant: Instant?, zone: ZoneId): Any =
-        instant?.atZone(zone)?.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-            ?: JSONObject.NULL
+        instant?.atZone(zone)?.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME) ?: JSONObject.NULL
 
     private fun JSONObject.optIntOrNull(name: String): Int? =
         if (has(name) && !isNull(name)) optInt(name) else null
@@ -1044,19 +1048,19 @@ class AgentQueryService : Service() {
         JSONArray().apply { values.forEach { put(it) } }
 
     /**
- * Pagination contract shared by search, facets, and stats endpoints: out-of-range values are an
- * explicit invalid_argument error (or null when the arguments are valid) instead of being
- * silently corrected.
- */
-internal fun pageArgumentError(offset: Int, limit: Int, maxLimit: Int): String? =
-    when {
-        offset < 0 -> errorJson("invalid_argument", "offset must be non-negative")
-        limit !in 1..maxLimit ->
-            errorJson("invalid_argument", "limit must be between 1 and $maxLimit")
-        else -> null
-    }
+     * Pagination contract shared by search, facets, and stats endpoints: out-of-range values are an
+     * explicit invalid_argument error (or null when the arguments are valid) instead of being
+     * silently corrected.
+     */
+    internal fun pageArgumentError(offset: Int, limit: Int, maxLimit: Int): String? =
+        when {
+            offset < 0 -> errorJson("invalid_argument", "offset must be non-negative")
+            limit !in 1..maxLimit ->
+                errorJson("invalid_argument", "limit must be between 1 and $maxLimit")
+            else -> null
+        }
 
-private fun errorJson(code: String, message: String): String =
+    private fun errorJson(code: String, message: String): String =
         JSONObject().put("error", JSONObject().put("code", code).put("message", message)).toString()
 
     private inline fun guarded(block: () -> String): String {

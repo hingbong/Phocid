@@ -201,8 +201,7 @@ fun BridgeScreen() {
     ) { innerPadding ->
         Column(
             modifier =
-                Modifier
-                    .fillMaxWidth()
+                Modifier.fillMaxWidth()
                     .padding(innerPadding)
                     .imePadding()
                     .verticalScroll(rememberScrollState())
@@ -240,11 +239,12 @@ fun BridgeScreen() {
                                 Uri.fromParts("package", context.packageName, null),
                             )
                         )
-                    }.onFailure {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Could not open app settings")
-                        }
                     }
+                        .onFailure {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Could not open app settings")
+                            }
+                        }
                 },
             )
             TokenCard(
@@ -259,11 +259,12 @@ fun BridgeScreen() {
                         context.startActivity(
                             Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                         )
-                    }.onFailure {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Could not open battery settings")
-                        }
                     }
+                        .onFailure {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Could not open battery settings")
+                            }
+                        }
                 },
             )
             ConnectCard(endpoint = endpoint, config = displayedConfig)
@@ -302,7 +303,7 @@ fun BridgeScreen() {
                     },
                     colors =
                         ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.error
                         ),
                 ) {
                     Text("Generate")
@@ -333,7 +334,7 @@ fun BridgeScreen() {
                         showLocalNetworkRationale = false
                         if (Build.VERSION.SDK_INT >= LocalNetworkPermission.SDK_LEVEL) {
                             requestLocalNetworkAccess.launch(
-                                Manifest.permission.ACCESS_LOCAL_NETWORK,
+                                Manifest.permission.ACCESS_LOCAL_NETWORK
                             )
                         }
                     }
@@ -488,9 +489,7 @@ private fun ServerCard(
 ) {
     Card(
         colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -636,9 +635,7 @@ private fun TokenCard(
 ) {
     Card(
         colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -695,9 +692,7 @@ private fun BatteryCard(
 ) {
     Card(
         colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -734,9 +729,7 @@ private fun ConnectCard(
 ) {
     Card(
         colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -788,9 +781,7 @@ private fun ConnectCard(
 private fun AboutCard() {
     Card(
         colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {

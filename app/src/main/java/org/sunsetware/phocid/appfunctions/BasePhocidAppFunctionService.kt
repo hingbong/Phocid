@@ -36,17 +36,15 @@ abstract class BasePhocidAppFunctionService : AppFunctionService() {
      */
     @AppFunctionDeclaration(isDescribedByKDoc = true)
     internal suspend fun searchTracks(query: String, limit: Int = 20): List<TrackSummary> =
-        withContext(Dispatchers.IO) {
-            PhocidAppFunctionDataSource.searchTracks(query, limit)
-        }
+        withContext(Dispatchers.IO) { PhocidAppFunctionDataSource.searchTracks(query, limit) }
 
     /**
      * Returns what the Phocid player is doing right now: the current track, playback state, and
      * position.
      *
      * Call this when the user asks what is playing, who the artist is, or how far into the track
-     * they are. When the playback service is not running, [NowPlayingState.active] is false and
-     * the remaining fields are empty or zero.
+     * they are. When the playback service is not running, [NowPlayingState.active] is false and the
+     * remaining fields are empty or zero.
      *
      * @return A snapshot of the current playback session.
      */
@@ -57,8 +55,8 @@ abstract class BasePhocidAppFunctionService : AppFunctionService() {
         }
 
     /**
-     * Returns aggregate counts for the user's indexed local music library: tracks, artists,
-     * albums, album artists, genres, and the summed duration of every indexed track.
+     * Returns aggregate counts for the user's indexed local music library: tracks, artists, albums,
+     * album artists, genres, and the summed duration of every indexed track.
      *
      * Use this for questions such as "how many albums do I have". For listening history, use
      * [getPlaybackStats] instead.
@@ -73,12 +71,12 @@ abstract class BasePhocidAppFunctionService : AppFunctionService() {
      * Returns the user's listening statistics for one time range.
      *
      * Use this when the user asks how much they listened, how many plays a period had, or how
-     * active their listening was. A play is counted once accumulated listening reaches
-     * min(30 seconds, half the track duration).
+     * active their listening was. A play is counted once accumulated listening reaches min(30
+     * seconds, half the track duration).
      *
-     * @param range Time window. One of "today", "7d", "30d", "month", "90d", "365d", "year",
-     *   "3y", or "all"; defaults to "30d". Calendar ranges start on the first day of the current
-     *   month or year, and "all" covers all imported history.
+     * @param range Time window. One of "today", "7d", "30d", "month", "90d", "365d", "year", "3y",
+     *   or "all"; defaults to "30d". Calendar ranges start on the first day of the current month or
+     *   year, and "all" covers all imported history.
      * @return Playback totals for the requested range.
      */
     @AppFunctionDeclaration(isDescribedByKDoc = true)

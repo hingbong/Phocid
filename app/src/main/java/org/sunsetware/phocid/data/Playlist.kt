@@ -181,15 +181,13 @@ class PlaylistManager(
                 .filter { shortcut ->
                     shortcut.intent.action == SHORTCUT_PLAYLIST &&
                         !uuids.contains(
-                            shortcut.intent.extras
-                                ?.getString(SHORTCUT_PLAYLIST_EXTRA_KEY)
-                                ?.let {
-                                    try {
-                                        UUID.fromString(it)
-                                    } catch (_: Exception) {
-                                        null
-                                    }
+                            shortcut.intent.extras?.getString(SHORTCUT_PLAYLIST_EXTRA_KEY)?.let {
+                                try {
+                                    UUID.fromString(it)
+                                } catch (_: Exception) {
+                                    null
                                 }
+                            }
                         )
                 }
                 .map { it.id }

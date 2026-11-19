@@ -68,10 +68,10 @@ object TagKey {
 /**
  * Third identity layer: lowercase path relative to a media root.
  *
- * A path outside every known media root deliberately produces NO key instead of falling back to
- * the file name: two different directories can hold the same file name, and a name-only key would
- * link (and, in backups, merge) two unrelated tracks. Identity for such files relies on [TagKey]
- * and the audio hash instead.
+ * A path outside every known media root deliberately produces NO key instead of falling back to the
+ * file name: two different directories can hold the same file name, and a name-only key would link
+ * (and, in backups, merge) two unrelated tracks. Identity for such files relies on [TagKey] and the
+ * audio hash instead.
  */
 object RelPathKey {
     fun of(absolutePath: String, mediaRoots: List<String>): String? {
@@ -80,8 +80,7 @@ object RelPathKey {
             mediaRoots
                 .map { it.replace('\\', '/').trimEnd('/') }
                 .filter { path.startsWith("$it/") }
-                .maxByOrNull { it.length }
-                ?: return null
+                .maxByOrNull { it.length } ?: return null
         return path.removePrefix("$root/").lowercase(Locale.ROOT)
     }
 }

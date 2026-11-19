@@ -39,8 +39,7 @@ import org.sunsetware.phocid.utils.coerceInOrMin
 import org.sunsetware.phocid.utils.wrap
 
 /** The MediaController could not be built, or could not be built in time. */
-class PlayerInitializationException(message: String, cause: Throwable) :
-    Exception(message, cause)
+class PlayerInitializationException(message: String, cause: Throwable) : Exception(message, cause)
 
 @Stable
 class PlayerManager(

@@ -375,7 +375,8 @@ class McpServerTest {
 
     @Test
     fun slowDripIsCutByTheRequestDeadline() {
-        val dripServer = McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, requestTimeoutMs = 300)
+        val dripServer =
+            McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, requestTimeoutMs = 300)
         dripServer.start()
         try {
             openSocket(dripServer).use { socket ->
@@ -386,14 +387,17 @@ class McpServerTest {
                         "Authorization: Bearer $TOKEN\r\n" +
                         "Content-Type: application/json\r\n" +
                         "Content-Length: 400\r\n" +
-                        "\r\n"
+                        "\r\n",
                 )
                 // Drip one byte at a time: every individual read stays far below the socket
                 // timeout, but the total request crosses the absolute deadline and is cut.
                 repeat(20) {
                     Thread.sleep(40)
                     runCatching {
-                        socket.getOutputStream().apply { write('{'.code); flush() }
+                        socket.getOutputStream().apply {
+                            write('{'.code)
+                            flush()
+                        }
                     }
                 }
                 socket.soTimeout = 10_000
@@ -417,7 +421,8 @@ class McpServerTest {
             )
         server.start()
         try {
-            val text = callTool(server, "library_update_sort_keys", """{"dryRun":false,"items":[]}""")
+            val text =
+                callTool(server, "library_update_sort_keys", """{"dryRun":false,"items":[]}""")
             assertTrue(text, text.contains("Writes are disabled"))
         } finally {
             server.stop()
@@ -428,7 +433,13 @@ class McpServerTest {
     fun validateSortKeysForcesDryRun() {
         val source = RecordingSortKeysSource()
         val server =
-            McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, dataSource = source, allowWrites = true)
+            McpServer(
+                "127.0.0.1",
+                0,
+                tokenProvider = { TOKEN },
+                dataSource = source,
+                allowWrites = true,
+            )
         server.start()
         try {
             callTool(server, "library_validate_sort_keys", """{"dryRun":false,"items":[]}""")
@@ -456,7 +467,8 @@ class McpServerTest {
     @Test
     fun batchResponseBytesAreCapped() {
         // Each fake search result is ~100 KiB; six of them cross the 512 KiB response cap.
-        val server = McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, dataSource = BulkDataSource())
+        val server =
+            McpServer("127.0.0.1", 0, tokenProvider = { TOKEN }, dataSource = BulkDataSource())
         server.start()
         try {
             val payload =
@@ -493,6 +505,7 @@ class McpServerTest {
         assertEquals(200, response.status)
         return response.body.toString(StandardCharsets.UTF_8)
     }
+
     private fun request(raw: String, target: McpServer = server): Response =
         openSocket(target).use { socket ->
             write(socket, raw)

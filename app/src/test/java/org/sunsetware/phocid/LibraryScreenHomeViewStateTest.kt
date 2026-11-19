@@ -5,7 +5,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.sunsetware.phocid.data.Preferences
-import org.sunsetware.phocid.ui.views.library.LibraryScreenTabType
 import org.sunsetware.phocid.ui.views.library.activeTabTypeFor
 
 @RunWith(RobolectricTestRunner::class)

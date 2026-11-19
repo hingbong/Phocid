@@ -33,8 +33,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,11 +69,11 @@ import org.sunsetware.phocid.UiManager
 import org.sunsetware.phocid.data.InvalidTrack
 import org.sunsetware.phocid.data.LibraryIndex
 import org.sunsetware.phocid.data.Lyrics
+import org.sunsetware.phocid.data.LyricsDisplayPreference
 import org.sunsetware.phocid.data.PlayerManager
 import org.sunsetware.phocid.data.Track
 import org.sunsetware.phocid.data.getArtworkColor
 import org.sunsetware.phocid.data.isFavorite
-import org.sunsetware.phocid.data.LyricsDisplayPreference
 import org.sunsetware.phocid.data.loadLyrics
 import org.sunsetware.phocid.data.parseLrc
 import org.sunsetware.phocid.globals.Strings
@@ -143,8 +143,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
     // Lyrics loading touches the filesystem: it must never run during composition. Compute it
     // off the main thread in a LaunchedEffect and publish the result as state. The keys include
     // every preference the loader reads, so a charset / embedded-lyrics change recomputes.
-    var currentTrackLyrics by
-        remember(currentTrack) { mutableStateOf(null as PlayerScreenLyrics?) }
+    var currentTrackLyrics by remember(currentTrack) { mutableStateOf(null as PlayerScreenLyrics?) }
     LaunchedEffect(
         currentTrack,
         preferences.charsetName,
@@ -172,7 +171,9 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 ?.let { parseLrc(it) }
                                 ?.takeIf { it.lines.isNotEmpty() }
                                 ?.let { PlayerScreenLyrics.Synced(it) }
-                                ?: currentTrack.unsyncedLyrics?.let { PlayerScreenLyrics.Unsynced(it) }
+                                ?: currentTrack.unsyncedLyrics?.let {
+                                    PlayerScreenLyrics.Unsynced(it)
+                                }
                         } else {
                             currentTrack.unsyncedLyrics?.let { PlayerScreenLyrics.Unsynced(it) }
                         }
@@ -536,13 +537,13 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 // Reading the animated position directly in composition
                                 // invalidates this whole scope on every drag frame. The derived
                                 // state only flips at the fully-open/fully-closed boundaries.
-                                dragIndicatorVisibility =
-                                    remember {
+                                dragIndicatorVisibility = remember {
                                         derivedStateOf {
                                             playQueueDragState.position == 1f ||
                                                 playQueueDragTarget == 1f
                                         }
-                                    }.value,
+                                    }
+                                        .value,
                                 swipeToRemoveFromQueue = preferences.swipeToRemoveFromQueue,
                                 swipeThreshold =
                                     DEFAULT_SWIPE_THRESHOLD * preferences.swipeThresholdMultiplier,
