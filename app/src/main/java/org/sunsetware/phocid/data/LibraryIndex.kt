@@ -1548,7 +1548,7 @@ private fun scanTrack(
                 ?: unsyncedLyrics
         comment =
             VORBIS_COMMENT_UNOFFICIAL_COMMENT.firstNotNullOfOrNull { comments[it]?.firstOrNull() }
-                ?: unsyncedLyrics
+                ?: comment
         format = "Ogg Opus"
         sampleRate = 48000
     }
