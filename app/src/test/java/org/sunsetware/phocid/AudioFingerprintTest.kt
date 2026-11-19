@@ -125,6 +125,19 @@ class AudioFingerprintTest {
         assertThat(AudioFingerprint.compute(left)).isEqualTo(AudioFingerprint.compute(right))
     }
 
+    @Test
+    fun apev2TagIsFullyStrippedToTheExactAudioRange() {
+        // Guards the spec reading: the footer size field includes the footer, so the audio range
+        // must end exactly where the tag begins. Over- or under-subtracting shifts the window into
+        // the audio (or leaves tag bytes in it) and changes the hash vs the bare audio.
+        val tagged = temporaryFolder.newFile("tagged.ape")
+        writeApe(tagged, 0x55)
+        val bare = temporaryFolder.newFile("bare.ape")
+        RandomAccessFile(bare, "rw").use { it.write(ByteArray(4096) { (it * 31).toByte() }) }
+
+        assertThat(AudioFingerprint.compute(tagged)).isEqualTo(AudioFingerprint.compute(bare))
+    }
+
     /** Same-length audio with a small ID3v2 tag; only the middle bytes differ. */
     private fun writeTaggedAudio(file: File, middle: ByteArray) {
         RandomAccessFile(file, "rw").use { raf ->
@@ -182,10 +195,11 @@ class AudioFingerprintTest {
         RandomAccessFile(file, "rw").use { raf ->
             raf.write(ByteArray(4096) { (it * 31).toByte() })
             raf.write(ByteArray(64) { tagByte.toByte() })
-            // APEv2 footer (the tag body size excludes the footer; no header flag).
+            // APEv2 footer: per spec the size field covers the 64-byte tag body PLUS this 32-byte
+            // footer (= 96), excluding the optional header; no header flag is set here.
             raf.write("APETAGEX".toByteArray(Charsets.US_ASCII))
             raf.write(intBytes(2000))
-            raf.write(intBytesLe(64))
+            raf.write(intBytesLe(96))
             raf.write(intBytesLe(1))
             raf.write(intBytesLe(0))
             raf.write(ByteArray(8))

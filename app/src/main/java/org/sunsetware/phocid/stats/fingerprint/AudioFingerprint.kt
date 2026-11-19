@@ -129,9 +129,11 @@ object AudioFingerprint {
                 val tagSize = ByteBuffer.wrap(ape, 12, 4).order(ByteOrder.LITTLE_ENDIAN).int
                 val flags = ByteBuffer.wrap(ape, 20, 4).order(ByteOrder.LITTLE_ENDIAN).int
                 val hasHeader = flags and 0x80000000.toInt() != 0
-                // tagSize covers the tag items only: the 32-byte footer sits outside it (and a
-                // 32-byte header too when the header flag is set), so all three are excluded.
-                end -= 32 + tagSize.toLong() + if (hasHeader) 32 else 0
+                // Per the APEv2 spec the footer's size field covers the tag items AND the 32-byte
+                // footer itself (but not the optional 32-byte header), so subtract tagSize plus the
+                // header when present. Adding another 32 here would shift the tail hash window into
+                // the audio and invalidate every existing AUDIO_HASH alias for APEv2-tagged tracks.
+                end -= tagSize.toLong() + if (hasHeader) 32 else 0
             }
         }
 
