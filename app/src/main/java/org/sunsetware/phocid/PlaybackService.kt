@@ -41,7 +41,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.sunsetware.phocid.data.DefaultShuffleMode
@@ -228,7 +227,10 @@ class PlaybackService : MediaLibraryService() {
                         Player.EVENT_MEDIA_ITEM_TRANSITION,
                     )
                 ) {
-                    runBlocking {
+                    // Never block the service main thread on the timer mutex: the expiry
+                    // check tolerates a one-frame deferral, and the polling timer job enforces
+                    // the same pause independently.
+                    mainScope.launch {
                         timerMutex.withLock {
                             if (
                                 timerTarget >= 0 &&
@@ -606,7 +608,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun onSetTimer(player: CustomizedPlayer, session: MediaSession, args: Bundle) {
-        runBlocking {
+        // Same-thread (main) but suspending: waiting for the timer mutex must not block the
+        // service main thread behind a contended lock.
+        mainScope.launch {
             timerMutex.withLock {
                 val target = args.getLong(TIMER_TARGET_KEY, -1)
                 val finishLastTrack = args.getBoolean(TIMER_FINISH_LAST_TRACK_KEY, true)

@@ -53,9 +53,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import java.util.Locale
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import org.sunsetware.phocid.data.DarkThemePreference
 import org.sunsetware.phocid.data.ShapePreference
 import org.sunsetware.phocid.data.WidgetLayout
@@ -289,11 +290,16 @@ class WidgetConfigureActivity : ComponentActivity() {
                                                 AppWidgetManager.EXTRA_APPWIDGET_ID,
                                                 appWidgetId,
                                             )
-                                    runBlocking {
-                                        MainAppWidget().updateAll(this@WidgetConfigureActivity)
+                                    // The glance update decodes artwork; keep it off the
+                                    // main thread, and never strand the activity if it fails.
+                                    lifecycleScope.launch {
+                                        try {
+                                            MainAppWidget().updateAll(this@WidgetConfigureActivity)
+                                        } finally {
+                                            setResult(RESULT_OK, resultValue)
+                                            finish()
+                                        }
                                     }
-                                    setResult(RESULT_OK, resultValue)
-                                    finish()
                                 },
                             ) {
                                 Text(Strings[R.string.commons_ok])

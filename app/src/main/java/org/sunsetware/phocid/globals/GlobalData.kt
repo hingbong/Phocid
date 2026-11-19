@@ -1,5 +1,6 @@
 package org.sunsetware.phocid.globals
 
+import android.os.SystemClock
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,12 +26,16 @@ object GlobalData {
     /**
      * Waits (briefly) for initialization, but never forever. Returns false if initialization
      * failed or did not complete within [timeoutMillis]. Callers must handle the false case.
+     *
+     * The deadline counts on [SystemClock.elapsedRealtime]: the wall clock can jump backwards
+     * (NTP resync, manual time change), which would make a wall-clock deadline wait far longer
+     * than the intended bound.
      */
     fun awaitInitialized(timeoutMillis: Long = 10_000L): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMillis
+        val deadline = SystemClock.elapsedRealtime() + timeoutMillis
         while (!initialized.get()) {
             if (initializationFailed.get()) return false
-            if (System.currentTimeMillis() > deadline) return false
+            if (SystemClock.elapsedRealtime() > deadline) return false
             Thread.sleep(16)
         }
         return true
