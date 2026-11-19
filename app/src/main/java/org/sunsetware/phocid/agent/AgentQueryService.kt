@@ -3,9 +3,12 @@ package org.sunsetware.phocid.agent
 import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
+import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.Parcel
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.Player
@@ -38,12 +41,24 @@ import org.sunsetware.phocid.stats.domain.StatsSort
 /**
  * Read-only query surface for the companion agent bridge.
  *
- * The service is exported with a signature permission. It exposes read methods plus one opt-in
- * method for writing local sort keys. It never exposes the filesystem path by default.
+ * The service is exported with a signature permission, and - because the platform permission state
+ * can be subverted by an install-order race on the permission name - every binder transaction is
+ * additionally checked by [AgentCallerGate] against our own signing certificate. It exposes read
+ * methods plus one opt-in method for writing local sort keys. It never exposes the filesystem path
+ * by default.
  */
 class AgentQueryService : Service() {
     private val binder =
         object : IPhocidQuery.Stub() {
+            override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                // Defence in depth: a caller that somehow holds the platform permission (for
+                // example a hostile package that pre-declared the permission name at normal level)
+                // must still be signed with our certificate. Denials surface as a RemoteException
+                // on the caller side.
+                if (!isCallerTrusted()) return false
+                return super.onTransact(code, data, reply, flags)
+            }
+
             override fun capabilities(): String = guarded { capabilitiesJson() }
 
             override fun searchTracks(requestJson: String): String = guarded {
@@ -76,6 +91,15 @@ class AgentQueryService : Service() {
         }
 
     override fun onBind(intent: Intent?): IBinder = binder
+
+    private fun isCallerTrusted(): Boolean {
+        val callingUid = Binder.getCallingUid()
+        return AgentCallerGate.isTrusted(
+            callingUid = callingUid,
+            myUid = Process.myUid(),
+            packagesForUid = packageManager.getPackagesForUid(callingUid),
+        ) { callingPackage -> packageManager.checkSignatures(callingPackage, packageName) }
+    }
 
     private val responseBudget = ResponseJsonBudget()
 

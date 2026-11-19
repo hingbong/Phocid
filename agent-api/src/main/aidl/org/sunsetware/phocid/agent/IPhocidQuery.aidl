@@ -3,7 +3,11 @@ package org.sunsetware.phocid.agent;
 // Read-mostly query surface for the companion agent bridge.
 //
 // Trust model: the service is exported with a signature-level permission, so only APKs signed
-// with the same certificate can bind. Callers must still validate every argument.
+// with the same certificate can bind. Because a hostile APK that pre-declares the permission
+// name at normal level can win the platform's permission-definition race, every binder
+// transaction is additionally verified in-process against the caller's signing certificate
+// (see AgentCallerGate in the main app); mismatches fail the transaction. Callers must still
+// validate every argument.
 //
 // The main app's capabilities() always reports writeSortKeys=true: write protection is enforced
 // on the bridge side (its opt-in "Allow agent writes" toggle), not by this interface. Read-only
