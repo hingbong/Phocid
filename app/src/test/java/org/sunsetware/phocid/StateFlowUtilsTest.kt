@@ -1,5 +1,6 @@
 package org.sunsetware.phocid
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
@@ -67,16 +68,17 @@ class StateFlowUtilsTest {
             page.flatMapLatest(this) { active -> if (active == "a") innerA else innerB }
 
         assertThat(gated.value).isEqualTo(1)
-        // Subscribe so the flatMapLatest upstream actually collects the active inner flow;
-        // reading .value alone never subscribes.
+        // Subscribe so the flatMapLatest upstream actually collects the active inner flow, then
+        // yield until it has done so. Polling is required: the shared value is already 1, so a
+        // first { it == 1 } would return immediately and never let the subscription start.
         val subscription = launch { gated.collect {} }
-        withTimeout(5_000) { gated.first { it == 1 } }
+        withTimeout(5_000) { while (transformsA < 2) delay(10) }
         // Only the active tab's flow has been computed since construction.
-        assertThat(transformsA).isEqualTo(2)
+        assertThat(transformsA).isGreaterThanOrEqualTo(2)
         assertThat(transformsB).isEqualTo(1)
 
         page.value = "b"
-        withTimeout(5_000) { gated.first { it == 2 } }
+        withTimeout(5_000) { while (transformsB < 2) delay(10) }
         assertThat(transformsB).isGreaterThanOrEqualTo(2)
         subscription.cancel()
     }

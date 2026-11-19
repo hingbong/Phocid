@@ -2,6 +2,7 @@ package org.sunsetware.phocid
 
 import android.content.ContentProvider
 import android.content.ContentValues
+import android.content.Context
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
@@ -16,6 +17,9 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
 import org.sunsetware.phocid.data.InvalidTrack
 import org.sunsetware.phocid.data.UnfilteredTrackIndex
 import org.sunsetware.phocid.data.scanTracks
@@ -31,7 +35,21 @@ private fun getVersionBundle(method: String): Bundle? =
  */
 
 @RunWith(RobolectricTestRunner::class)
+@Config(shadows = [ScanTracksAbortTest.TestShadowMediaStore::class])
 class ScanTracksAbortTest {
+    /**
+     * MediaStore.getVersion goes through ContentResolver.call, which this sandbox does not
+     * implement; without the shadow the scan throws before it ever reaches the cursor.
+     */
+    @Implements(MediaStore::class)
+    class TestShadowMediaStore {
+        companion object {
+            @JvmStatic
+            @Implementation
+            fun getVersion(@Suppress("unused") context: Context): String = "test-version"
+        }
+    }
+
 
     private fun grantReadPermission() {
         Shadows.shadowOf(RuntimeEnvironment.getApplication())
