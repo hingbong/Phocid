@@ -73,6 +73,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private var mediaSession: MediaLibrarySession? = null
+    private var player: CustomizedPlayer? = null
     private val mainScope = MainScope()
     private val timerMutex = Mutex()
     @Volatile private var timerTarget = -1L
@@ -94,6 +95,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val player = CustomizedPlayer(this)
+        this.player = player
         statisticsRecorder = GlobalData.statsManager.createRecorder()
 
         // Integrate with system equalizer.
@@ -181,11 +183,24 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         isRunning = false
-        statisticsRecorder.onShutdown()
+        if (::statisticsRecorder.isInitialized) {
+            statisticsRecorder.onShutdown()
+        }
         getSystemService(AudioManager::class.java)
             .unregisterAudioDeviceCallback(audioDeviceCallback)
-        mediaSession?.run {
+        // Release the player even when onCreate failed before the session was built, and close
+        // the audio effect control session that was opened for it in onCreate.
+        player?.let { player ->
+            sendBroadcast(
+                Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                    putExtra(AudioEffect.EXTRA_AUDIO_SESSION, player.inner.audioSessionId)
+                    putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                }
+            )
             player.release()
+        }
+        player = null
+        mediaSession?.run {
             release()
             mediaSession = null
         }
