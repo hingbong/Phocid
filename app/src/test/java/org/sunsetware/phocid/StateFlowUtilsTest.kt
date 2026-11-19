@@ -1,18 +1,22 @@
 package org.sunsetware.phocid
 
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.sunsetware.phocid.utils.combine
 import org.sunsetware.phocid.utils.flatMapLatest
 import org.sunsetware.phocid.utils.map
 
+/**
+ * These tests never leave a collector running in the background: runBlocking joins every child
+ * coroutine it sees, so a launched collect that is not cancelled on the failure path would hang
+ * the test (and the test JVM) forever. Subscription is instead triggered by first{}, which
+ * unsubscribes by itself, or by a bounded observation window that cancels on timeout.
+ */
 class StateFlowUtilsTest {
     @Test
     fun combineWithAnInitialValueSkipsTheEagerTransform() = runBlocking<Unit> {
@@ -31,16 +35,14 @@ class StateFlowUtilsTest {
         assertThat(flow.value).isEqualTo(-1)
         assertThat(transforms).isZero()
 
-        // A real subscription is required: StateFlow.first() would hand back the cached
-        // placeholder (-1) without ever starting the WhileSubscribed upstream.
-        val subscription = launch { flow.collect {} }
+        // A subscription is what starts the WhileSubscribed upstream. first{} takes the emitted
+        // value and then unsubscribes, so the placeholder is replaced and the transform runs.
         withTimeout(5_000) { flow.first { it == 0 } }
         assertThat(transforms).isEqualTo(1)
 
         a.value = 5
         withTimeout(5_000) { flow.first { it == 5 } }
         assertThat(transforms).isGreaterThanOrEqualTo(2)
-        subscription.cancel()
     }
 
     @Test
@@ -68,18 +70,16 @@ class StateFlowUtilsTest {
             page.flatMapLatest(this) { active -> if (active == "a") innerA else innerB }
 
         assertThat(gated.value).isEqualTo(1)
-        // Subscribe so the flatMapLatest upstream actually collects the active inner flow, then
-        // yield until it has done so. Polling is required: the shared value is already 1, so a
-        // first { it == 1 } would return immediately and never let the subscription start.
-        val subscription = launch { gated.collect {} }
-        withTimeout(5_000) { while (transformsA < 2) delay(10) }
+        // The shared value is already 1, so first { it == 1 } would return without ever
+        // subscribing. Wait instead for a value that never arrives: the upstream stays collected
+        // for the bounded window and is cancelled on timeout, which is what we want to observe.
+        withTimeoutOrNull(2_000) { gated.first { it == Int.MIN_VALUE } }
         // Only the active tab's flow has been computed since construction.
         assertThat(transformsA).isGreaterThanOrEqualTo(2)
         assertThat(transformsB).isEqualTo(1)
 
         page.value = "b"
-        withTimeout(5_000) { while (transformsB < 2) delay(10) }
+        withTimeoutOrNull(2_000) { gated.first { it == Int.MIN_VALUE } }
         assertThat(transformsB).isGreaterThanOrEqualTo(2)
-        subscription.cancel()
     }
 }
