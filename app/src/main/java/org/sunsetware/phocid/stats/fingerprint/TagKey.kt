@@ -8,6 +8,18 @@ import java.util.Locale
  *
  * It survives re-encoding and format changes, where the audio hash necessarily changes. Duration is
  * bucketed because different encoders disagree by tens of milliseconds.
+ *
+ * Known collision surface (G2, characterization in StatsTagCollisionTest): same-album duplicates
+ * whose distinguishing mark is stripped below (remaster/live/feat/year brackets, deluxe-edition
+ * album suffix), tracks inside one 2 s bucket, and the neighbor-bucket candidates near a boundary.
+ * Cross-album tracks do NOT collide because the album is part of the key. [TrackResolver] treats
+ * TAG_KEY as a weak clue, so with audio hashes present a collision splits safely instead of
+ * merging; the residual wrong-merge windows require a missing hash and coincide with the designed
+ * retag/format-change fallback.
+ *
+ * CONTINUITY: the exact key strings are stored in users' TAG_KEY aliases. Changing this
+ * normalization or bucketing invalidates those aliases and splits existing stats; it requires a
+ * migration decision, not an in-place edit. StatsTagCollisionTest pins the stored key format.
  */
 object TagKey {
     private const val BUCKET_MILLIS = 2000L
