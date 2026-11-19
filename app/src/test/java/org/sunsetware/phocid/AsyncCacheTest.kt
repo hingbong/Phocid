@@ -95,4 +95,25 @@ class AsyncCacheTest {
             }
         }
     }
+
+    @Test
+    fun testFailedCreationDoesNotPoisonTheKey() {
+        runBlocking {
+            val cache = AsyncCache<Int, Int>(this, 4)
+            var attempts = 0
+
+            runCatching {
+                cache.getOrPut(0) {
+                    attempts++
+                    throw RuntimeException("creation failed")
+                }
+            }
+
+            // The failed job must have been removed from the creation map, so a later creation
+            // gets a fresh job instead of awaiting the dead one forever.
+            assertThat(cache.getOrPut(0) { attempts++; 42 }).isEqualTo(42)
+            assertThat(attempts).isEqualTo(2)
+            assertThat(cache.get(0)).isEqualTo(42)
+        }
+    }
 }
