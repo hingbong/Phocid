@@ -73,6 +73,7 @@ import org.sunsetware.phocid.data.PlayerManager
 import org.sunsetware.phocid.data.Track
 import org.sunsetware.phocid.data.getArtworkColor
 import org.sunsetware.phocid.data.isFavorite
+import org.sunsetware.phocid.data.LyricsDisplayPreference
 import org.sunsetware.phocid.data.loadLyrics
 import org.sunsetware.phocid.data.parseLrc
 import org.sunsetware.phocid.globals.Strings
@@ -144,7 +145,18 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
     // every preference the loader reads, so a charset / embedded-lyrics change recomputes.
     var currentTrackLyrics by
         remember(currentTrack) { mutableStateOf(null as PlayerScreenLyrics?) }
-    LaunchedEffect(currentTrack, preferences.charsetName, preferences.treatEmbeddedLyricsAsLrc) {
+    LaunchedEffect(
+        currentTrack,
+        preferences.charsetName,
+        preferences.treatEmbeddedLyricsAsLrc,
+        preferences.lyricsDisplay,
+    ) {
+        // Never touch the filesystem while the lyrics display is disabled, and clear anything
+        // loaded before the preference change so no stale lyrics linger.
+        if (preferences.lyricsDisplay == LyricsDisplayPreference.DISABLED) {
+            currentTrackLyrics = null
+            return@LaunchedEffect
+        }
         currentTrackLyrics =
             withContext(Dispatchers.IO) {
                 val cachedLyrics = viewModel.lyricsCache.get()

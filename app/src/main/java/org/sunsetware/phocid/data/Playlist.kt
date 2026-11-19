@@ -5,6 +5,7 @@ package org.sunsetware.phocid.data
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.icu.text.Collator
 import android.icu.text.DateFormat
 import android.net.Uri
 import android.util.Log
@@ -26,13 +27,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.Path
 import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.io.path.relativeToOrSelf
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -53,6 +54,7 @@ import org.sunsetware.phocid.R
 import org.sunsetware.phocid.SHORTCUT_PLAYLIST
 import org.sunsetware.phocid.SHORTCUT_PLAYLIST_EXTRA_KEY
 import org.sunsetware.phocid.globals.Strings
+import org.sunsetware.phocid.ui.views.library.LibraryScreenTabInfo
 import org.sunsetware.phocid.ui.views.library.LibraryScreenTabType
 import org.sunsetware.phocid.utils.CaseInsensitiveMap
 import org.sunsetware.phocid.utils.UUIDSerializer
@@ -113,6 +115,11 @@ class PlaylistManager(
                 libraryIndex.map(coroutineScope) { libraryIndex ->
                     libraryIndex.tracks.values.associateBy { it.path }
                 },
+                // Hot: the playback service reads .value (favourite state for the notification
+                // buttons) without collecting; a cold flow would serve it the initial value
+                // forever. The global library index above is already hot, so this only keeps
+                // one realization active per library change.
+                hot = true,
             ) { playlists, trackIndex ->
                 playlists.mapValues { it.value.realize(SpecialPlaylistLookup[it.key], trackIndex) }
             }
@@ -134,57 +141,72 @@ class PlaylistManager(
                 .combine(
                     preferences.map { it.sortCollator to it.tabSettings }.distinctUntilChanged()
                 ) { playlists, (sortCollator, tabSettings) ->
-                    val tabSettings = tabSettings[LibraryScreenTabType.PLAYLISTS]!!
-                    val uuids =
-                        playlists
-                            .asIterable()
-                            .sortedBy(
-                                sortCollator,
-                                tabSettings.sortingKeys,
-                                tabSettings.sortAscending,
-                            ) {
-                                it.value
-                            }
-                            .take(ShortcutManagerCompat.getMaxShortcutCountPerActivity(context))
-                            .map { it.key }
-                            .toSet()
-
-                    // Remove extra shortcuts
-                    val invalidShortcuts =
-                        ShortcutManagerCompat.getDynamicShortcuts(context)
-                            .filter { shortcut ->
-                                shortcut.intent.action == SHORTCUT_PLAYLIST &&
-                                    !uuids.contains(
-                                        shortcut.intent.extras
-                                            ?.getString(SHORTCUT_PLAYLIST_EXTRA_KEY)
-                                            ?.let {
-                                                try {
-                                                    UUID.fromString(it)
-                                                } catch (_: Exception) {
-                                                    null
-                                                }
-                                            }
-                                    )
-                            }
-                            .map { it.id }
-                    ShortcutManagerCompat.removeDynamicShortcuts(context, invalidShortcuts)
-
-                    // Push shortcuts
-                    val shortcuts = uuids.mapIndexed { i, uuid ->
-                        playlistShortcut(
-                            context,
-                            "playlist",
-                            uuid,
-                            checkNotNull(playlists[uuid]).displayName,
-                            i + 1,
+                    // A failure during shortcut bookkeeping must not complete this collector
+                    // and freeze every future playlist or index update: log this round and keep
+                    // collecting. Cancellation still propagates.
+                    try {
+                        updatePlaylistShortcuts(
+                            playlists,
+                            sortCollator,
+                            tabSettings[LibraryScreenTabType.PLAYLISTS]!!,
                         )
-                    }
-                    if (!ShortcutManagerCompat.addDynamicShortcuts(context, shortcuts)) {
-                        Log.e("Phocid", "Shortcut update is rate limited")
+                    } catch (ex: CancellationException) {
+                        throw ex
+                    } catch (ex: Exception) {
+                        Log.e("Phocid", "Error updating playlist shortcuts", ex)
                     }
                 }
-                .catch { Log.e("Phocid", "Error updating playlist shortcuts", it) }
                 .collect()
+        }
+    }
+
+    private fun updatePlaylistShortcuts(
+        playlists: Map<UUID, RealizedPlaylist>,
+        sortCollator: Collator,
+        tabSettings: LibraryScreenTabInfo,
+    ) {
+        val uuids =
+            playlists
+                .asIterable()
+                .sortedBy(sortCollator, tabSettings.sortingKeys, tabSettings.sortAscending) {
+                    it.value
+                }
+                .take(ShortcutManagerCompat.getMaxShortcutCountPerActivity(context))
+                .map { it.key }
+                .toSet()
+
+        // Remove extra shortcuts
+        val invalidShortcuts =
+            ShortcutManagerCompat.getDynamicShortcuts(context)
+                .filter { shortcut ->
+                    shortcut.intent.action == SHORTCUT_PLAYLIST &&
+                        !uuids.contains(
+                            shortcut.intent.extras
+                                ?.getString(SHORTCUT_PLAYLIST_EXTRA_KEY)
+                                ?.let {
+                                    try {
+                                        UUID.fromString(it)
+                                    } catch (_: Exception) {
+                                        null
+                                    }
+                                }
+                        )
+                }
+                .map { it.id }
+        ShortcutManagerCompat.removeDynamicShortcuts(context, invalidShortcuts)
+
+        // Push shortcuts
+        val shortcuts = uuids.mapIndexed { i, uuid ->
+            playlistShortcut(
+                context,
+                "playlist",
+                uuid,
+                checkNotNull(playlists[uuid]).displayName,
+                i + 1,
+            )
+        }
+        if (!ShortcutManagerCompat.addDynamicShortcuts(context, shortcuts)) {
+            Log.e("Phocid", "Shortcut update is rate limited")
         }
     }
 
