@@ -98,7 +98,7 @@ class PlayerManager(
         val controller =
             try {
                 withTimeout(CONTROLLER_INITIALIZATION_TIMEOUT_MILLIS) {
-                    suspendCancellableCoroutine { continuation ->
+                    suspendCancellableCoroutine<MediaController> { continuation ->
                         controllerFuture.addListener(
                             {
                                 try {
