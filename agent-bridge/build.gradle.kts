@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import java.time.Duration
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -135,11 +137,11 @@ dependencies {
 // Same bounded-test policy as the app module: a hang must fail with the test name instead
 // of stalling the job.
 tasks.withType<Test>().configureEach {
-    timeout.set(java.time.Duration.ofMinutes(10))
+    timeout.set(Duration.ofMinutes(10))
     testLogging {
         events("started", "failed", "skipped")
         showStandardStreams = false
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        exceptionFormat = TestExceptionFormat.FULL
     }
 }
 

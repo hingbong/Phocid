@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import java.time.Duration
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -205,11 +207,11 @@ dependencies {
 // cancels it, hiding which test hung. Bound the task and log every test start/finish so
 // the last logged test identifies the culprit.
 tasks.withType<Test>().configureEach {
-    timeout.set(java.time.Duration.ofMinutes(10))
+    timeout.set(Duration.ofMinutes(10))
     testLogging {
         events("started", "failed", "skipped")
         showStandardStreams = false
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        exceptionFormat = TestExceptionFormat.FULL
     }
 }
 
