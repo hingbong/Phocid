@@ -107,6 +107,8 @@ android {
     lint {
         // The report-only phase is over: lint findings gate builds again.
         abortOnError = true
+        // Snapshot of pre-existing findings; gating applies to new issues only.
+        baseline = file("lint-baseline.xml")
     }
 
     testOptions {

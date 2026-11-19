@@ -139,6 +139,9 @@ android {
     lint {
         // The report-only phase is over: lint findings gate builds again.
         abortOnError = true
+        // Snapshot of pre-existing findings accumulated while lint was report-only; gating
+        // applies to new issues only. Regenerate with :app:updateLintBaseline after fixing them.
+        baseline = file("lint-baseline.xml")
         // Translation coverage lags behind some locales (see the maintenance backlog);
         // re-enable once coverage is even.
         disable += "MissingTranslation"
