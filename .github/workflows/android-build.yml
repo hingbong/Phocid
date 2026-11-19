@@ -133,7 +133,10 @@ jobs:
       - name: Pinpoint where the unit tests stalled
         # A test that never returns leaves no failing test to report, so surface the last
         # test activity as an annotation: that names the class and method that stalled.
-        if: always()
+        # Only when the test step did not succeed: 'failure' covers failed tests and
+        # 'cancelled' covers the step timeout (a hang). Green or skipped runs must not
+        # emit an ::error:: annotation.
+        if: always() && steps.unit_tests.outcome != 'success' && steps.unit_tests.outcome != 'skipped'
         run: |
           LOG="$RUNNER_TEMP/unit-test.log"
           [ -f "$LOG" ] || exit 0
