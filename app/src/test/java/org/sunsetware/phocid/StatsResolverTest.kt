@@ -45,9 +45,11 @@ class StatsResolverTest {
         db.close()
     }
 
+    // fingerprint is last so plain trailing-lambda call sites keep binding to it; mediaRoots
+    // defaults to none.
     private fun resolver(
-        fingerprint: (TrackMeta) -> String?,
         mediaRoots: () -> List<String> = { emptyList() },
+        fingerprint: (TrackMeta) -> String?,
     ) = TrackResolver(db = db, fingerprint = fingerprint, mediaRoots = mediaRoots)
 
     private fun meta(
@@ -380,7 +382,7 @@ class StatsResolverTest {
             val relRow = insertTrack("Rel")
             putAlias(AliasKind.REL_PATH, relPath!!, relRow)
 
-            val resolver = resolver({ "hash" }, mediaRoots = { roots })
+            val resolver = resolver(mediaRoots = { roots }) { "hash" }
             val resolved = resolver.resolve(meta(file = file))
 
             assertThat(resolved).isEqualTo(hashRow)
@@ -451,10 +453,9 @@ class StatsResolverTest {
             val roots = listOf(temporaryFolder.root.absolutePath)
             val relPath = RelPathKey.of(file.absolutePath, roots)
             val resolver =
-                resolver(
-                    { m -> if (m.modified == 1L) "old-hash" else "new-hash" },
-                    mediaRoots = { roots },
-                )
+                resolver(mediaRoots = { roots }) { m ->
+                    if (m.modified == 1L) "old-hash" else "new-hash"
+                }
             val oldMeta =
                 noIdentityMeta("content://media/external/audio/media/21", 1).copy(file = file)
             val newMeta =

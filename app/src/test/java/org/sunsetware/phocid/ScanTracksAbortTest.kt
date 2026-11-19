@@ -195,7 +195,9 @@ class ScanTracksAbortTest {
                 )
                 .apply {
                     addRow(
-                        arrayOf(
+                        // Explicit Any: a mixed Long/String/Int/Null array would otherwise
+                        // reify to an intersection type, which is a compile error.
+                        arrayOf<Any>(
                             7L,
                             "/nonexistent-music/song.flac",
                             0L,
