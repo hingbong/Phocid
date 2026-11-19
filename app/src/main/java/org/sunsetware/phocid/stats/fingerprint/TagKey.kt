@@ -84,6 +84,13 @@ object TagKey {
  * file name: two different directories can hold the same file name, and a name-only key would link
  * (and, in backups, merge) two unrelated tracks. Identity for such files relies on [TagKey] and the
  * audio hash instead.
+ *
+ * CONTINUITY (G4, pending decision): aliases stored before this change may be basename-only values
+ * from unrooted paths. They are indistinguishable from legitimate keys of files directly under a
+ * media root, old backups still carry them, and restore can still merge two unrelated same-name
+ * tracks through such an alias. No provably safe one-time cleanup exists from stored data alone;
+ * StatsRelPathLegacyAliasTest pins the behavior and documents the migration proposal. Do not delete
+ * stored REL_PATH aliases based on their shape.
  */
 object RelPathKey {
     fun of(absolutePath: String, mediaRoots: List<String>): String? {
