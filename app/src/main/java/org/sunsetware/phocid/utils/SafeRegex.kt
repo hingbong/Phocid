@@ -21,7 +21,7 @@ object SafeRegex {
 
     // Matches a quantified group that is itself quantified, e.g. (a+)+ , (.*)* , (a|b)+?+
     private val NESTED_QUANTIFIER =
-        Regex("""([^()]*[+*][^()]*)s*[+*{]""")
+        Regex("""\([^()]*[+*][^()]*\)\s*[+*{]""")
 
     /** Returns true when [pattern] is accepted as a bounded user rule. */
     fun isValid(pattern: String): Boolean {

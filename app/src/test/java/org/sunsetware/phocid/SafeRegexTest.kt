@@ -9,7 +9,7 @@ class SafeRegexTest {
     @Test
     fun acceptsOrdinaryRules() {
         assertThat(SafeRegex.isValid("^/Music/")).isTrue()
-        assertThat(SafeRegex.isValid("(?i).*\.mp3$")).isTrue()
+        assertThat(SafeRegex.isValid("""(?i).*\.mp3$""")).isTrue()
         assertThat(SafeRegex.compile("^/Music/")).isNotNull()
     }
 

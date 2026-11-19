@@ -283,8 +283,10 @@ class StatsBackupManager(
             day.firstPlayedAt?.let { requireNonNegative(it, "firstPlayedAt") }
             day.dayStartMs?.let { requireNonNegative(it, "dayStartMs") }
             day.dayEndMs?.let { requireNonNegative(it, "dayEndMs") }
-            if (day.dayStartMs != null && day.dayEndMs != null) {
-                require(day.dayStartMs <= day.dayEndMs) { "Backup daily row has dayStartMs > dayEndMs" }
+            val startMs = day.dayStartMs
+            val endMs = day.dayEndMs
+            if (startMs != null && endMs != null) {
+                require(startMs <= endMs) { "Backup daily row has dayStartMs > dayEndMs" }
             }
             day.utcOffsetMinutes?.let { offset ->
                 require(offset in -StatsBackup.MAX_UTC_OFFSET_MINUTES..StatsBackup.MAX_UTC_OFFSET_MINUTES) {

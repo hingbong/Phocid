@@ -237,9 +237,7 @@ interface TrackDailyDao {
      * Loads only the daily rows relevant to a merge restore, in bounded chunks so the generated
      * IN clauses stay below SQLite's parameter limit. Avoids scanning the whole track_daily table.
      */
-    @Query(
-        "SELECT * FROM track_daily WHERE trackRowId IN (:rowIds) AND epochDay IN (:epochDays)"
-    )
+    @Query("SELECT * FROM track_daily WHERE trackRowId IN (:rowIds) AND epochDay IN (:epochDays)")
     suspend fun byKeys(rowIds: List<Long>, epochDays: List<Int>): List<TrackDailyEntity>
 
     /** Merge loser's days into winner. Overlapping days are summed. */
@@ -346,6 +344,8 @@ interface TrackDailyDao {
         localUriKind: Int,
     ): Flow<List<TrackAggregate>>
 
+    // Mixed-timezone restores can produce different local-day boundaries for the same epochDay.
+    // The union of a day's boundaries ends at the latest end, hence MAX(dayEndMs) (not MIN).
     @Query(
         """
         SELECT epochDay AS epochDay,
@@ -360,8 +360,6 @@ interface TrackDailyDao {
                SUM(skipCount) AS skipCount,
                SUM(completedMillis) AS completedMillis,
                MIN(dayStartMs) AS dayStartMs,
-               -- Mixed-timezone restores can produce different local-day boundaries for the
-               -- same epochDay. The union ends at the latest end, not the earliest one.
                MAX(dayEndMs) AS dayEndMs,
                MIN(utcOffsetMinutes) AS utcOffsetMinutes
         FROM track_daily
