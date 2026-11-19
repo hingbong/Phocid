@@ -133,4 +133,22 @@ class ScanCoalescerTest {
         val result = coalesceUnchangedScan(null, "v", mapOf(InvalidTrack.id to InvalidTrack))
         assertThat(result.tracks).hasSize(1)
     }
+
+    @Test
+    fun changedParseFingerprintRestampsTheSurvivingIndex() {
+        val old =
+            UnfilteredTrackIndex("v", mapOf(InvalidTrack.id to InvalidTrack), parseFingerprint = 1)
+        val result = coalesceUnchangedScan(old, "v", old.tracks, parseFingerprint = 2)
+        assertThat(result).isNotSameAs(old)
+        assertThat(result.parseFingerprint).isEqualTo(2L)
+        assertThat(result.tracks).isEqualTo(old.tracks)
+    }
+
+    @Test
+    fun unchangedParseFingerprintKeepsTheOldInstance() {
+        val old =
+            UnfilteredTrackIndex("v", mapOf(InvalidTrack.id to InvalidTrack), parseFingerprint = 1)
+        val result = coalesceUnchangedScan(old, "v", old.tracks, parseFingerprint = 1)
+        assertThat(result).isSameAs(old)
+    }
 }

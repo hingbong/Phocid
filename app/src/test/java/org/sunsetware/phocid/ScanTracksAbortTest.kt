@@ -111,6 +111,51 @@ class ScanTracksAbortTest {
         assertThat(reports.last()).isEqualTo(1 to 1)
     }
 
+    @Test
+    fun parseSettingsChangeInvalidatesTheScanCache() = runBlocking<Unit> {
+        grantReadPermission()
+        Robolectric.buildContentProvider(OneCrudeRowProvider::class.java).create("media")
+        val context = RuntimeEnvironment.getApplication()
+        val oldTrack =
+            InvalidTrack.copy(id = 7L, version = 1L, path = "/nonexistent-music/song.flac")
+        val old =
+            UnfilteredTrackIndex("test-version", mapOf(7L to oldTrack), parseFingerprint = 1L)
+
+        // Same parse settings: the matching row is reused without touching the file, so the
+        // scan hands back the old index instance.
+        val reused =
+            scanTracks(
+                context,
+                false,
+                false,
+                old,
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                parseFingerprint = 1L,
+            ) { _, _ -> }
+        assertThat(reused).isSameAs(old)
+
+        // Different settings: every row must be re-read. The file is missing, so the row is
+        // dropped and the fresh index carries the new fingerprint.
+        val reparsed =
+            scanTracks(
+                context,
+                false,
+                false,
+                old,
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                parseFingerprint = 2L,
+            ) { _, _ -> }
+        assertThat(reparsed).isNotSameAs(old)
+        assertThat(reparsed!!.tracks).isEmpty()
+        assertThat(reparsed.parseFingerprint).isEqualTo(2L)
+    }
+
     class NullCursorProvider : ContentProvider() {
         override fun onCreate(): Boolean = true
 

@@ -24,6 +24,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import org.sunsetware.phocid.data.Lyrics
 import org.sunsetware.phocid.data.PlayerManager
 import org.sunsetware.phocid.data.Preferences
+import org.sunsetware.phocid.data.scanParseFingerprint
 import org.sunsetware.phocid.data.scanTracks
 import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.ui.components.ArtworkCache
@@ -154,16 +155,26 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
                             }
                         }
 
+                        val currentPreferences = preferences.value
                         val newTrackIndex =
                             scanTracks(
                                 application.applicationContext,
-                                preferences.value.advancedMetadataExtraction,
-                                preferences.value.disableArtworkColorExtraction,
+                                currentPreferences.advancedMetadataExtraction,
+                                currentPreferences.disableArtworkColorExtraction,
                                 if (force) null else unfilteredTrackIndex.value,
-                                preferences.value.artistMetadataSeparators,
-                                preferences.value.artistMetadataSeparatorExceptions,
-                                preferences.value.genreMetadataSeparators,
-                                preferences.value.genreMetadataSeparatorExceptions,
+                                currentPreferences.artistMetadataSeparators,
+                                currentPreferences.artistMetadataSeparatorExceptions,
+                                currentPreferences.genreMetadataSeparators,
+                                currentPreferences.genreMetadataSeparatorExceptions,
+                                parseFingerprint =
+                                    scanParseFingerprint(
+                                        currentPreferences.advancedMetadataExtraction,
+                                        currentPreferences.disableArtworkColorExtraction,
+                                        currentPreferences.artistMetadataSeparators,
+                                        currentPreferences.artistMetadataSeparatorExceptions,
+                                        currentPreferences.genreMetadataSeparators,
+                                        currentPreferences.genreMetadataSeparatorExceptions,
+                                    ),
                             ) { current, total ->
                                 _libraryScanProgress.update { current to total }
                             }

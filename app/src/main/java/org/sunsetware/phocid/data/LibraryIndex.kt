@@ -1066,6 +1066,13 @@ data class UnfilteredTrackIndex(
     val version: String?,
     val tracks: Map<Long, Track>,
     /**
+     * Fingerprint of the parse settings (separator lists, extraction flags) that produced
+     * [tracks]. Part of the scan cache key: a non-forced scan may only reuse rows whose
+     * fingerprint matches the settings in effect, so changing settings re-reads the files.
+     * Older saves decode with null and are re-read exactly once.
+     */
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val parseFingerprint: Long? = null,
+    /**
      * Automatically assigned monotonically increasing value, used for syncing updates between the
      * flow of [UnfilteredTrackIndex] and [LibraryIndex].
      */
@@ -1326,9 +1333,38 @@ internal fun coalesceUnchangedScan(
     old: UnfilteredTrackIndex?,
     version: String?,
     tracks: Map<Long, Track>,
-): UnfilteredTrackIndex =
-    if (old != null && version == old.version && tracks == old.tracks) old
-    else UnfilteredTrackIndex(version, tracks)
+    parseFingerprint: Long? = null,
+): UnfilteredTrackIndex {
+    if (old != null && version == old.version && tracks == old.tracks) {
+        // Keep the identical instance (same flowVersion, no derived rebuild) unless the parse
+        // fingerprint changed and needs restamping onto the surviving index.
+        return if (old.parseFingerprint == parseFingerprint) old
+        else old.copy(parseFingerprint = parseFingerprint)
+    }
+    return UnfilteredTrackIndex(version, tracks, parseFingerprint)
+}
+
+/**
+ * Fingerprint of every setting that influences how a file is parsed during a scan. Part of the
+ * scan cache key: a cached row may only be reused when the old index was built with the same
+ * fingerprint, so changing separators or extraction flags invalidates the whole cache.
+ */
+internal fun scanParseFingerprint(
+    advancedMetadataExtraction: Boolean,
+    disableArtworkColorExtraction: Boolean,
+    artistSeparators: List<String>,
+    artistSeparatorExceptions: List<String>,
+    genreSeparators: List<String>,
+    genreSeparatorExceptions: List<String>,
+): Long {
+    var result = if (advancedMetadataExtraction) 1L else 0L
+    result = 31L * result + (if (disableArtworkColorExtraction) 1L else 0L)
+    result = 31L * result + artistSeparators.hashCode()
+    result = 31L * result + artistSeparatorExceptions.hashCode()
+    result = 31L * result + genreSeparators.hashCode()
+    result = 31L * result + genreSeparatorExceptions.hashCode()
+    return result
+}
 
 suspend fun scanTracks(
     context: Context,
@@ -1339,6 +1375,7 @@ suspend fun scanTracks(
     artistSeparatorExceptions: List<String>,
     genreSeparators: List<String>,
     genreSeparatorExceptions: List<String>,
+    parseFingerprint: Long? = null,
     onProgressReport: (Int, Int) -> Unit,
 ): UnfilteredTrackIndex? {
     if (
@@ -1361,6 +1398,10 @@ suspend fun scanTracks(
     // of publishing an empty library as if every track had vanished.
     if (query == null) return null
 
+    // Cache reuse is only valid when the old rows were parsed with the settings in effect now;
+    // a settings change must re-read every file even though MediaStore did not change.
+    val cacheableOld = if (old?.parseFingerprint == parseFingerprint) old else null
+
     val tracks = ConcurrentLinkedQueue<Track>()
     val crudeTracks = ConcurrentLinkedQueue<Track>()
     var maxSize = 0L
@@ -1376,7 +1417,7 @@ suspend fun scanTracks(
                     .trimAndNormalize()
                     .let { FilenameUtils.normalize(it) }
                     .let { FilenameUtils.separatorsToUnix(it) }
-            val oldIndex = old?.tracks?.get(id)
+            val oldIndex = cacheableOld?.tracks?.get(id)
 
             if (oldIndex?.version == trackVersion && oldIndex.path == path) {
                 tracks += oldIndex
@@ -1484,7 +1525,7 @@ suspend fun scanTracks(
         }
     }
 
-    return coalesceUnchangedScan(old, libraryVersion, tracks.associateBy { it.id })
+    return coalesceUnchangedScan(old, libraryVersion, tracks.associateBy { it.id }, parseFingerprint)
 }
 
 private val originalYearFieldNames =
