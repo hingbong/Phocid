@@ -1316,6 +1316,20 @@ private val contentResolverColumns =
     )
 
 @Suppress("DEPRECATION")
+/**
+ * Returns [old] unchanged when a scan produced exactly the same library (same MediaStore
+ * generation and same tracks). Returning the identical instance keeps its
+ * [UnfilteredTrackIndex] flowVersion, so no new derived [LibraryIndex] is built, no
+ * flowVersion-based sync waits, and no CBOR save is re-serialised for an unchanged library.
+ */
+internal fun coalesceUnchangedScan(
+    old: UnfilteredTrackIndex?,
+    version: String?,
+    tracks: Map<Long, Track>,
+): UnfilteredTrackIndex =
+    if (old != null && version == old.version && tracks == old.tracks) old
+    else UnfilteredTrackIndex(version, tracks)
+
 suspend fun scanTracks(
     context: Context,
     advancedMetadataExtraction: Boolean,
@@ -1461,7 +1475,7 @@ suspend fun scanTracks(
         }
     }
 
-    return UnfilteredTrackIndex(libraryVersion, tracks.associateBy { it.id })
+    return coalesceUnchangedScan(old, libraryVersion, tracks.associateBy { it.id })
 }
 
 private val originalYearFieldNames =

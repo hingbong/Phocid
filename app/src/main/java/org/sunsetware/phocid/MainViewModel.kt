@@ -18,8 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -30,6 +28,7 @@ import org.sunsetware.phocid.data.scanTracks
 import org.sunsetware.phocid.globals.GlobalData
 import org.sunsetware.phocid.ui.components.ArtworkCache
 import org.sunsetware.phocid.ui.views.library.LibraryScreenTabInfo
+import org.sunsetware.phocid.utils.ScanCoalescer
 import org.sunsetware.phocid.utils.externalStorageRoots
 
 private const val MEDIA_SCAN_TIMEOUT_MILLIS = 30_000L
@@ -39,7 +38,7 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
     private val _initialized = MutableStateFlow(false)
     val initialized = _initialized.asStateFlow()
     private val initializationStarted = AtomicBoolean(false)
-    private val scanMutex = Mutex()
+    private val scanCoalescer = ScanCoalescer()
 
     lateinit var playerManager: PlayerManager
     lateinit var uiManager: UiManager
@@ -122,9 +121,10 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
     fun scanLibrary(force: Boolean): Job {
         return viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                // withLock suspends instead of busy-waiting on a contended scan, and always
-                // releases the mutex even if the scan throws.
-                scanMutex.withLock {
+                // Coalesce contended scans: a caller that arrives while a scan is in flight
+                // waits for that scan and returns instead of queueing another full scan.
+                // Forced (manual) scans still run after the in-flight one completes.
+                scanCoalescer.scan(force) {
                     Log.d("Phocid", "Library scan started")
                     try {
                         _libraryScanProgress.update { null }
