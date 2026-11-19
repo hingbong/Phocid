@@ -39,14 +39,15 @@ class Media3BrowseTest {
                     PlaylistEntry(playlistId, "/c"),
                 ),
             )
-        val playlists = mapOf(playlistId to RealizedPlaylist(playlistId, "list", entries, 0))
+        val playlists = mapOf(playlistId to RealizedPlaylist(null, "list", entries, 0))
         val collator = Collator.getInstance(Locale.ROOT).freeze()
         val libraryIndex =
             LibraryIndex(UnfilteredTrackIndex(null, emptyMap()), collator, emptyList(), emptyList())
+        val parentId = "playlists:$playlistId"
+        val children =
+            getChildMediaItems(Preferences(), libraryIndex, playlists, parentId).orEmpty()
 
-        val items = getChildMediaItems(Preferences(), libraryIndex, playlists, "playlists:$playlistId")
-
-        assertThat(items).hasSize(2)
-        assertThat(items.map { it.mediaId }).containsOnly(InvalidTrack.id.toString())
+        assertThat(children).hasSize(2)
+        assertThat(children.map { it.mediaId }).containsOnly(InvalidTrack.id.toString())
     }
 }
