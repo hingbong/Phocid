@@ -40,7 +40,12 @@ fun String.firstCharacter(): String? {
 fun ByteArray.decodeWithCharsetName(charsetName: String?): String {
     if (!charsetName.isNullOrBlank() && Charset.isSupported(charsetName)) {
         return runCatching {
-            Charset.forName(charsetName).decode(ByteBuffer.wrap(this)).toString()
+            // An explicit charset can still leave a decoded BOM in the output (UTF-8 does);
+            // strip it the way decodeDetected does so playlist and lyric parsers never see one.
+            Charset.forName(charsetName)
+                .decode(ByteBuffer.wrap(this))
+                .toString()
+                .removePrefix("\uFEFF")
         }
             .getOrElse { decodeDetected() }
     }
