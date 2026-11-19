@@ -259,27 +259,27 @@ class McpServer(
 
     /**
      * Non-loopback binds serve local agent clients only. Browsers always send Origin on
-     * cross-origin calls and agents never do, so an Origin header means a web page; and a
-     * DNS-rebinding page resolving to this device keeps its original (non-IP or loopback) Host.
-     * Reject both instead of relying on CORS, which this server does not emit.
+     * cross-origin calls and agents never do, so an Origin header means a web page. A DNS-rebinding
+     * page resolves its attacker hostname to this device but keeps that hostname in Host, so Host
+     * must be an IP literal (loopback for adb-forward clients, the device's LAN IP for network
+     * agents) or `localhost`; foreign hostnames are the rebinding vector and get
+     * 421. Reject instead of relying on CORS, which this server does not emit.
      */
     private fun guardNonLoopbackRequests(request: Request) {
         if (loopbackBind) return
         if (request.headers["origin"] != null) {
             throw HttpError(403, "Browser origins are not accepted")
         }
+        val rawHost = (request.headers["host"] ?: "").trim()
+        // Strip the port without corrupting IPv6 literals: bracketed form is [::1]:port, a
+        // single colon means host:port, and anything else is a bare IPv6 literal or hostname.
         val hostPart =
-            (request.headers["host"] ?: "")
-                .substringBeforeLast(':')
-                .removePrefix("[")
-                .removeSuffix("]")
-                .lowercase(Locale.ROOT)
-        if (
-            hostPart.isEmpty() ||
-                hostPart == "localhost" ||
-                hostPart == "127.0.0.1" ||
-                hostPart == "::1"
-        ) {
+            when {
+                rawHost.startsWith("[") -> rawHost.removePrefix("[").substringBefore(']')
+                rawHost.count { it == ':' } == 1 -> rawHost.substringBefore(':')
+                else -> rawHost
+            }.lowercase(Locale.ROOT)
+        if (hostPart != "localhost" && !BridgeEndpoint.isNumericHost(hostPart)) {
             throw HttpError(421, "Misdirected request")
         }
     }

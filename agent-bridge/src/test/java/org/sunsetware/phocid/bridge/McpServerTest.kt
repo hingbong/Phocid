@@ -306,13 +306,77 @@ class McpServerTest {
     }
 
     @Test
-    fun nonLoopbackBindRejectsLoopbackHosts() {
+    fun nonLoopbackBindAcceptsLoopbackHosts() {
+        // adb-forward clients reach a 0.0.0.0 bind with a loopback Host; that is legitimate,
+        // not a rebinding signal. The guard must accept loopback literals and localhost.
+        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        lanServer.start()
+        try {
+            for (host in listOf("127.0.0.1", "localhost", "127.0.0.1:8765", "[::1]:8765", "::1")) {
+                val response =
+                    request(
+                        "GET /health HTTP/1.1\r\nHost: $host\r\nAuthorization: Bearer $TOKEN\r\n\r\n",
+                        lanServer,
+                    )
+                assertEquals("Host: $host", 200, response.status)
+            }
+        } finally {
+            lanServer.stop()
+        }
+    }
+
+    @Test
+    fun nonLoopbackBindRejectsRebindingHostnames() {
+        // DNS rebinding: an attacker hostname resolves to this device, and the browser page
+        // keeps that hostname in Host. Even with a valid token, foreign hostnames get 421.
+        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        lanServer.start()
+        try {
+            for (host in
+                listOf("evil.example", "rebind.attacker.example:8765", "localhost.evil.example")) {
+                val response =
+                    request(
+                        "GET /health HTTP/1.1\r\nHost: $host\r\nAuthorization: Bearer $TOKEN\r\n\r\n",
+                        lanServer,
+                    )
+                assertEquals("Host: $host", 421, response.status)
+            }
+        } finally {
+            lanServer.stop()
+        }
+    }
+
+    @Test
+    fun nonLoopbackBindRejectsRebindingHostOnMcpBeforeAuth() {
+        val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
+        lanServer.start()
+        try {
+            val payload = """{"jsonrpc":"2.0","id":1,"method":"ping"}"""
+            val response =
+                request(
+                    "POST /mcp HTTP/1.1\r\n" +
+                        "Host: evil.example\r\n" +
+                        "Authorization: Bearer $TOKEN\r\n" +
+                        "Content-Type: application/json\r\n" +
+                        "Content-Length: ${payload.toByteArray(StandardCharsets.UTF_8).size}\r\n" +
+                        "\r\n" +
+                        payload,
+                    lanServer,
+                )
+            assertEquals(421, response.status)
+        } finally {
+            lanServer.stop()
+        }
+    }
+
+    @Test
+    fun nonLoopbackBindRejectsMissingHost() {
         val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
         lanServer.start()
         try {
             val response =
                 request(
-                    "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer $TOKEN\r\n\r\n",
+                    "GET /health HTTP/1.1\r\nAuthorization: Bearer $TOKEN\r\n\r\n",
                     lanServer,
                 )
             assertEquals(421, response.status)
@@ -326,12 +390,14 @@ class McpServerTest {
         val lanServer = McpServer("0.0.0.0", 0, tokenProvider = { TOKEN })
         lanServer.start()
         try {
-            val response =
-                request(
-                    "GET /health HTTP/1.1\r\nHost: 192.168.1.50\r\nAuthorization: Bearer $TOKEN\r\n\r\n",
-                    lanServer,
-                )
-            assertEquals(200, response.status)
+            for (host in listOf("192.168.1.50", "192.168.1.50:8765")) {
+                val response =
+                    request(
+                        "GET /health HTTP/1.1\r\nHost: $host\r\nAuthorization: Bearer $TOKEN\r\n\r\n",
+                        lanServer,
+                    )
+                assertEquals("Host: $host", 200, response.status)
+            }
         } finally {
             lanServer.stop()
         }

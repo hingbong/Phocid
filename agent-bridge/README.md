@@ -310,8 +310,10 @@ frozen client from a frozen server.
 - The bridge does not make outbound network requests.
 - The bridge is not consumable from browser pages: no endpoint sends CORS
   headers. On non-loopback binds, requests carrying an `Origin` header are
-  rejected (403), and `Host` headers naming a loopback address are refused
-  (421), which also closes DNS-rebinding pages that resolve to this device.
+  rejected (403), and `Host` headers that are neither `localhost` nor an IP
+  literal are refused (421). DNS-rebinding pages keep their attacker
+  hostname in `Host`, so they are blocked, while adb-forward clients
+  (`Host: 127.0.0.1`) and LAN agents (`Host: <device IP>`) still work.
 - MCP protocol negotiation returns the revision the server implements
   (`2025-03-26`) instead of echoing whatever the client asked for.
 - The bridge is a separate UID; the main APK still has no `INTERNET` permission.
