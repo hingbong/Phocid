@@ -11,8 +11,9 @@ import kotlinx.coroutines.sync.withLock
  * queueing another full scan behind it, so rapid repeat triggers (activity RESUMED events, a
  * permission grant racing a lifecycle trigger) cannot multiply the work. Requests with [scan]'s
  * [force] flag still run after the in-flight scan completes, because a manual rescan must not be
- * silently dropped. If the in-flight scan fails, waiters run their own scan, so a failure is
- * retried instead of being reported as done.
+ * silently dropped. If the in-flight scan fails without completing, exactly one waiter retries
+ * under the scan lock and the remaining waiters coalesce into that retry, so a failure cannot
+ * stampede every waiter into its own duplicate full scan.
  */
 class ScanCoalescer {
     private val mutex = Mutex()
@@ -36,18 +37,20 @@ class ScanCoalescer {
             }
             return true
         }
-        // Wait for the in-flight scan to finish. The empty critical section only parks this
-        // coroutine until the lock is free; it holds no state.
-        mutex.withLock {}
-        if (force || generation.get() == generationBeforeQueueing) {
-            // Either the caller explicitly asked for a fresh scan, or the in-flight scan failed
-            // without completing: run one ourselves.
-            mutex.withLock {
+        // Wait for the in-flight scan, then re-check the generation and run any needed scan in
+        // the SAME critical section. A failed in-flight scan leaves the generation unchanged, so
+        // the first waiter to acquire the lock retries; its retry bumps the generation before the
+        // lock is released, so every later waiter observes a completed scan and coalesces instead
+        // of queueing its own duplicate retry. If the retry itself fails, the generation again
+        // stays unchanged and exactly the next waiter retries.
+        return mutex.withLock {
+            if (force || generation.get() == generationBeforeQueueing) {
                 scanWork()
                 generation.incrementAndGet()
+                true
+            } else {
+                false
             }
-            return true
         }
-        return false
     }
 }

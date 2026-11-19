@@ -1,6 +1,7 @@
 package org.sunsetware.phocid
 
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
@@ -114,6 +115,157 @@ class ScanCoalescerTest {
             first.join()
             second.join()
             assertThat(scans.get()).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun failedInFlightScanTriggersOnlyOneCoalescedRetry() {
+        runBlocking {
+            val coalescer = ScanCoalescer()
+            val scans = AtomicInteger(0)
+            val scanStarted = CompletableDeferred<Unit>()
+            val finishScan = CompletableDeferred<Unit>()
+            val firstFailure = CompletableDeferred<Throwable>()
+            val waiterResults = List(3) { CompletableDeferred<Boolean>() }
+
+            // UNDISPATCHED so the request reaches the contended lock before the driver resumes.
+            val first =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    firstFailure.complete(
+                        runCatching {
+                            coalescer.scan(false) {
+                                scanStarted.complete(Unit)
+                                finishScan.await()
+                                throw IllegalStateException("scan failed")
+                            }
+                        }
+                            .exceptionOrNull()!!
+                    )
+                }
+            scanStarted.await()
+
+            // All waiters park behind the in-flight scan before it fails, so they all observe the
+            // same unchanged generation. Only one of them may retry; the rest must coalesce into
+            // that retry instead of each running a duplicate full scan.
+            val waiters = waiterResults.map { result ->
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    result.complete(coalescer.scan(false) { scans.incrementAndGet() })
+                }
+            }
+            finishScan.complete(Unit)
+
+            first.join()
+            waiters.forEach { it.join() }
+            assertThat(firstFailure.await()).isInstanceOf(IllegalStateException::class.java)
+            assertThat(scans.get()).isEqualTo(1)
+            assertThat(waiterResults.map { it.await() }).containsExactly(true, false, false)
+        }
+    }
+
+    @Test
+    fun failedRetryHandsOffToTheNextWaiterOnce() {
+        runBlocking {
+            val coalescer = ScanCoalescer()
+            val scans = AtomicInteger(0)
+            val scanStarted = CompletableDeferred<Unit>()
+            val finishScan = CompletableDeferred<Unit>()
+            val firstFailure = CompletableDeferred<Throwable>()
+            val retryFailure = CompletableDeferred<Throwable>()
+            val secondWaiterResult = CompletableDeferred<Boolean>()
+            val thirdWaiterResult = CompletableDeferred<Boolean>()
+
+            // UNDISPATCHED so the request reaches the contended lock before the driver resumes.
+            val first =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    firstFailure.complete(
+                        runCatching {
+                            coalescer.scan(false) {
+                                scanStarted.complete(Unit)
+                                finishScan.await()
+                                throw IllegalStateException("scan failed")
+                            }
+                        }
+                            .exceptionOrNull()!!
+                    )
+                }
+            scanStarted.await()
+
+            // The first waiter's retry fails too: exactly the next waiter retries, and the third
+            // coalesces into that successful retry. Each failure yields one retry, never N.
+            val retryingWaiter =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    retryFailure.complete(
+                        runCatching {
+                            coalescer.scan(false) {
+                                scans.incrementAndGet()
+                                throw IllegalStateException("retry failed")
+                            }
+                        }
+                            .exceptionOrNull()!!
+                    )
+                }
+            val secondWaiter =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    secondWaiterResult.complete(coalescer.scan(false) { scans.incrementAndGet() })
+                }
+            val thirdWaiter =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    thirdWaiterResult.complete(coalescer.scan(false) { scans.incrementAndGet() })
+                }
+            finishScan.complete(Unit)
+
+            first.join()
+            retryingWaiter.join()
+            secondWaiter.join()
+            thirdWaiter.join()
+            assertThat(firstFailure.await()).isInstanceOf(IllegalStateException::class.java)
+            assertThat(retryFailure.await()).isInstanceOf(IllegalStateException::class.java)
+            assertThat(scans.get()).isEqualTo(2)
+            assertThat(secondWaiterResult.await()).isTrue()
+            assertThat(thirdWaiterResult.await()).isFalse()
+        }
+    }
+
+    @Test
+    fun cancelledInFlightScanPropagatesAndRetriesOnce() {
+        runBlocking {
+            val coalescer = ScanCoalescer()
+            val scans = AtomicInteger(0)
+            val scanStarted = CompletableDeferred<Unit>()
+            val finishScan = CompletableDeferred<Unit>()
+            val firstFailure = CompletableDeferred<Throwable>()
+            val waiterResults = List(2) { CompletableDeferred<Boolean>() }
+
+            // UNDISPATCHED so the request reaches the contended lock before the driver resumes.
+            val first =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    firstFailure.complete(
+                        runCatching {
+                            coalescer.scan(false) {
+                                scanStarted.complete(Unit)
+                                finishScan.await()
+                                throw CancellationException("scan cancelled")
+                            }
+                        }
+                            .exceptionOrNull()!!
+                    )
+                }
+            scanStarted.await()
+
+            val waiters = waiterResults.map { result ->
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    result.complete(coalescer.scan(false) { scans.incrementAndGet() })
+                }
+            }
+            finishScan.complete(Unit)
+
+            first.join()
+            waiters.forEach { it.join() }
+            // CancellationException must reach the caller unswallowed, and the waiters still
+            // coalesce into a single retry.
+            assertThat(firstFailure.await()).isInstanceOf(CancellationException::class.java)
+            assertThat(scans.get()).isEqualTo(1)
+            assertThat(waiterResults.map { it.await() }).containsExactly(true, false)
         }
     }
 
