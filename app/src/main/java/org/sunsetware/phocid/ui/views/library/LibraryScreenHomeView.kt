@@ -142,9 +142,35 @@ data class LibraryScreenHomeViewItem(
     }
 }
 
-/** The tab type whose item flow must stay hot while the pager settles towards [page]. */
-internal fun activeTabTypeFor(page: Int, preferences: Preferences): LibraryScreenTabType? =
-    preferences.tabs.getOrNull(page)?.type
+/**
+ * The tab types whose item flows must stay hot: the page the pager is currently showing and the
+ * page it is settling towards. During a tab-change animation `targetPage` flips immediately while
+ * the departing page (`currentPage`) is still fully visible, so both must keep their items (and
+ * selection) until the settle completes; afterwards the two coincide and only one tab stays hot.
+ */
+internal fun activeTabTypesFor(
+    currentPage: Int,
+    targetPage: Int,
+    preferences: Preferences,
+): Set<LibraryScreenTabType> =
+    setOfNotNull(
+        preferences.tabs.getOrNull(currentPage)?.type,
+        preferences.tabs.getOrNull(targetPage)?.type,
+    )
+
+/**
+ * Subscribes [rawItems] only while [tabType] is one of the active tab types. flatMapLatest
+ * unsubscribes the raw flow otherwise, so its WhileSubscribed sharing stops and nothing is
+ * searched, sorted, or hinted while that tab is neither visible nor settling into view.
+ */
+internal fun <T> StateFlow<Set<LibraryScreenTabType>>.gateTabItems(
+    tabType: LibraryScreenTabType,
+    flowScope: CoroutineScope,
+    rawItems: StateFlow<List<T>>,
+): StateFlow<List<T>> =
+    flatMapLatest(flowScope) { active ->
+        if (tabType in active) rawItems else MutableStateFlow(emptyList())
+    }
 
 class LibraryScreenHomeViewState(
     coroutineScope: CoroutineScope,
@@ -162,14 +188,21 @@ class LibraryScreenHomeViewState(
      */
     private val flowScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** The page the pager is settling towards, as a flow, so per-tab computation can be gated. */
-    private val _activePage = MutableStateFlow(0)
+    /**
+     * The pages the pager is showing and settling towards, as a flow, so per-tab computation can be
+     * gated. Both are tracked: keeping only `targetPage` hot would blank the departing page
+     * mid-animation.
+     */
+    private val _activePages = MutableStateFlow(0 to 0)
     private val activePageJob = coroutineScope.launch {
-        snapshotFlow { pagerState.targetPage }.collect { _activePage.value = it }
+        snapshotFlow { pagerState.currentPage to pagerState.targetPage }
+            .collect { _activePages.value = it }
     }
 
-    private val activeTabType =
-        _activePage.combine(flowScope, preferences, transform = ::activeTabTypeFor)
+    private val activeTabTypes =
+        _activePages.combine(flowScope, preferences) { (currentPage, targetPage), prefs ->
+            activeTabTypesFor(currentPage, targetPage, prefs)
+        }
 
     val tabStates =
         LibraryScreenTabType.entries.associateWith { tabType ->
@@ -204,14 +237,9 @@ class LibraryScreenHomeViewState(
                     )
                 }
 
-            // Only the tab the pager is settling towards stays subscribed. flatMapLatest
-            // unsubscribes every other tab's raw flow, so its WhileSubscribed sharing stops and
-            // nothing is searched, sorted, or hinted while that tab is not visible.
-            val items =
-                activeTabType.flatMapLatest(flowScope) { active ->
-                    if (active == tabType) rawItems
-                    else MutableStateFlow(emptyList<LibraryScreenHomeViewItem>())
-                }
+            // Only the visible page and the page being settled towards stay subscribed; every
+            // other tab receives a cheap empty list and computes nothing.
+            val items = activeTabTypes.gateTabItems(tabType, flowScope, rawItems)
 
             LibraryScreenHomeViewTabState(MultiSelectState(coroutineScope, items))
         }
