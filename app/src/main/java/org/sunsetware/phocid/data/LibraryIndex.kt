@@ -1356,11 +1356,16 @@ suspend fun scanTracks(
             null,
             "${Media._ID} ASC",
         )
+    // A null cursor means the MediaStore query itself failed (permission revoked between the
+    // check and the query, provider unavailable): abort and keep the caller's old index instead
+    // of publishing an empty library as if every track had vanished.
+    if (query == null) return null
+
     val tracks = ConcurrentLinkedQueue<Track>()
     val crudeTracks = ConcurrentLinkedQueue<Track>()
     var maxSize = 0L
 
-    query?.use { cursor ->
+    query.use { cursor ->
         val ci = contentResolverColumns.associateWith { cursor.getColumnIndexOrThrow(it) }
         while (cursor.moveToNext()) {
             val id = cursor.getLong(ci[Media._ID]!!)
@@ -1468,10 +1473,14 @@ suspend fun scanTracks(
                 }
             }
         launch {
-            while (jobs.all { it.isActive }) {
+            // Report while any worker is still running: the old all-of check stopped as soon
+            // as one worker finished, freezing the progress bar mid-scan. Always finish with
+            // the terminal (total, total) state so listeners can complete their progress UI.
+            while (jobs.any { it.isActive }) {
                 onProgressReport(progressCurrent.get(), progressTotal)
                 delay(100.milliseconds)
             }
+            onProgressReport(progressTotal, progressTotal)
         }
     }
 

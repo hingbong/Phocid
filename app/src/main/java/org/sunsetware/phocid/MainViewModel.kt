@@ -179,7 +179,10 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
                             }
                             Log.d("Phocid", "Library scan completed")
                         } else {
-                            Log.d("Phocid", "Library scan aborted: permission denied")
+                            Log.d(
+                                "Phocid",
+                                "Library scan aborted: MediaStore query failed or permission denied",
+                            )
                         }
                         playlistManager.syncPlaylists()
                     } finally {
