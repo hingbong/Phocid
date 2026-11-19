@@ -2,28 +2,6 @@
 <issues format="6" by="lint 9.5.0" type="baseline" client="gradle" dependencies="false" name="AGP (9.5.0)" variant="all" version="9.5.0">
 
     <issue
-        id="MissingExplicitUriGrant"
-        message="This intent attaches a URI but is missing `FLAG_GRANT_READ_URI_PERMISSION`; the receiving app will not be granted access to the URI on Android 18 and higher"
-        errorLine1="                Intent().apply {"
-        errorLine2="                ~~~~~~~~">
-        <location
-            file="src/main/java/org/sunsetware/phocid/MainActivity.kt"
-            line="318"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingExplicitUriGrant"
-        message="This intent attaches a URI but is missing `FLAG_GRANT_READ_URI_PERMISSION`; the receiving app will not be granted access to the URI on Android 18 and higher"
-        errorLine1="                Intent().apply {"
-        errorLine2="                ~~~~~~~~">
-        <location
-            file="src/main/java/org/sunsetware/phocid/MainActivity.kt"
-            line="328"
-            column="17"/>
-    </issue>
-
-    <issue
         id="MissingIntentFilterForMediaSearch"
         message="Missing `intent-filter` for action `android.media.action.MEDIA_PLAY_FROM_SEARCH`."
         errorLine1="    &lt;application"
@@ -393,7 +371,7 @@
         errorLine2="             ~~~">
         <location
             file="src/main/java/org/sunsetware/phocid/ui/views/player/PlayerScreen.kt"
-            line="184"
+            line="185"
             column="14"/>
     </issue>
 
@@ -404,7 +382,7 @@
         errorLine2="                            ~~~">
         <location
             file="src/main/java/org/sunsetware/phocid/ui/views/player/PlayerScreen.kt"
-            line="187"
+            line="188"
             column="29"/>
     </issue>
 
@@ -415,7 +393,7 @@
         errorLine2="                            ~~~">
         <location
             file="src/main/java/org/sunsetware/phocid/ui/views/player/PlayerScreen.kt"
-            line="189"
+            line="190"
             column="29"/>
     </issue>
 
@@ -624,7 +602,7 @@
         errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/org/sunsetware/phocid/data/Playlist.kt"
-            line="208"
+            line="206"
             column="14"/>
     </issue>
 
@@ -635,7 +613,7 @@
         errorLine2="                ^">
         <location
             file="src/main/java/org/sunsetware/phocid/agent/AgentQueryService.kt"
-            line="143"
+            line="145"
             column="17"/>
     </issue>
 
@@ -646,7 +624,7 @@
         errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/org/sunsetware/phocid/data/Playlist.kt"
-            line="286"
+            line="284"
             column="19"/>
     </issue>
 

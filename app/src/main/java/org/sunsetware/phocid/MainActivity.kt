@@ -311,13 +311,24 @@ class MainActivity : ComponentActivity(), IntentLauncher {
     }
 
     override fun share(tracks: List<Track>) {
-        if (tracks.isEmpty()) return
+        val shareIntent = buildShareIntent(tracks) ?: return
+        startActivity(Intent.createChooser(shareIntent, null))
+    }
 
-        val shareIntent =
-            if (tracks.size == 1) {
+    companion object {
+        /**
+         * Builds the share intent for [tracks], or null if empty. The read grant is required on
+         * Android 18+ for the receiving app to access the MediaStore content URIs; the framework
+         * migrates EXTRA_STREAM (single or multiple) into ClipData so the grant covers every URI.
+         */
+        internal fun buildShareIntent(tracks: List<Track>): Intent? {
+            if (tracks.isEmpty()) return null
+
+            return if (tracks.size == 1) {
                 Intent().apply {
                     action = Intent.ACTION_SEND
                     putExtra(Intent.EXTRA_STREAM, tracks.first().uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     // guessContentTypeFromName can fail if file name contains special characters
                     type =
                         URLConnection.guessContentTypeFromName(
@@ -331,6 +342,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                         Intent.EXTRA_STREAM,
                         ArrayList(tracks.map { it.uri }),
                     )
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     type =
                         tracks
                             .map {
@@ -342,7 +354,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                             .singleOrNull() ?: "audio/*"
                 }
             }
-        startActivity(Intent.createChooser(shareIntent, null))
+        }
     }
 
     private suspend fun handleIntent(
