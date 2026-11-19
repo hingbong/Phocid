@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -47,11 +48,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.ceil
-import kotlin.time.Duration.Companion.milliseconds
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.sunsetware.phocid.TNUM
 import org.sunsetware.phocid.ui.theme.EXIT_DURATION
@@ -88,6 +85,19 @@ fun adjustThumbOffsets(
     }
 
     return start to end
+}
+
+/**
+ * Whether the scrollbar should fade in: the thumb must not cover the whole viewport (i.e. the
+ * content actually scrolls), and the list must be scrolling or the thumb must be dragged.
+ */
+fun scrollbarShouldShow(
+    thumbStart: Float,
+    thumbEnd: Float,
+    isScrollInProgress: Boolean,
+    isThumbDragging: Boolean,
+): Boolean {
+    return (thumbStart > 0f || thumbEnd < 1f) && (isScrollInProgress || isThumbDragging)
 }
 
 fun DrawScope.drawThumb(width: Dp, color: Color, alpha: Float, start: Float, end: Float) {
@@ -315,22 +325,30 @@ inline fun Scrollbar(
             }
         }
     val totalItemsCount by remember(state) { derivedStateOf { state.layoutInfo.totalItemsCount } }
-    val isScrollbarDragging = remember { AtomicBoolean(false) }
+    var isScrollbarDragging by remember { mutableStateOf(false) }
 
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        // Reading state.isScrollInProgress outside of LaunchedEffect will trigger a recomposition
-        while (isActive) {
-            val isScrolling =
-                (thumbRange.first > 0 || thumbRange.second < 1) &&
-                    (state.isScrollInProgress || isScrollbarDragging.get())
-            if (alpha.targetValue != 1f && isScrolling) {
-                coroutineScope.launch { alpha.animateTo(1f, scrollbarEnter) }
-            } else if (alpha.targetValue != 0f && !isScrolling) {
-                coroutineScope.launch { alpha.animateTo(0f, scrollbarExit) }
-            }
-            delay(17.milliseconds)
+        // snapshotFlow reads scroll state without triggering recomposition, and only emits
+        // when the derived visibility changes, so an idle list causes no wakeups at all.
+        snapshotFlow {
+            scrollbarShouldShow(
+                thumbRange.first,
+                thumbRange.second,
+                state.isScrollInProgress,
+                isScrollbarDragging,
+            )
         }
+            .collect { isScrolling ->
+                val target = if (isScrolling) 1f else 0f
+                if (alpha.targetValue != target) {
+                    // Launch separately so a new fade can cancel an in-flight one via
+                    // Animatable's internal mutex instead of waiting for it to finish.
+                    coroutineScope.launch {
+                        alpha.animateTo(target, if (isScrolling) scrollbarEnter else scrollbarExit)
+                    }
+                }
+            }
     }
 
     ScrollbarThumb(
@@ -341,7 +359,7 @@ inline fun Scrollbar(
         { thumbRange },
         { totalItemsCount },
         { state.requestScrollToItem(it) },
-        { isScrollbarDragging.set(it) },
+        { isScrollbarDragging = it },
         {
             state.layoutInfo.visibleItemsInfo
                 .firstOrNull { it.offset > -it.size / 2 }
@@ -396,22 +414,30 @@ inline fun Scrollbar(
             }
         }
     val totalItemsCount by remember(state) { derivedStateOf { state.layoutInfo.totalItemsCount } }
-    val isScrollbarDragging = remember { AtomicBoolean(false) }
+    var isScrollbarDragging by remember { mutableStateOf(false) }
 
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        // Reading state.isScrollInProgress outside of LaunchedEffect will trigger a recomposition
-        while (isActive) {
-            val isScrolling =
-                (thumbRange.first > 0 || thumbRange.second < 1) &&
-                    (state.isScrollInProgress || isScrollbarDragging.get())
-            if (alpha.targetValue != 1f && isScrolling) {
-                coroutineScope.launch { alpha.animateTo(1f, scrollbarEnter) }
-            } else if (alpha.targetValue != 0f && !isScrolling) {
-                coroutineScope.launch { alpha.animateTo(0f, scrollbarExit) }
-            }
-            delay(17.milliseconds)
+        // snapshotFlow reads scroll state without triggering recomposition, and only emits
+        // when the derived visibility changes, so an idle list causes no wakeups at all.
+        snapshotFlow {
+            scrollbarShouldShow(
+                thumbRange.first,
+                thumbRange.second,
+                state.isScrollInProgress,
+                isScrollbarDragging,
+            )
         }
+            .collect { isScrolling ->
+                val target = if (isScrolling) 1f else 0f
+                if (alpha.targetValue != target) {
+                    // Launch separately so a new fade can cancel an in-flight one via
+                    // Animatable's internal mutex instead of waiting for it to finish.
+                    coroutineScope.launch {
+                        alpha.animateTo(target, if (isScrolling) scrollbarEnter else scrollbarExit)
+                    }
+                }
+            }
     }
 
     ScrollbarThumb(
@@ -422,7 +448,7 @@ inline fun Scrollbar(
         { thumbRange },
         { totalItemsCount },
         { state.requestScrollToItem(it) },
-        { isScrollbarDragging.set(it) },
+        { isScrollbarDragging = it },
         {
             state.layoutInfo.visibleItemsInfo
                 .firstOrNull { it.offset.y > -it.size.height / 2 }
