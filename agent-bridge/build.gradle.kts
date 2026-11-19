@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
     alias(libs.plugins.compose.compiler)
+    id("com.ncorti.ktfmt.gradle") version "0.27.0"
 }
 
 val buildCommit =
@@ -46,6 +47,9 @@ android {
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
     }
 
+    // See app/build.gradle.kts: the debug key must never sign a release channel artifact,
+    // because the AGENT_QUERY signature permission is shared with the main app. With no
+    // keystore configured the release build stays unsigned (PR verification only).
     val customKeystorePath = System.getenv("PHOCID_KEYSTORE_PATH")
     if (!customKeystorePath.isNullOrBlank()) {
         signingConfigs.getByName("debug").apply {
@@ -59,6 +63,19 @@ android {
                 System.getenv("PHOCID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
             storeType = "PKCS12"
         }
+        signingConfigs.create("release") {
+            storeFile = file(customKeystorePath)
+            storePassword =
+                System.getenv("PHOCID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
+            keyAlias =
+                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+                    ?: "androiddebugkey"
+            keyPassword =
+                System.getenv("PHOCID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
+            storeType = "PKCS12"
+            enableV2Signing = false
+            enableV3Signing = true
+        }
     }
 
     buildTypes {
@@ -69,9 +86,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug").apply {
-                enableV2Signing = false
-                enableV3Signing = true
+            if (!customKeystorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }
@@ -87,7 +103,8 @@ android {
     }
 
     lint {
-        abortOnError = false
+        // The report-only phase is over: lint findings gate builds again.
+        abortOnError = true
     }
 
     testOptions {
@@ -114,3 +131,5 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation("org.json:json:20260814")
 }
+
+ktfmt { kotlinLangStyle() }

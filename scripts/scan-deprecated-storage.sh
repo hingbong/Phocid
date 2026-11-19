@@ -11,9 +11,9 @@ elif [[ $# -gt 0 ]]; then
     exit 2
 fi
 
-mapfile -t files < <(find app/src/main -type f -name '*.kt' | sort)
+mapfile -t files < <(find app/src/main agent-bridge/src -type f -name '*.kt' | sort)
 if [[ ${#files[@]} -eq 0 ]]; then
-    echo "No Kotlin sources found under app/src/main" >&2
+    echo "No Kotlin sources found under app/src/main or agent-bridge/src" >&2
     exit 1
 fi
 
@@ -30,8 +30,16 @@ else
 fi
 
 if [[ "$check_only" == true ]]; then
-    if grep -nHE 'Environment\.getExternalStorageDirectory|Environment\.getExternalStoragePublicDirectory' "${files[@]}"; then
+    if grep -nHE 'Environment\.(getExternalStorageDirectory|getExternalStoragePublicDirectory)' "${files[@]}"; then
         echo "Environment storage APIs must be replaced with StorageManager/StorageVolume." >&2
+        exit 1
+    fi
+    # MediaStore.DATA is deprecated but still the only column that carries the real file path;
+    # its remaining use is deliberately isolated to LibraryIndex.kt (see the comment there).
+    # New DATA usage anywhere else must fail the gate instead of only being printed.
+    if grep -nHE 'MediaStore\.Audio\.Media\.DATA|Media\.DATA' "${files[@]}" \
+        | grep -v '^app/src/main/java/org/sunsetware/phocid/data/LibraryIndex\.kt:'; then
+        echo "New MediaStore.DATA usage must stay inside LibraryIndex.kt or be removed." >&2
         exit 1
     fi
 fi

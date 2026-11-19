@@ -1,1 +1,7 @@
-Initial release
+Maintenance and hardening release.
+
+• Faster library scans: redundant and unchanged rescans are skipped, and collection views build in a single pass
+• Safer agent bridge: binder callers are verified against our signing certificate, and release builds never fall back to debug signing
+• Statistics fixes: unplayed tracks no longer accumulate forever, listening-hour charts load in bounded memory, and same-name files in different folders keep separate statistics
+• Player: queue drags no longer recompose the whole screen, and progress states always reach completion
+• Updated third-party components and translations

@@ -41,9 +41,15 @@ val buildTime =
 
 // versionCode must grow on every published build, otherwise installed users never receive an
 // update. CI supplies the monotonically increasing run number via PHOCID_BUILD_NUMBER.
+//
+// github.run_number is scoped to the workflow FILE (.github/workflows/android-build.yml):
+// renaming or deleting and recreating that file resets the counter, which would roll versionCode
+// backwards and block upgrades. Do not rename or rebuild the workflow; if the sequence is ever
+// reset anyway, bump baseVersionCode above every previously published value first.
+val baseVersionCode = 20260610
 val buildNumber = System.getenv("PHOCID_BUILD_NUMBER")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-val computedVersionCode = 20260610 + buildNumber
-val computedVersionName = "20260610.$buildNumber"
+val computedVersionCode = baseVersionCode + buildNumber
+val computedVersionName = "$baseVersionCode.$buildNumber"
 
 android {
     namespace = "org.sunsetware.phocid"
@@ -62,9 +68,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Use one stable signing key for both debug and release builds when CI provides
-    // a keystore. The Android Gradle plugin's debug signing config is reused by the
-    // release build type, so both variants can be installed over each other.
+    // When a stable keystore is provided, the debug and the dedicated release signing configs
+    // both use it, so the app and the agent bridge can be installed over each other and pass
+    // the CI signature-consistency check. Without it, debug builds keep AGP's throwaway key and
+    // release builds are UNSIGNED (PR verification only): a release channel artifact must never
+    // be signed with a debug key, because the AGENT_QUERY signature permission would then be
+    // forgeable by anyone holding that keystore. Main-branch CI refuses to build without the
+    // keystore (see the workflow's "Validate stable release signing" step).
     val customKeystorePath = System.getenv("PHOCID_KEYSTORE_PATH")
     if (!customKeystorePath.isNullOrBlank()) {
         signingConfigs.getByName("debug").apply {
@@ -77,6 +87,19 @@ android {
                 System.getenv("PHOCID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
             storeType = "PKCS12"
         }
+        signingConfigs.create("release") {
+            storeFile = file(customKeystorePath)
+            storePassword =
+                System.getenv("PHOCID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
+            keyAlias =
+                System.getenv("PHOCID_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "androiddebugkey"
+            keyPassword =
+                System.getenv("PHOCID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
+            storeType = "PKCS12"
+            // Disable v2 signing and force enable v3 signing for modern Android (9+)
+            enableV2Signing = false
+            enableV3Signing = true
+        }
     }
 
     buildTypes {
@@ -88,12 +111,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig =
-                signingConfigs.getByName("debug").apply {
-                    // Disable v2 signing and force enable v3 signing for modern Android (9+)
-                    enableV2Signing = false
-                    enableV3Signing = true
-                }
+            if (!customKeystorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -115,8 +135,11 @@ android {
     androidResources.generateLocaleConfig = true
 
     lint {
-        // Keep the first runs report-only so the report can be triaged before it gates builds.
-        abortOnError = false
+        // The report-only phase is over: lint findings gate builds again.
+        abortOnError = true
+        // Translation coverage lags behind some locales (see the maintenance backlog);
+        // re-enable once coverage is even.
+        disable += "MissingTranslation"
     }
 }
 
@@ -182,7 +205,10 @@ tasks.register("customSetup") { dependsOn("licenseReleaseReport") }
 
 tasks.preBuild { dependsOn("customSetup") }
 
-tasks.assembleUnitTest { dependsOn("customSetup") }
+// The license test reads the generated report from src/main/assets: depend on it explicitly
+// instead of relying on CI invoking :app:customSetup before the test task. (The previous
+// assembleUnitTest hook used a non-standard task name that could break on AGP upgrades.)
+tasks.named("testDebugUnitTest") { dependsOn("customSetup") }
 
 composeCompiler {
     stabilityConfigurationFiles =
