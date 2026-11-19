@@ -15,7 +15,9 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
-import kotlin.coroutines.resume
+import com.google.common.util.concurrent.ListenableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -98,20 +100,8 @@ class PlayerManager(
         val controller =
             try {
                 withTimeout(CONTROLLER_INITIALIZATION_TIMEOUT_MILLIS) {
-                    suspendCancellableCoroutine<MediaController> { continuation ->
-                        controllerFuture.addListener(
-                            {
-                                try {
-                                    continuation.resume(controllerFuture.get())
-                                } catch (t: Throwable) {
-                                    continuation.resumeWithException(t)
-                                }
-                            },
-                            ContextCompat.getMainExecutor(context),
-                        )
-                        // Cancelling the wait (timeout or caller teardown) also releases the
-                        // pending controller instead of leaking it.
-                        continuation.invokeOnCancellation { controllerFuture.cancel(true) }
+                    controllerFuture.awaitOrRelease(ContextCompat.getMainExecutor(context)) {
+                        it.release()
                     }
                 }
             } catch (ex: TimeoutCancellationException) {
@@ -367,6 +357,47 @@ class PlayerManager(
             true
         } catch (_: Exception) {
             false
+        }
+    }
+}
+
+/**
+ * Awaits a [ListenableFuture], guaranteeing that a successfully built value reaches [release]
+ * exactly once whenever the wait is cancelled (timeout or caller teardown) instead of leaking.
+ *
+ * `cancel(true)` is a no-op on an already-completed future, so cancelling the wait alone would leak
+ * a value built concurrently with cancellation: the cancelled continuation never receives it. Both
+ * sides of the race therefore attempt the release, deduplicated by an atomic flag: the cancellation
+ * handler releases an already-completed future's value, and `resume(value, onCancellation)`
+ * releases the value when cancellation wins against the resume in the completion listener. Releases
+ * run on [executor] (the value's application looper) even if cancellation is triggered from another
+ * thread, and release failures are swallowed so teardown cannot crash.
+ */
+internal suspend fun <T> ListenableFuture<T>.awaitOrRelease(
+    executor: Executor,
+    release: (T) -> Unit,
+): T = suspendCancellableCoroutine { continuation ->
+    val released = AtomicBoolean(false)
+    val releaseOnce = { value: T ->
+        if (released.compareAndSet(false, true)) {
+            runCatching { release(value) }
+        }
+    }
+    addListener(
+        {
+            try {
+                val value = get()
+                continuation.resume(value) { releaseOnce(value) }
+            } catch (t: Throwable) {
+                continuation.resumeWithException(t)
+            }
+        },
+        executor,
+    )
+    continuation.invokeOnCancellation {
+        cancel(true)
+        if (isDone && !isCancelled) {
+            executor.execute { runCatching { releaseOnce(get()) } }
         }
     }
 }
