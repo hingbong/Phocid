@@ -154,7 +154,11 @@ class McpServer(
             // A per-read timeout alone does not bound a slow-drip client: each individual read can
             // succeed just under the timeout while the total request stretches forever and holds
             // one of the few worker threads. Enforce an absolute deadline on every read.
-            val deadline = SystemClock.elapsedRealtime() + requestTimeoutMs
+            // Use System.nanoTime(), not SystemClock.elapsedRealtime(): the latter is an Android
+            // framework method that unit tests stub to 0 (isReturnDefaultValues), which would
+            // disable the guard exactly where the slow-drip test exercises it. nanoTime is a real
+            // monotonic JVM clock on device and in tests alike.
+            val deadline = System.nanoTime() + requestTimeoutMs * 1_000_000L
             val input = BufferedInputStream(DeadlineInputStream(client.getInputStream(), deadline))
             val request = readRequestHead(input)
             transferred = route(client, input, request)
@@ -384,19 +388,23 @@ class McpServer(
             if (input.length() == 0) {
                 return jsonRpcError(null, -32600, "Invalid Request: empty batch").toString()
             }
+            // The tools/call cap is more specific than the batch-size cap, so check it first: a
+            // batch made only of tools/call entries must report the tools/call limit rather than
+            // "Batch too large", even when both limits are equal.
+            val toolsCallCount =
+                (0 until input.length()).count {
+                    input.optJSONObject(it)?.optString("method", "") == "tools/call"
+                }
+            if (toolsCallCount > MAX_BATCH_TOOLS_CALLS) {
+                return jsonRpcError(null, -32600, "Too many tools/call entries").toString()
+            }
             if (input.length() > MAX_BATCH_SIZE) {
                 return jsonRpcError(null, -32600, "Batch too large").toString()
             }
             val output = JSONArray()
-            var toolsCalls = 0
             var responseBytes = 2 // account for the enclosing []
             for (i in 0 until input.length()) {
                 val item = input.optJSONObject(i) ?: continue
-                if (item.optString("method", "") == "tools/call") {
-                    if (++toolsCalls > MAX_BATCH_TOOLS_CALLS) {
-                        return jsonRpcError(null, -32600, "Too many tools/call entries").toString()
-                    }
-                }
                 val result = processObject(item) ?: continue
                 val encoded = result.toString()
                 val encodedBytes = encoded.toByteArray(StandardCharsets.UTF_8).size
@@ -1181,7 +1189,7 @@ class McpServer(
         private val deadlineRealtime: Long,
     ) : InputStream() {
         private fun checkDeadline() {
-            if (SystemClock.elapsedRealtime() > deadlineRealtime) {
+            if (System.nanoTime() > deadlineRealtime) {
                 throw HttpError(408, "Request deadline exceeded")
             }
         }
