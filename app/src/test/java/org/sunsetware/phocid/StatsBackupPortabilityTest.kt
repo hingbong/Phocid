@@ -1,12 +1,15 @@
 package org.sunsetware.phocid
 
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.Collections
+import java.util.concurrent.Executor
 import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -30,21 +33,31 @@ import org.sunsetware.phocid.stats.db.ActiveDayEntity
 import org.sunsetware.phocid.stats.db.AliasKind
 import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.db.TrackAliasEntity
+import org.sunsetware.phocid.stats.db.TrackDailyEntity
 import org.sunsetware.phocid.stats.db.TrackEntity
 import org.sunsetware.phocid.stats.db.TrackTotalsEntity
 
 @RunWith(RobolectricTestRunner::class)
 class StatsBackupPortabilityTest {
     private lateinit var db: StatsDatabase
+    private val recordedQueries =
+        Collections.synchronizedList(mutableListOf<Pair<String, List<Any?>>>())
 
     @Before
     fun setUp() {
+        recordedQueries.clear()
         db =
             Room.inMemoryDatabaseBuilder(
                     RuntimeEnvironment.getApplication(),
                     StatsDatabase::class.java,
                 )
                 .allowMainThreadQueries()
+                .setQueryCallback(
+                    RoomDatabase.QueryCallback { sql, bindArgs ->
+                        recordedQueries.add(sql to bindArgs.toList())
+                    },
+                    Executor { it.run() },
+                )
                 .build()
     }
 
@@ -1001,5 +1014,78 @@ class StatsBackupPortabilityTest {
             assertThat(merged.playedMillis).isEqualTo(9_000)
             // Unrelated rows are untouched.
             assertThat(db.dailyDao().since(1_000).size).isEqualTo(50)
+        }
+
+    @Test
+    fun mergeRestoreFetchesOnlyExactDiagonalPairs() =
+        runBlocking<Unit> {
+            // Regression: the merge fetch used IN(rowIds) x IN(epochDays), a cartesian grid. A
+            // sparse diagonal payload (track i paired only with day i) must fetch exactly its
+            // own pairs, not the whole grid intersection, and the query count must scale with
+            // the payload pair count instead of rowChunks x dayChunks.
+            val n = 500 // > 400 so the pair batching must split into two queries.
+            val baseDay = 2_000
+            val rowIds = (0 until n).map { insertTrack("uuid-diag-$it") }
+            db.dailyDao()
+                .insertAll(
+                    (0 until n).flatMap { i ->
+                        listOf(
+                            TrackDailyEntity(
+                                trackRowId = rowIds[i],
+                                epochDay = baseDay + i,
+                                // One existing diagonal row is larger than the payload: max
+                                // must keep the local values.
+                                playCount = if (i == 0) 7 else 1,
+                                playedMillis = if (i == 0) 20_000 else 1_000,
+                                lastPlayedAt = 1,
+                            ),
+                            // Off-diagonal grid intersection the cartesian fetch over-loaded.
+                            TrackDailyEntity(
+                                trackRowId = rowIds[i],
+                                epochDay = baseDay + (i + 1) % n,
+                                playCount = 1,
+                                playedMillis = 1_000,
+                                lastPlayedAt = 1,
+                            ),
+                        )
+                    }
+                )
+            val payload =
+                backup(
+                    tracks = (0 until n).map { track("uuid-diag-$it") },
+                    daily = (0 until n).map { day("uuid-diag-$it", baseDay + it, 4, 9_000, 10) },
+                )
+
+            recordedQueries.clear()
+            StatsBackupManager(db).restore(payload, replace = false)
+            val fetches =
+                recordedQueries.toList().filter {
+                    it.first.startsWith("SELECT * FROM track_daily WHERE (trackRowId")
+                }
+
+            // 500 pairs at 400 pairs/query => 2 queries with 1000 binds total. The cartesian
+            // form issued 2 x 2 = 4 queries with 2000 binds and loaded all 1000 grid rows.
+            assertThat(fetches).hasSize(2)
+            assertThat(fetches.sumOf { it.second.size }).isEqualTo(2 * n)
+            assertThat(fetches).allSatisfy { assertThat(it.second.size).isLessThanOrEqualTo(800) }
+
+            val rows = db.dailyDao().since(baseDay).associateBy { it.trackRowId to it.epochDay }
+            assertThat(rows).hasSize(2 * n)
+            (0 until n).forEach { i ->
+                val merged = rows.getValue(rowIds[i] to (baseDay + i))
+                assertThat(merged.playCount).isEqualTo(if (i == 0) 7 else 4)
+                assertThat(merged.playedMillis).isEqualTo(if (i == 0) 20_000L else 9_000L)
+                assertThat(merged.lastPlayedAt).isEqualTo(10)
+                // Off-diagonal rows inside the grid intersection stay untouched.
+                val untouched = rows.getValue(rowIds[i] to (baseDay + (i + 1) % n))
+                assertThat(untouched.playCount).isEqualTo(1)
+                assertThat(untouched.playedMillis).isEqualTo(1_000)
+                assertThat(untouched.lastPlayedAt).isEqualTo(1)
+            }
+
+            // Idempotent: re-importing the same payload must not change any value.
+            StatsBackupManager(db).restore(payload, replace = false)
+            val again = db.dailyDao().since(baseDay).associateBy { it.trackRowId to it.epochDay }
+            assertThat(again).isEqualTo(rows)
         }
 }

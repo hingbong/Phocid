@@ -1,6 +1,7 @@
 package org.sunsetware.phocid.stats.backup
 
 import androidx.room.withTransaction
+import androidx.sqlite.db.SimpleSQLiteQuery
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -575,19 +576,26 @@ class StatsBackupManager(
             if (replace) {
                 grouped.values.toList()
             } else {
-                // Only load the daily rows this backup can actually overlap, in bounded chunks.
-                // The old since(Int.MIN_VALUE) scanned the entire track_daily table into a Map on
-                // every merge restore, which is unbounded for long-lived libraries.
+                // Only load the exact (trackRowId, epochDay) pairs this backup can overlap, in
+                // bounded chunks. The old since(Int.MIN_VALUE) scanned the entire track_daily
+                // table on every merge restore; the interim IN(rowIds) x IN(epochDays) form was
+                // still a cartesian grid that over-fetched every cross combination for sparse
+                // backups and issued a multiplicative number of chunk-pair queries. Row-value IN
+                // (SQLite >= 3.15) matches whole pairs, so both the fetched rows and the query
+                // count are proportional to the payload alone.
                 val existing = HashMap<Pair<Long, Int>, TrackDailyEntity>()
-                val rowIds = grouped.values.map { it.trackRowId }.distinct()
-                val epochDays = grouped.values.map { it.epochDay }.distinct()
-                // Keep each generated IN clause well below SQLite's 999 bind-parameter limit.
-                for (rowChunk in rowIds.chunked(400)) {
-                    for (dayChunk in epochDays.chunked(400)) {
-                        db.dailyDao().byKeys(rowChunk, dayChunk).forEach {
-                            existing[it.trackRowId to it.epochDay] = it
-                        }
-                    }
+                // 400 pairs = 800 bind parameters, well below SQLite's 999-parameter limit.
+                for (pairChunk in grouped.keys.chunked(400)) {
+                    val tuples = pairChunk.joinToString(",") { "(?,?)" }
+                    val args = pairChunk.flatMap { listOf<Any>(it.first, it.second) }.toTypedArray()
+                    db.dailyDao()
+                        .byExactPairs(
+                            SimpleSQLiteQuery(
+                                "SELECT * FROM track_daily WHERE (trackRowId, epochDay) IN (VALUES $tuples)",
+                                args,
+                            )
+                        )
+                        .forEach { existing[it.trackRowId to it.epochDay] = it }
                 }
                 grouped.values.map { group ->
                     val current = existing[group.trackRowId to group.epochDay] ?: return@map group

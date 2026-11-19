@@ -4,7 +4,9 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Transaction
+import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
 /** One row of the statistics ranking. */
@@ -257,11 +259,14 @@ interface TrackDailyDao {
     suspend fun since(sinceDay: Int): List<TrackDailyEntity>
 
     /**
-     * Loads only the daily rows relevant to a merge restore, in bounded chunks so the generated IN
-     * clauses stay below SQLite's parameter limit. Avoids scanning the whole track_daily table.
+     * Loads only the exact (trackRowId, epochDay) pairs a merge restore can overlap. A raw query is
+     * required because the row-value form `(trackRowId, epochDay) IN (VALUES (?,?),...)` needs a
+     * dynamically sized tuple list, which Room's declarative `IN (:list)` binding cannot express.
+     * The previous `trackRowId IN (:rowIds) AND epochDay IN (:epochDays)` form fetched the full
+     * cartesian grid instead of the payload's pairs. Callers must chunk the pairs so the flat bind
+     * list (2 parameters per pair) stays below SQLite's 999 bind-parameter limit.
      */
-    @Query("SELECT * FROM track_daily WHERE trackRowId IN (:rowIds) AND epochDay IN (:epochDays)")
-    suspend fun byKeys(rowIds: List<Long>, epochDays: List<Int>): List<TrackDailyEntity>
+    @RawQuery suspend fun byExactPairs(query: SupportSQLiteQuery): List<TrackDailyEntity>
 
     /** Merge loser's days into winner. Overlapping days are summed. */
     @Query(
