@@ -68,4 +68,140 @@ class AudioFingerprintTest {
             (value ushr 7 and 0x7f).toByte(),
             (value and 0x7f).toByte(),
         )
+
+    @Test
+    fun sameHeadAndTailWithDifferentMiddleCollide() {
+        // Documents the known collision surface (work plan G1): only the first and last
+        // 256 KiB windows of the audio payload are hashed, so two same-length files with
+        // identical head and tail windows share the AUDIO_HASH alias and statistics would
+        // silently merge. A stronger scheme is deliberately deferred: replacing this hash
+        // would invalidate every existing fingerprint.
+        val left = temporaryFolder.newFile("left.bin")
+        val right = temporaryFolder.newFile("right.bin")
+        writeTaggedAudio(left, ByteArray(200 * 1024) { 0x11 })
+        writeTaggedAudio(right, ByteArray(200 * 1024) { 0x22 })
+
+        assertThat(AudioFingerprint.compute(left)).isNotNull
+        assertThat(AudioFingerprint.compute(right)).isEqualTo(AudioFingerprint.compute(left))
+    }
+
+    @Test
+    fun flacMetadataEditsDoNotChangeAudioFingerprint() {
+        val left = temporaryFolder.newFile("left.flac")
+        val right = temporaryFolder.newFile("right.flac")
+        writeFlac(left, 0x55)
+        writeFlac(right, 0xAA)
+
+        assertThat(AudioFingerprint.compute(left)).isEqualTo(AudioFingerprint.compute(right))
+    }
+
+    @Test
+    fun mp4ContainerEditsDoNotChangeAudioFingerprint() {
+        val left = temporaryFolder.newFile("left.m4a")
+        val right = temporaryFolder.newFile("right.m4a")
+        writeMp4(left, 0x55)
+        writeMp4(right, 0xAA)
+
+        assertThat(AudioFingerprint.compute(left)).isEqualTo(AudioFingerprint.compute(right))
+    }
+
+    @Test
+    fun wavHeaderEditsDoNotChangeAudioFingerprint() {
+        val left = temporaryFolder.newFile("left.wav")
+        val right = temporaryFolder.newFile("right.wav")
+        writeWav(left, 0x55)
+        writeWav(right, 0xAA)
+
+        assertThat(AudioFingerprint.compute(left)).isEqualTo(AudioFingerprint.compute(right))
+    }
+
+    @Test
+    fun apev2TagEditsDoNotChangeAudioFingerprint() {
+        val left = temporaryFolder.newFile("left.ape")
+        val right = temporaryFolder.newFile("right.ape")
+        writeApe(left, 0x55)
+        writeApe(right, 0xAA)
+
+        assertThat(AudioFingerprint.compute(left)).isEqualTo(AudioFingerprint.compute(right))
+    }
+
+    /** Same-length audio with a small ID3v2 tag; only the middle bytes differ. */
+    private fun writeTaggedAudio(file: File, middle: ByteArray) {
+        RandomAccessFile(file, "rw").use { raf ->
+            raf.write("ID3".toByteArray(Charsets.US_ASCII))
+            raf.write(byteArrayOf(3, 0, 0))
+            raf.write(syncSafe(64))
+            raf.write(ByteArray(64))
+            raf.write(ByteArray(256 * 1024) { (it % 251).toByte() })
+            raf.write(middle)
+            raf.write(ByteArray(256 * 1024) { ((it * 13) % 251).toByte() })
+        }
+    }
+
+    private fun writeFlac(file: File, paddingByte: Int) {
+        RandomAccessFile(file, "rw").use { raf ->
+            raf.write("fLaC".toByteArray(Charsets.US_ASCII))
+            // A padding metadata block whose content differs, then the final empty block.
+            raf.write(byteArrayOf(0x00, 0x00, 0x00, 0x10))
+            raf.write(ByteArray(16) { paddingByte.toByte() })
+            raf.write(byteArrayOf(0x80.toByte(), 0x00, 0x00, 0x00))
+            raf.write(ByteArray(4096) { (it * 31).toByte() })
+        }
+    }
+
+    private fun writeMp4(file: File, brandByte: Int) {
+        val audio = ByteArray(4096) { (it * 31).toByte() }
+        RandomAccessFile(file, "rw").use { raf ->
+            raf.write(intBytes(24))
+            raf.write("ftyp".toByteArray(Charsets.US_ASCII))
+            raf.write(ByteArray(16) { brandByte.toByte() })
+            raf.write(intBytes(8 + audio.size))
+            raf.write("mdat".toByteArray(Charsets.US_ASCII))
+            raf.write(audio)
+        }
+    }
+
+    private fun writeWav(file: File, fmtByte: Int) {
+        RandomAccessFile(file, "rw").use { raf ->
+            raf.write("RIFF".toByteArray(Charsets.US_ASCII))
+            raf.write(intBytes(12 + 8 + 16 + 8 + 4096))
+            raf.write("WAVE".toByteArray(Charsets.US_ASCII))
+            raf.write("fmt ".toByteArray(Charsets.US_ASCII))
+            raf.write(intBytes(16))
+            raf.write(ByteArray(16) { fmtByte.toByte() })
+            raf.write("data".toByteArray(Charsets.US_ASCII))
+            raf.write(intBytes(4096))
+            raf.write(ByteArray(4096) { (it * 31).toByte() })
+        }
+    }
+
+    private fun writeApe(file: File, tagByte: Int) {
+        RandomAccessFile(file, "rw").use { raf ->
+            raf.write(ByteArray(4096) { (it * 31).toByte() })
+            raf.write(ByteArray(64) { tagByte.toByte() })
+            // APEv2 footer (the tag body size excludes the footer; no header flag).
+            raf.write("APETAGEX".toByteArray(Charsets.US_ASCII))
+            raf.write(intBytes(2000))
+            raf.write(intBytesLe(64))
+            raf.write(intBytesLe(1))
+            raf.write(intBytesLe(0))
+            raf.write(ByteArray(8))
+        }
+    }
+
+    private fun intBytes(value: Int): ByteArray =
+        byteArrayOf(
+            (value ushr 24).toByte(),
+            (value ushr 16).toByte(),
+            (value ushr 8).toByte(),
+            value.toByte(),
+        )
+
+    private fun intBytesLe(value: Int): ByteArray =
+        byteArrayOf(
+            value.toByte(),
+            (value ushr 8).toByte(),
+            (value ushr 16).toByte(),
+            (value ushr 24).toByte(),
+        )
 }

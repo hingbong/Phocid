@@ -1161,6 +1161,7 @@ class McpServer(
             405 -> "Method Not Allowed"
             408 -> "Request Timeout"
             413 -> "Payload Too Large"
+            421 -> "Misdirected Request"
             503 -> "Service Unavailable"
             else -> "Internal Server Error"
         }
