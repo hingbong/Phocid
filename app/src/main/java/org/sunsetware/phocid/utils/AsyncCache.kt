@@ -56,6 +56,10 @@ class AsyncCache<TKey : Any, TValue : Any>(
         if (creationJob != newCreationJob) {
             newCreationJob.cancel()
         }
+        // A failed or cancelled creation must not stay in the map: every later getOrPut would
+        // await the dead job, poisoning the key forever. This also runs for successful jobs,
+        // where the coroutine's own removal below has already taken care of it.
+        creationJob.invokeOnCompletion { creationJobs.remove(key, creationJob) }
 
         val newEvitionJob = getEvictionJob()
         if (evictionJob.compareAndSet(null, newEvitionJob)) {
