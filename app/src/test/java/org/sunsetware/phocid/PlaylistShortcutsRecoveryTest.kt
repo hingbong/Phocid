@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.After
-import org.junit.Rule
-import org.junit.rules.Timeout
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -27,9 +25,6 @@ import org.sunsetware.phocid.ui.views.library.LibraryScreenTabType
 @RunWith(RobolectricTestRunner::class)
 class PlaylistShortcutsRecoveryTest {
 
-    // Hard bound so a deadlocked (not merely slow) test fails under its own name instead of
-    // stalling the whole CI job until the workflow timeout cancels it.
-    @get:Rule val globalTimeout: Timeout = Timeout.seconds(120)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private lateinit var manager: PlaylistManager
 

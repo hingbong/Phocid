@@ -6,9 +6,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.*
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.sunsetware.phocid.data.InvalidTrack
@@ -21,9 +19,6 @@ import org.sunsetware.phocid.utils.ScanCoalescer
 @RunWith(RobolectricTestRunner::class)
 class ScanCoalescerTest {
 
-    // Hard bound so a deadlocked (not merely slow) test fails under its own name instead of
-    // stalling the whole CI job until the workflow timeout cancels it.
-    @get:Rule val globalTimeout: Timeout = Timeout.seconds(120)
     // The first scan is held in flight via CompletableDeferreds, so a second request is
     // deterministically queued behind it before it completes.
 

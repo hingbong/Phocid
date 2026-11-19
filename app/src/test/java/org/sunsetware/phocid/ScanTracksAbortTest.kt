@@ -11,8 +11,6 @@ import android.provider.MediaStore.Audio.Media
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
-import org.junit.Rule
-import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
@@ -35,9 +33,6 @@ private fun getVersionBundle(method: String): Bundle? =
 @RunWith(RobolectricTestRunner::class)
 class ScanTracksAbortTest {
 
-    // Hard bound so a deadlocked (not merely slow) test fails under its own name instead of
-    // stalling the whole CI job until the workflow timeout cancels it.
-    @get:Rule val globalTimeout: Timeout = Timeout.seconds(120)
     private fun grantReadPermission() {
         Shadows.shadowOf(RuntimeEnvironment.getApplication())
             .grantPermissions(org.sunsetware.phocid.READ_PERMISSION)

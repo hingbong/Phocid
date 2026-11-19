@@ -130,6 +130,17 @@ jobs:
           status=${PIPESTATUS[0]}
           exit $status
 
+      - name: Pinpoint where the unit tests stalled
+        # A test that never returns leaves no failing test to report, so surface the last
+        # test activity as an annotation: that names the class and method that stalled.
+        if: always()
+        run: |
+          LOG="$RUNNER_TEMP/unit-test.log"
+          [ -f "$LOG" ] || exit 0
+          LAST=$(grep -E ' (STARTED|FAILED|SKIPPED)$' "$LOG" | tail -6 | tr '\n' ';' | sed 's/;*$//')
+          MODULE=$(grep -E '^> Task :(app|agent-bridge):test.*UnitTest' "$LOG" | tail -1)
+          echo "::error::Last unit-test activity: ${LAST:-none} | ${MODULE:-no test task yet}"
+
       - name: Upload unit test diagnostics
         # Always: when a test deadlocks or the step times out, this log names the last test
         # that started, which is the only record of where the run stalled.
