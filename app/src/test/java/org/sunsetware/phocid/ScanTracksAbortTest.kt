@@ -7,6 +7,7 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.provider.MediaStore
+import android.provider.MediaStore.Audio.Media
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
@@ -43,25 +44,6 @@ class ScanTracksAbortTest {
         Shadows.shadowOf(RuntimeEnvironment.getApplication())
             .grantPermissions(org.sunsetware.phocid.READ_PERMISSION)
     }
-
-    private fun scanColumns() =
-        arrayOf(
-            Media._ID,
-            Media.DATA,
-            Media.DATE_ADDED,
-            Media.DATE_MODIFIED,
-            Media.TITLE,
-            Media.ARTIST,
-            Media.ALBUM,
-            Media.ALBUM_ARTIST,
-            Media.GENRE,
-            Media.YEAR,
-            Media.TRACK,
-            Media.DISC_NUMBER,
-            Media.DURATION,
-            Media.SIZE,
-            Media.BITRATE,
-        )
 
     @Test
     fun aNullMediaStoreCursorAbortsTheScanAndKeepsTheOldIndex() = runBlocking<Unit> {
