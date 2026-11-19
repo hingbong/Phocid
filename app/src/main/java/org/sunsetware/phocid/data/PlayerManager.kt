@@ -15,17 +15,20 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
-import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 import org.sunsetware.phocid.AUDIO_SESSION_ID_KEY
 import org.sunsetware.phocid.PlaybackService
 import org.sunsetware.phocid.SET_TIMER_COMMAND
@@ -33,6 +36,10 @@ import org.sunsetware.phocid.TIMER_FINISH_LAST_TRACK_KEY
 import org.sunsetware.phocid.TIMER_TARGET_KEY
 import org.sunsetware.phocid.utils.coerceInOrMin
 import org.sunsetware.phocid.utils.wrap
+
+/** The MediaController could not be built, or could not be built in time. */
+class PlayerInitializationException(message: String, cause: Throwable) :
+    Exception(message, cause)
 
 @Stable
 class PlayerManager(
@@ -70,39 +77,68 @@ class PlayerManager(
 
     private var playbackPreferenceJob = null as Job?
 
+    private companion object {
+        const val CONTROLLER_INITIALIZATION_TIMEOUT_MILLIS = 10_000L
+    }
+
     override fun close() {
         playbackPreferenceJob?.cancel()
         scope.cancel()
-        mediaController.release()
+        // initialize() may never have run or may still be connecting; releasing an
+        // uninitialized lateinit controller would crash during teardown instead.
+        if (::mediaController.isInitialized) {
+            mediaController.release()
+        }
     }
 
     suspend fun initialize(context: Context) {
         val sessionToken =
             SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
-        val completed = AtomicBoolean(false)
-        controllerFuture.addListener(
-            {
-                mediaController = controllerFuture.get()
-                mediaController.prepare()
-                // External changes (notification, headset, track transition) must reach the
-                // clock immediately instead of waiting for the next tick.
-                mediaController.addListener(
-                    object : Player.Listener {
-                        override fun onEvents(player: Player, events: Player.Events) {
-                            playbackClock.invalidate()
-                        }
+        val controller =
+            try {
+                withTimeout(CONTROLLER_INITIALIZATION_TIMEOUT_MILLIS) {
+                    suspendCancellableCoroutine { continuation ->
+                        controllerFuture.addListener(
+                            {
+                                try {
+                                    continuation.resume(controllerFuture.get())
+                                } catch (t: Throwable) {
+                                    continuation.resumeWithException(t)
+                                }
+                            },
+                            ContextCompat.getMainExecutor(context),
+                        )
+                        // Cancelling the wait (timeout or caller teardown) also releases the
+                        // pending controller instead of leaking it.
+                        continuation.invokeOnCancellation { controllerFuture.cancel(true) }
                     }
+                }
+            } catch (ex: TimeoutCancellationException) {
+                throw PlayerInitializationException(
+                    "Timed out connecting to the playback service",
+                    ex,
                 )
-                playbackClock.invalidate()
-                completed.set(true)
-            },
-            ContextCompat.getMainExecutor(context),
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                throw PlayerInitializationException(
+                    "Failed to connect to the playback service",
+                    ex,
+                )
+            }
+        mediaController = controller
+        controller.prepare()
+        // External changes (notification, headset, track transition) must reach the
+        // clock immediately instead of waiting for the next tick.
+        controller.addListener(
+            object : Player.Listener {
+                override fun onEvents(player: Player, events: Player.Events) {
+                    playbackClock.invalidate()
+                }
+            }
         )
-
-        while (!completed.get()) {
-            delay(16)
-        }
+        playbackClock.invalidate()
     }
 
     private fun updateTransientState() {

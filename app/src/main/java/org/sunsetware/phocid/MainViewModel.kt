@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -82,15 +83,31 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
                         libraryIndex,
                         playlistManager,
                     )
-                playerManager.initialize(application.applicationContext)
+                try {
+                    playerManager.initialize(application.applicationContext)
+                } catch (ex: CancellationException) {
+                    throw ex
+                } catch (ex: Exception) {
+                    // A same-process controller connection only fails pathologically; leave
+                    // the loading state in place and let the next launch retry, instead of
+                    // crashing the whole app or hanging a coroutine forever.
+                    Log.e("Phocid", "Failed to connect to the playback service", ex)
+                    return@launch
+                }
                 _initialized.update { true }
             }
         }
     }
 
     override fun onCleared() {
-        playerManager.close()
-        uiManager.close()
+        // Initialization may not have run or completed yet; closing an uninitialized
+        // lateinit manager would crash during teardown instead.
+        if (::playerManager.isInitialized) {
+            playerManager.close()
+        }
+        if (::uiManager.isInitialized) {
+            uiManager.close()
+        }
         super.onCleared()
     }
 
