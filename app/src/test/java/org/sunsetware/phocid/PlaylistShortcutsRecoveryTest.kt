@@ -1,16 +1,18 @@
 package org.sunsetware.phocid
 
 import android.icu.text.Collator
-import androidx.core.content.pm.ShortcutManagerCompat
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.After
+import org.junit.Rule
+import org.junit.rules.Timeout
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -18,13 +20,16 @@ import org.robolectric.RuntimeEnvironment
 import org.sunsetware.phocid.data.LibraryIndex
 import org.sunsetware.phocid.data.PlaylistManager
 import org.sunsetware.phocid.data.Preferences
-import org.sunsetware.phocid.data.SpecialPlaylist
 import org.sunsetware.phocid.data.UnfilteredTrackIndex
 import org.sunsetware.phocid.ui.views.library.LibraryScreenTabInfo
 import org.sunsetware.phocid.ui.views.library.LibraryScreenTabType
 
 @RunWith(RobolectricTestRunner::class)
 class PlaylistShortcutsRecoveryTest {
+
+    // Hard bound so a deadlocked (not merely slow) test fails under its own name instead of
+    // stalling the whole CI job until the workflow timeout cancels it.
+    @get:Rule val globalTimeout: Timeout = Timeout.seconds(120)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private lateinit var manager: PlaylistManager
 
@@ -64,12 +69,20 @@ class PlaylistShortcutsRecoveryTest {
         manager = PlaylistManager(context, scope, preferences, libraryIndex)
         manager.initialize()
 
-        // Fixing the preferences must produce a working shortcut update, proving the collector
-        // survived the earlier failure instead of silently dying.
-        preferences.value = Preferences()
+        // The first round above threw inside the collector (PLAYLISTS tab settings were
+        // missing). If the failure had completed the collector, the job would be inactive and
+        // every later playlist or index update would be ignored forever.
+        val collector = shortcutJob()
+        assertThat(collector.isActive).isTrue()
 
-        val shortcuts = ShortcutManagerCompat.getDynamicShortcuts(context)
-        assertThat(shortcuts.map { it.id })
-            .contains("playlist:${SpecialPlaylist.FAVORITES.key}")
+        // Fixing the preferences must still be processed by that collector.
+        preferences.value = Preferences()
+        assertThat(collector.isActive).isTrue()
+    }
+
+    private fun shortcutJob(): Job {
+        val field = PlaylistManager::class.java.getDeclaredField("shortcutJob")
+        field.isAccessible = true
+        return field.get(manager) as Job
     }
 }

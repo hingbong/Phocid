@@ -1,8 +1,11 @@
 package org.sunsetware.phocid
 
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.sunsetware.phocid.utils.combine
@@ -27,12 +30,16 @@ class StateFlowUtilsTest {
         assertThat(flow.value).isEqualTo(-1)
         assertThat(transforms).isZero()
 
-        assertThat(flow.first()).isEqualTo(0)
+        // A real subscription is required: StateFlow.first() would hand back the cached
+        // placeholder (-1) without ever starting the WhileSubscribed upstream.
+        val subscription = launch { flow.collect {} }
+        withTimeout(5_000) { flow.first { it == 0 } }
         assertThat(transforms).isEqualTo(1)
 
         a.value = 5
-        assertThat(flow.first { it == 5 }).isEqualTo(5)
+        withTimeout(5_000) { flow.first { it == 5 } }
         assertThat(transforms).isGreaterThanOrEqualTo(2)
+        subscription.cancel()
     }
 
     @Test
@@ -59,13 +66,18 @@ class StateFlowUtilsTest {
         val gated =
             page.flatMapLatest(this) { active -> if (active == "a") innerA else innerB }
 
-        assertThat(gated.first()).isEqualTo(1)
+        assertThat(gated.value).isEqualTo(1)
+        // Subscribe so the flatMapLatest upstream actually collects the active inner flow;
+        // reading .value alone never subscribes.
+        val subscription = launch { gated.collect {} }
+        withTimeout(5_000) { gated.first { it == 1 } }
         // Only the active tab's flow has been computed since construction.
         assertThat(transformsA).isEqualTo(2)
         assertThat(transformsB).isEqualTo(1)
 
         page.value = "b"
-        assertThat(gated.first { it == 2 }).isEqualTo(2)
+        withTimeout(5_000) { gated.first { it == 2 } }
         assertThat(transformsB).isGreaterThanOrEqualTo(2)
+        subscription.cancel()
     }
 }

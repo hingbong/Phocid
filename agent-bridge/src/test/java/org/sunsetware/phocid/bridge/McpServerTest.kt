@@ -8,6 +8,8 @@ import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
 import org.json.JSONObject
 import org.junit.After
+import org.junit.Rule
+import org.junit.rules.Timeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -17,6 +19,10 @@ import org.junit.Before
 import org.junit.Test
 
 class McpServerTest {
+
+    // Hard bound so a deadlocked (not merely slow) test fails under its own name instead of
+    // stalling the whole CI job until the workflow timeout cancels it.
+    @get:Rule val globalTimeout: Timeout = Timeout.seconds(120)
     private lateinit var server: McpServer
 
     @Before

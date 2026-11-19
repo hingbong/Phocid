@@ -115,6 +115,9 @@ jobs:
 
       - name: Run unit tests
         id: unit_tests
+        # The Gradle test tasks are themselves bounded (15 min each); this step bound keeps a
+        # pathological hang from consuming the whole 45-minute job budget.
+        timeout-minutes: 30
         if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_unit_tests == true)
         env:
           PHOCID_KEYSTORE_PASSWORD: ${{ secrets.PHOCID_KEYSTORE_PASSWORD }}
@@ -126,6 +129,20 @@ jobs:
           ./gradlew --no-daemon --stacktrace --console=plain :app:customSetup :app:testDebugUnitTest :agent-bridge:testDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           status=${PIPESTATUS[0]}
           exit $status
+
+      - name: Upload unit test diagnostics
+        # Always: when a test deadlocks or the step times out, this log names the last test
+        # that started, which is the only record of where the run stalled.
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: unit-test-diagnostics-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/unit-test.log
+            app/build/reports/tests/
+            agent-bridge/build/reports/tests/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Report unit test failures
         if: failure() && steps.unit_tests.outcome == 'failure'

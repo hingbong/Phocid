@@ -201,6 +201,18 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 }
 
+// A deadlocked unit test would otherwise stall the CI job until the workflow timeout
+// cancels it, hiding which test hung. Bound the task and log every test start/finish so
+// the last logged test identifies the culprit.
+tasks.withType<Test>().configureEach {
+    timeout.set(java.time.Duration.ofMinutes(10))
+    testLogging {
+        events("started", "failed", "skipped")
+        showStandardStreams = false
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
 tasks.register("customSetup") { dependsOn("licenseReleaseReport") }
 
 tasks.preBuild { dependsOn("customSetup") }

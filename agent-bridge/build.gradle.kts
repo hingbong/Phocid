@@ -132,4 +132,15 @@ dependencies {
     testImplementation("org.json:json:20260814")
 }
 
+// Same bounded-test policy as the app module: a hang must fail with the test name instead
+// of stalling the job.
+tasks.withType<Test>().configureEach {
+    timeout.set(java.time.Duration.ofMinutes(10))
+    testLogging {
+        events("started", "failed", "skipped")
+        showStandardStreams = false
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
 ktfmt { kotlinLangStyle() }

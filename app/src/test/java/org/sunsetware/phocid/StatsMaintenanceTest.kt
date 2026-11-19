@@ -3,8 +3,11 @@ package org.sunsetware.phocid
 import androidx.room.Room
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.After
+import org.junit.Rule
+import org.junit.rules.Timeout
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,6 +23,10 @@ import org.sunsetware.phocid.stats.db.TrackEntity
 
 @RunWith(RobolectricTestRunner::class)
 class StatsMaintenanceTest {
+
+    // Hard bound so a deadlocked (not merely slow) test fails under its own name instead of
+    // stalling the whole CI job until the workflow timeout cancels it.
+    @get:Rule val globalTimeout: Timeout = Timeout.seconds(120)
     private lateinit var db: StatsDatabase
 
     @Before
@@ -144,7 +151,9 @@ class StatsMaintenanceTest {
         db.eventDao()
             .insert(PlayEventEntity(trackRowId = track, playedAt = base + 900_000L, playedMillis = 40_000L))
 
-        val slices = db.eventDao().hourlyBuckets(0).first()
+        // Bounded: a Room Flow that never emits (paused-looper invalidation) must fail here
+        // rather than hang the test worker.
+        val slices = withTimeout(10_000) { db.eventDao().hourlyBuckets(0).first() }
 
         assertThat(slices).hasSize(2)
         assertThat(slices[0].startMillis).isEqualTo(base)

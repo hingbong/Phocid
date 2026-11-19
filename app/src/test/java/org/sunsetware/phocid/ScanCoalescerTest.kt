@@ -2,16 +2,28 @@ package org.sunsetware.phocid
 
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.*
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.Timeout
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import org.sunsetware.phocid.data.InvalidTrack
 import org.sunsetware.phocid.data.UnfilteredTrackIndex
 import org.sunsetware.phocid.data.coalesceUnchangedScan
 import org.sunsetware.phocid.utils.ScanCoalescer
 
+// InvalidTrack/UnfilteredTrackIndex touch Android types during class initialisation, so the
+// plain JVM runner fails with ExceptionInInitializerError; the Robolectric sandbox supplies them.
+@RunWith(RobolectricTestRunner::class)
 class ScanCoalescerTest {
+
+    // Hard bound so a deadlocked (not merely slow) test fails under its own name instead of
+    // stalling the whole CI job until the workflow timeout cancels it.
+    @get:Rule val globalTimeout: Timeout = Timeout.seconds(120)
     // The first scan is held in flight via CompletableDeferreds, so a second request is
     // deterministically queued behind it before it completes.
 
@@ -23,8 +35,9 @@ class ScanCoalescerTest {
             val scanStarted = CompletableDeferred<Unit>()
             val finishScan = CompletableDeferred<Unit>()
 
+            // UNDISPATCHED so the request reaches the contended lock before the driver resumes.
             val first =
-                launch {
+                launch(start = CoroutineStart.UNDISPATCHED) {
                     coalescer.scan(false) {
                         scans.incrementAndGet()
                         scanStarted.complete(Unit)
@@ -33,7 +46,7 @@ class ScanCoalescerTest {
                 }
             scanStarted.await()
 
-            val second = launch { coalescer.scan(false) { scans.incrementAndGet() } }
+            val second = launch(start = CoroutineStart.UNDISPATCHED) { coalescer.scan(false) { scans.incrementAndGet() } }
             finishScan.complete(Unit)
 
             first.join()
@@ -50,8 +63,9 @@ class ScanCoalescerTest {
             val scanStarted = CompletableDeferred<Unit>()
             val finishScan = CompletableDeferred<Unit>()
 
+            // UNDISPATCHED so the request reaches the contended lock before the driver resumes.
             val first =
-                launch {
+                launch(start = CoroutineStart.UNDISPATCHED) {
                     coalescer.scan(false) {
                         scans.incrementAndGet()
                         scanStarted.complete(Unit)
@@ -60,7 +74,7 @@ class ScanCoalescerTest {
                 }
             scanStarted.await()
 
-            val second = launch { coalescer.scan(true) { scans.incrementAndGet() } }
+            val second = launch(start = CoroutineStart.UNDISPATCHED) { coalescer.scan(true) { scans.incrementAndGet() } }
             finishScan.complete(Unit)
 
             first.join()
@@ -77,8 +91,9 @@ class ScanCoalescerTest {
             val scanStarted = CompletableDeferred<Unit>()
             val finishScan = CompletableDeferred<Unit>()
 
+            // UNDISPATCHED so the request reaches the contended lock before the driver resumes.
             val first =
-                launch {
+                launch(start = CoroutineStart.UNDISPATCHED) {
                     runCatching {
                         coalescer.scan(false) {
                             scanStarted.complete(Unit)
@@ -89,7 +104,7 @@ class ScanCoalescerTest {
                 }
             scanStarted.await()
 
-            val second = launch { coalescer.scan(false) { scans.incrementAndGet() } }
+            val second = launch(start = CoroutineStart.UNDISPATCHED) { coalescer.scan(false) { scans.incrementAndGet() } }
             finishScan.complete(Unit)
 
             first.join()

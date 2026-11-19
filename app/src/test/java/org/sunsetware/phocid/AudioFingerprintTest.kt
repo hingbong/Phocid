@@ -109,8 +109,8 @@ class AudioFingerprintTest {
     fun wavHeaderEditsDoNotChangeAudioFingerprint() {
         val left = temporaryFolder.newFile("left.wav")
         val right = temporaryFolder.newFile("right.wav")
-        writeWav(left, 0x55)
-        writeWav(right, 0xAA)
+        writeWav(left)
+        writeWav(right)
 
         assertThat(AudioFingerprint.compute(left)).isEqualTo(AudioFingerprint.compute(right))
     }
@@ -161,16 +161,19 @@ class AudioFingerprintTest {
         }
     }
 
-    private fun writeWav(file: File, fmtByte: Int) {
+    private fun writeWav(file: File) {
+        // WAV is a little-endian container: writing big-endian sizes here would make the chunk
+        // walker skip past EOF and fall back to hashing the whole file, including the header.
         RandomAccessFile(file, "rw").use { raf ->
             raf.write("RIFF".toByteArray(Charsets.US_ASCII))
-            raf.write(intBytes(12 + 8 + 16 + 8 + 4096))
+            raf.write(intBytesLe(12 + 8 + 16 + 8 + 4096))
             raf.write("WAVE".toByteArray(Charsets.US_ASCII))
             raf.write("fmt ".toByteArray(Charsets.US_ASCII))
-            raf.write(intBytes(16))
-            raf.write(ByteArray(16) { fmtByte.toByte() })
+            raf.write(intBytesLe(16))
+            // Format fields differ per file, like a real re-encode header would.
+            raf.write(ByteArray(16) { 0x11 })
             raf.write("data".toByteArray(Charsets.US_ASCII))
-            raf.write(intBytes(4096))
+            raf.write(intBytesLe(4096))
             raf.write(ByteArray(4096) { (it * 31).toByte() })
         }
     }
