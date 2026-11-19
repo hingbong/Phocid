@@ -1,6 +1,9 @@
 package org.sunsetware.phocid
 
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.*
@@ -99,7 +102,10 @@ class AsyncCacheTest {
     @Test
     fun testFailedCreationDoesNotPoisonTheKey() {
         runBlocking {
-            val cache = AsyncCache<Int, Int>(this, 4)
+            // Production caches run on supervised scopes (view model / application scope); a
+            // failed creation must not cancel the cache's scope, so give the cache its own.
+            val cacheScope = CoroutineScope(SupervisorJob())
+            val cache = AsyncCache<Int, Int>(cacheScope, 4)
             var attempts = 0
 
             runCatching {
@@ -114,6 +120,8 @@ class AsyncCacheTest {
             assertThat(cache.getOrPut(0) { attempts++; 42 }).isEqualTo(42)
             assertThat(attempts).isEqualTo(2)
             assertThat(cache.get(0)).isEqualTo(42)
+
+            cacheScope.cancel()
         }
     }
 }
