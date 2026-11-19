@@ -242,6 +242,24 @@ jobs:
             echo "App APK signer certificate matches PHOCID_CERT_SHA256."
           fi
 
+      - name: Verify AppFunctions artifacts in release APK
+        run: |
+          set -euo pipefail
+          # The manifest references the KSP-generated PhocidAppFunctionService and two
+          # asset files. None of those are checked by the build (the service class only
+          # materialises at runtime), so assert them here: a compiler or annotation
+          # regression must fail CI instead of shipping a broken AppFunctions surface.
+          apk="app/build/outputs/apk/release/app-release.apk"
+          [ -f "$apk" ] || { echo "::error::$apk not found"; exit 1; }
+          unzip -l "$apk" | grep -q "assets/phocid_app_functions.xml" ||
+            { echo "::error::KSP-generated assets/phocid_app_functions.xml missing from $apk"; exit 1; }
+          unzip -l "$apk" | grep -q "assets/app_functions_schema.xsd" ||
+            { echo "::error::assets/app_functions_schema.xsd missing from $apk"; exit 1; }
+          unzip -p "$apk" 'classes*.dex' |
+            grep -a -q "org/sunsetware/phocid/appfunctions/PhocidAppFunctionService" ||
+            { echo "::error::Generated PhocidAppFunctionService class missing from $apk"; exit 1; }
+          echo "AppFunctions service class and schema assets verified in release APK."
+
       - name: Upload test APKs (debug-signed, non-main)
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v6
