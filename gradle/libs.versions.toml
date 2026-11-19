@@ -29,6 +29,7 @@ media3Common = "1.10.1"
 media3Session = "1.10.1"
 paletteKtx = "1.1.0"
 reorderable = "3.1.0"
+re2j = "1.8"
 robolectric = "4.17"
 jaudiotagger = "3.0.1"
 
@@ -73,6 +74,7 @@ androidx-material-icons-extended = { group = "androidx.compose.material", name =
 androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3Session" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
+re2j = { module = "com.google.re2j:re2j", version.ref = "re2j" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]

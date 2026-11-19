@@ -19,6 +19,7 @@ import androidx.core.database.getLongOrNull
 import androidx.core.database.getStringOrNull
 import androidx.palette.graphics.Palette
 import androidx.palette.graphics.Target
+import com.google.re2j.Pattern
 import java.io.File
 import java.io.FileInputStream
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -1100,8 +1101,8 @@ data class LibraryIndex(
 fun LibraryIndex(
     unfilteredTrackIndex: UnfilteredTrackIndex,
     collator: Collator,
-    blacklist: List<Regex>,
-    whitelist: List<Regex>,
+    blacklist: List<Pattern>,
+    whitelist: List<Pattern>,
     sortKeys: SortKeyLookup = SortKeyLookup.EMPTY,
 ): LibraryIndex {
     val tracks =

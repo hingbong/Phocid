@@ -158,6 +158,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.jaudiotagger)
     implementation(libs.juniversalchardet)
+    implementation(libs.re2j)
     implementation(libs.reorderable)
     ksp(libs.androidx.appfunctions.compiler)
     ksp(libs.androidx.room.compiler)

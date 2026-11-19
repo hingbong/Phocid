@@ -28,11 +28,36 @@ class SafeRegexTest {
     }
 
     @Test
+    fun rejectsBacktrackingOnlySyntax() {
+        // RE2/J cannot express backreferences or lookaround; [SafeRegex.isValid] must report them
+        // as invalid so the editing dialog shows feedback instead of silently dropping the rule.
+        assertThat(SafeRegex.isValid("""(a)\1""")).isFalse()
+        assertThat(SafeRegex.isValid("""a(?=b)""")).isFalse()
+    }
+
+    @Test
     fun boundedMatchTruncatesLongSubjects() {
         val regex = SafeRegex.compile("needle")!!
         val longPath = "a".repeat(SafeRegex.MAX_SUBJECT_LENGTH) + "needle"
         // The match must not see beyond the cap.
         assertThat(regex.matchesBounded(longPath)).isFalse()
         assertThat(regex.matchesBounded("needle" + "a".repeat(50))).isTrue()
+    }
+
+    @Test
+    fun adversarialPatternsBypassingTheShapeCheckStayLinear() {
+        // Alternation overlap and parenthesised wrapping defeat the nested-quantifier shape
+        // check. The engine must still finish within a generous linear-time budget: a
+        // backtracking matcher would not terminate for either pattern.
+        val adversarial = listOf("(a|aa)+$", "^((a+))+$")
+        val longSubject = "a".repeat(100_000)
+        for (pattern in adversarial) {
+            val regex = SafeRegex.compile(pattern)!!
+            val startedAt = System.nanoTime()
+            val matched = regex.matcher(longSubject).find()
+            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+            assertThat(matched).isTrue()
+            assertThat(elapsedMs).isLessThan(10_000)
+        }
     }
 }
