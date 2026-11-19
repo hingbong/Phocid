@@ -50,6 +50,13 @@ inline fun <T1, T2, T3, R> StateFlow<T1>.combine(
     flow2: StateFlow<T2>,
     flow3: StateFlow<T3>,
     hot: Boolean = false,
+    /**
+     * Initial shared value. Pass a cheap placeholder (for example an empty list) to avoid
+     * computing [transform] eagerly on the calling thread at construction time; the real value
+     * is computed on [coroutineScope] when the first subscriber arrives. Null (the default)
+     * keeps the old eager-initial behaviour.
+     */
+    initial: R? = null,
     crossinline transform: (a: T1, b: T2, c: T3) -> R,
 ): StateFlow<R> {
     return combine(flow2) { a, b -> Pair(a, b) }
@@ -57,7 +64,7 @@ inline fun <T1, T2, T3, R> StateFlow<T1>.combine(
         .stateIn(
             coroutineScope,
             if (hot) SharingStarted.Eagerly else SharingStarted.WhileSubscribed(STOP_TIMEOUT),
-            transform(value, flow2.value, flow3.value),
+            initial ?: transform(value, flow2.value, flow3.value),
         )
 }
 

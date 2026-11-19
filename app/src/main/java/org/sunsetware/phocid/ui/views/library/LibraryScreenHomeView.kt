@@ -42,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
@@ -55,6 +56,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaMetadata
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -110,6 +114,7 @@ import org.sunsetware.phocid.ui.views.playlistCollectionMultiSelectMenuItems
 import org.sunsetware.phocid.ui.views.trackMenuItemsLibrary
 import org.sunsetware.phocid.utils.coerceInOrMin
 import org.sunsetware.phocid.utils.combine
+import org.sunsetware.phocid.utils.flatMapLatest
 
 @Immutable
 data class LibraryScreenHomeViewItem(
@@ -137,6 +142,10 @@ data class LibraryScreenHomeViewItem(
     }
 }
 
+/** The tab type whose item flow must stay hot while the pager settles towards [page]. */
+internal fun activeTabTypeFor(page: Int, preferences: Preferences): LibraryScreenTabType? =
+    preferences.tabs.getOrNull(page)?.type
+
 class LibraryScreenHomeViewState(
     coroutineScope: CoroutineScope,
     preferences: StateFlow<Preferences>,
@@ -145,14 +154,36 @@ class LibraryScreenHomeViewState(
     searchQuery: StateFlow<String>,
 ) : AutoCloseable {
     val pagerState = DefaultPagerState { preferences.value.tabs.size }
+
+    /**
+     * Tab transforms are full-library search+sort operations. They run on this scope's
+     * [Dispatchers.Default] pool, so the main thread only ever receives the finished lists; the
+     * caller's [coroutineScope] stays on the main dispatcher for snapshot and selection work.
+     */
+    private val flowScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** The page the pager is settling towards, as a flow, so per-tab computation can be gated. */
+    private val _activePage = MutableStateFlow(0)
+    private val activePageJob =
+        coroutineScope.launch {
+            snapshotFlow { pagerState.targetPage }.collect { _activePage.value = it }
+        }
+
+    private val activeTabType =
+        _activePage.combine(flowScope, preferences, transform = ::activeTabTypeFor)
+
     val tabStates =
         LibraryScreenTabType.entries.associateWith { tabType ->
-            val items =
+            // The initial value is a cheap empty list: WhileSubscribed computes the real items on
+            // first collection (on [flowScope]) instead of eagerly running the full transform on
+            // the main thread at construction time, once per tab.
+            val rawItems =
                 if (tabType != LibraryScreenTabType.PLAYLISTS) {
                     preferences.combine(
-                        coroutineScope,
+                        flowScope,
                         libraryIndex,
                         searchQuery,
+                        initial = emptyList<LibraryScreenHomeViewItem>(),
                         transform =
                             when (tabType) {
                                 LibraryScreenTabType.TRACKS -> ::trackItems
@@ -166,11 +197,21 @@ class LibraryScreenHomeViewState(
                     )
                 } else {
                     preferences.combine(
-                        coroutineScope,
+                        flowScope,
                         playlistManager.playlists,
                         searchQuery,
+                        initial = emptyList<LibraryScreenHomeViewItem>(),
                         transform = ::playlistItems,
                     )
+                }
+
+            // Only the tab the pager is settling towards stays subscribed. flatMapLatest
+            // unsubscribes every other tab's raw flow, so its WhileSubscribed sharing stops and
+            // nothing is searched, sorted, or hinted while that tab is not visible.
+            val items =
+                activeTabType.flatMapLatest(flowScope) { active ->
+                    if (active == tabType) rawItems
+                    else MutableStateFlow(emptyList<LibraryScreenHomeViewItem>())
                 }
 
             LibraryScreenHomeViewTabState(MultiSelectState(coroutineScope, items))
@@ -196,8 +237,10 @@ class LibraryScreenHomeViewState(
     }
 
     override fun close() {
+        activePageJob.cancel()
         activeMultiSelectStateJobs.forEach { it.cancel() }
         tabStates.values.forEach { it.close() }
+        flowScope.cancel()
     }
 
     private fun trackItems(
