@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -520,8 +521,16 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 containerColor = containerColor,
                                 contentColor = contentColor,
                                 colorfulBackground = preferences.colorfulPlayerBackground,
+                                // Reading the animated position directly in composition
+                                // invalidates this whole scope on every drag frame. The derived
+                                // state only flips at the fully-open/fully-closed boundaries.
                                 dragIndicatorVisibility =
-                                    playQueueDragState.position == 1f || playQueueDragTarget == 1f,
+                                    remember {
+                                        derivedStateOf {
+                                            playQueueDragState.position == 1f ||
+                                                playQueueDragTarget == 1f
+                                        }
+                                    }.value,
                                 swipeToRemoveFromQueue = preferences.swipeToRemoveFromQueue,
                                 swipeThreshold =
                                     DEFAULT_SWIPE_THRESHOLD * preferences.swipeThresholdMultiplier,
