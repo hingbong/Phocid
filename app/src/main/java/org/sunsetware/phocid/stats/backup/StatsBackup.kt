@@ -53,7 +53,10 @@ data class StatsBackup(
         const val MAGIC = "MSTATS1\u0000"
         /** Upper bound on the decompressed CBOR payload. Guards against gzip bombs. */
         const val MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
-        /** Upper bound on any single list in a payload, so decode cannot fan out unchecked. */
+        /**
+         * Upper bound on any single list in a payload. Enforced on the raw CBOR structure before
+         * decoding ([CborStructureGuard]) and re-checked in validate() as defense in depth.
+         */
         const val MAX_LIST_ENTRIES = 1_000_000
         /** Plausible epoch-day range (roughly ±8,000 years); blocks Int.MIN/MAX overflow. */
         const val MIN_EPOCH_DAY = -3_000_000
@@ -230,7 +233,12 @@ class StatsBackupManager(
                     }
                     bounded.write(buffer, 0, read)
                 }
-                val payload = cbor.decodeFromByteArray<StatsBackup>(bounded.toByteArray())
+                val bytes = bounded.toByteArray()
+                // The list caps in validate() run only after decodeFromByteArray has built the
+                // whole object graph. Reject oversized structures on the raw bytes first, so a
+                // crafted payload cannot fan out into a huge heap during decoding.
+                CborStructureGuard.check(bytes)
+                val payload = cbor.decodeFromByteArray<StatsBackup>(bytes)
                 require(payload.version in StatsBackup.MIN_VERSION..StatsBackup.VERSION) {
                     if (payload.version > StatsBackup.VERSION)
                         "Backup was created by a newer version"
@@ -631,6 +639,167 @@ class StatsBackupManager(
                 db.trackDao().clear()
             }
         }
+}
+
+/**
+ * Pre-decode structural guard for untrusted CBOR payloads.
+ *
+ * [StatsBackupManager.read] bounds the inflated payload to [StatsBackup.MAX_PAYLOAD_BYTES], but a
+ * few megabytes of CBOR can still describe millions of list elements. Definite-length array/map
+ * headers declare a count that kotlinx.serialization feeds into collection sizing before the
+ * elements are read, and indefinite-length containers (which [Cbor.Default] writes, so Phocid's own
+ * exports use them) declare no count at all. Enforcing [StatsBackup.MAX_LIST_ENTRIES] only after
+ * [Cbor.decodeFromByteArray] would let the object graph blow up first. This scanner walks the raw
+ * bytes instead, allocating nothing per element, and rejects oversized or malformed structures
+ * before any decoding happens:
+ * - definite-length array/map counts are checked against the entry cap and against the bytes
+ *   actually remaining (every child needs at least one byte), so a lying header cannot pre-size a
+ *   huge collection;
+ * - indefinite-length containers are counted element by element and rejected as soon as they exceed
+ *   the cap;
+ * - string and byte-string bodies are skipped, never materialized;
+ * - nesting is capped so neither this explicit frame stack nor the recursive decoder behind it can
+ *   be exhausted.
+ *
+ * Residual limitation: within the caps, decoding still amplifies payload bytes by a bounded
+ * constant factor (boxed numbers, strings, row objects). That factor is inherent to object-graph
+ * decoding; this guard removes the unbounded, header-driven fan-out, not the constant.
+ */
+private object CborStructureGuard {
+    private const val MAX_DEPTH = 32
+    private const val INDEFINITE = -1L
+
+    fun check(bytes: ByteArray) {
+        // One frame per open container: remaining definite children (or INDEFINITE), children
+        // seen so far, and the child cap. Frame 0 is a sentinel expecting one top-level item.
+        val remaining = LongArray(MAX_DEPTH)
+        val seen = LongArray(MAX_DEPTH)
+        val limit = LongArray(MAX_DEPTH)
+        var depth = 1
+        remaining[0] = 1
+        var pos = 0
+
+        // Marks one item as consumed at the current depth, cascading through finished frames.
+        fun consumeOne() {
+            while (depth > 0) {
+                val d = depth - 1
+                if (remaining[d] == INDEFINITE) {
+                    seen[d]++
+                    require(seen[d] <= limit[d]) {
+                        "Backup contains an oversized CBOR container (more than ${StatsBackup.MAX_LIST_ENTRIES} entries)"
+                    }
+                    return
+                }
+                remaining[d]--
+                if (remaining[d] > 0) return
+                depth--
+            }
+        }
+
+        fun pushFrame(children: Long, cap: Long) {
+            require(depth < MAX_DEPTH) { "Backup CBOR structure is nested too deeply" }
+            remaining[depth] = children
+            seen[depth] = 0
+            limit[depth] = cap
+            depth++
+        }
+
+        // Reads the argument of a header whose additional-info is [info], advancing pos. For
+        // info < 24 the argument is the info itself and no extra bytes follow.
+        fun argument(info: Int): Long {
+            if (info < 24) return info.toLong()
+            val width =
+                when (info) {
+                    24 -> 1
+                    25 -> 2
+                    26 -> 4
+                    27 -> 8
+                    else -> throw IllegalArgumentException("Backup CBOR payload is malformed")
+                }
+            require(pos + width <= bytes.size) { "Backup CBOR payload is truncated" }
+            var value = 0L
+            repeat(width) { value = (value shl 8) or (bytes[pos++].toInt() and 0xFF).toLong() }
+            return value
+        }
+
+        fun skipStringBody(length: Long) {
+            require(length >= 0 && length <= (bytes.size - pos).toLong()) {
+                "Backup CBOR payload is truncated"
+            }
+            pos += length.toInt()
+        }
+
+        val arrayCap = StatsBackup.MAX_LIST_ENTRIES.toLong()
+        val mapCap = 2L * StatsBackup.MAX_LIST_ENTRIES
+        while (depth > 0) {
+            require(pos < bytes.size) { "Backup CBOR payload is truncated" }
+            val header = bytes[pos++].toInt() and 0xFF
+            val major = header ushr 5
+            val info = header and 0x1F
+            if (info == 31) {
+                when (major) {
+                    // BREAK closes the nearest indefinite-length container.
+                    7 -> {
+                        require(depth > 1 && remaining[depth - 1] == INDEFINITE) {
+                            "Backup CBOR payload has an unexpected break"
+                        }
+                        depth--
+                        consumeOne()
+                    }
+                    4 -> pushFrame(INDEFINITE, arrayCap)
+                    5 -> pushFrame(INDEFINITE, mapCap)
+                    // Indefinite-length string: skip definite chunks until BREAK.
+                    2,
+                    3 -> {
+                        while (true) {
+                            require(pos < bytes.size) { "Backup CBOR payload is truncated" }
+                            val chunk = bytes[pos++].toInt() and 0xFF
+                            if (chunk == 0xFF) break
+                            require(chunk ushr 5 == major && chunk and 0x1F != 31) {
+                                "Backup CBOR payload is malformed"
+                            }
+                            skipStringBody(argument(chunk and 0x1F))
+                        }
+                        consumeOne()
+                    }
+                    else -> throw IllegalArgumentException("Backup CBOR payload is malformed")
+                }
+                continue
+            }
+            val value = argument(info)
+            when (major) {
+                0,
+                1,
+                7 -> consumeOne()
+                2,
+                3 -> {
+                    skipStringBody(value)
+                    consumeOne()
+                }
+                4 -> {
+                    require(value in 0..arrayCap) {
+                        "Backup declares an oversized CBOR array ($value entries)"
+                    }
+                    require(value <= (bytes.size - pos).toLong()) {
+                        "Backup declares more CBOR entries than the payload can hold"
+                    }
+                    if (value == 0L) consumeOne() else pushFrame(value, arrayCap)
+                }
+                5 -> {
+                    require(value in 0..arrayCap) {
+                        "Backup declares an oversized CBOR map ($value pairs)"
+                    }
+                    require(2 * value <= (bytes.size - pos).toLong()) {
+                        "Backup declares more CBOR entries than the payload can hold"
+                    }
+                    if (value == 0L) consumeOne() else pushFrame(2 * value, mapCap)
+                }
+                // A tag wraps exactly one item.
+                6 -> pushFrame(1, 1)
+                else -> throw IllegalArgumentException("Backup CBOR payload is malformed")
+            }
+        }
+    }
 }
 
 /**

@@ -811,6 +811,108 @@ class StatsBackupPortabilityTest {
                 .hasMessageContaining("too large")
         }
 
+    /** Writes a definite-length CBOR array header with a 4-byte count. */
+    private fun writeArrayHeader(out: ByteArrayOutputStream, count: Int) {
+        out.write(0x9A) // major type 4, additional info 26 (4-byte argument)
+        out.write(count ushr 24 and 0xFF)
+        out.write(count ushr 16 and 0xFF)
+        out.write(count ushr 8 and 0xFF)
+        out.write(count and 0xFF)
+    }
+
+    /** map(1) { "activeDays": ... } prefix shared by the oversized-list regressions. */
+    private fun activeDaysMapPrefix(): ByteArrayOutputStream {
+        val out = ByteArrayOutputStream()
+        out.write(0xA1) // definite map, 1 pair
+        out.write(0x6A) // text string, length 10
+        out.write("activeDays".toByteArray(Charsets.US_ASCII))
+        return out
+    }
+
+    @Test
+    fun readRejectsOversizedDefiniteListHeaderBeforeDecode() =
+        runBlocking<Unit> {
+            // map(1) { "activeDays": array(MAX_LIST_ENTRIES + 1) } with no elements at all. The
+            // declared count alone must be rejected by the structural pre-scan: decoding this
+            // payload would fail on truncation, and the post-decode cap would instead report
+            // "too many active days". The guard message proves rejection happened pre-decode.
+            val raw = activeDaysMapPrefix()
+            writeArrayHeader(raw, StatsBackup.MAX_LIST_ENTRIES + 1)
+
+            assertThatThrownBy {
+                    runBlocking {
+                        StatsBackupManager(db)
+                            .read(ByteArrayInputStream(gzippedBytes(raw.toByteArray())))
+                    }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("oversized CBOR array")
+        }
+
+    @Test
+    fun readRejectsDefiniteListHeaderLargerThanPayload() =
+        runBlocking<Unit> {
+            // A header within the entry cap but claiming far more elements than the payload could
+            // hold must be rejected before the decoder sizes a collection from the declared count.
+            val raw = activeDaysMapPrefix()
+            writeArrayHeader(raw, StatsBackup.MAX_LIST_ENTRIES)
+            raw.write(0x00)
+            raw.write(0x00)
+            raw.write(0x00) // only three elements actually follow
+
+            assertThatThrownBy {
+                    runBlocking {
+                        StatsBackupManager(db)
+                            .read(ByteArrayInputStream(gzippedBytes(raw.toByteArray())))
+                    }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("more CBOR entries than the payload can hold")
+        }
+
+    @Test
+    fun readRejectsOversizedIndefiniteListBeforeDecode() =
+        runBlocking<Unit> {
+            // Cbor.Default writes indefinite-length arrays, so no header declares the count. The
+            // pre-scan must count elements and reject at MAX_LIST_ENTRIES + 1, before
+            // decodeFromByteArray boxes a million integers. The post-decode cap would report
+            // "too many active days"; the guard message proves rejection happened pre-decode.
+            val raw = activeDaysMapPrefix()
+            raw.write(0x9F) // indefinite-length array
+            repeat(StatsBackup.MAX_LIST_ENTRIES + 1) { raw.write(0x00) }
+            raw.write(0xFF) // BREAK
+
+            assertThatThrownBy {
+                    runBlocking {
+                        StatsBackupManager(db)
+                            .read(ByteArrayInputStream(gzippedBytes(raw.toByteArray())))
+                    }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("oversized CBOR container")
+        }
+
+    @Test
+    fun readRejectsOversizedArrayUnderUnknownKey() =
+        runBlocking<Unit> {
+            // ignoreUnknownKeys would skip an unknown field, but the structural scan covers the
+            // whole payload, so an oversized array hidden under an unknown key is still rejected.
+            val raw = ByteArrayOutputStream()
+            raw.write(0xA1) // definite map, 1 pair
+            raw.write(0x64) // text string, length 4
+            raw.write("junk".toByteArray(Charsets.US_ASCII))
+            writeArrayHeader(raw, StatsBackup.MAX_LIST_ENTRIES + 1)
+
+            assertThatThrownBy {
+                    runBlocking {
+                        StatsBackupManager(db)
+                            .read(ByteArrayInputStream(gzippedBytes(raw.toByteArray())))
+                    }
+                }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("oversized CBOR array")
+        }
+
     @Test
     fun readRejectsTruncatedStream() =
         runBlocking<Unit> {
