@@ -19,7 +19,6 @@ import androidx.core.database.getLongOrNull
 import androidx.core.database.getStringOrNull
 import androidx.palette.graphics.Palette
 import androidx.palette.graphics.Target
-import com.google.re2j.Pattern
 import java.io.File
 import java.io.FileInputStream
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -64,11 +63,11 @@ import org.sunsetware.phocid.sortkey.SortKeyLookup
 import org.sunsetware.phocid.utils.CaseInsensitiveMap
 import org.sunsetware.phocid.utils.CaseInsensitiveString
 import org.sunsetware.phocid.utils.ColorSerializer
+import org.sunsetware.phocid.utils.SafePattern
 import org.sunsetware.phocid.utils.casefolder
 import org.sunsetware.phocid.utils.coerceInOrMin
 import org.sunsetware.phocid.utils.distinctCaseInsensitive
 import org.sunsetware.phocid.utils.icuFormat
-import org.sunsetware.phocid.utils.matchesBounded
 import org.sunsetware.phocid.utils.mode
 import org.sunsetware.phocid.utils.modeOrNull
 import org.sunsetware.phocid.utils.trimAndNormalize
@@ -1109,8 +1108,8 @@ data class LibraryIndex(
 fun LibraryIndex(
     unfilteredTrackIndex: UnfilteredTrackIndex,
     collator: Collator,
-    blacklist: List<Pattern>,
-    whitelist: List<Pattern>,
+    blacklist: List<SafePattern>,
+    whitelist: List<SafePattern>,
     sortKeys: SortKeyLookup = SortKeyLookup.EMPTY,
 ): LibraryIndex {
     val tracks =

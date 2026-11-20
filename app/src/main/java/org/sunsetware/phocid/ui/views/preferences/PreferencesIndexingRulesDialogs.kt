@@ -44,7 +44,6 @@ import org.sunsetware.phocid.ui.components.UtilityListItem
 import org.sunsetware.phocid.ui.theme.Typography
 import org.sunsetware.phocid.utils.SafeRegex
 import org.sunsetware.phocid.utils.icuFormat
-import org.sunsetware.phocid.utils.matchesBounded
 import org.sunsetware.phocid.utils.removeAt
 
 @Stable
