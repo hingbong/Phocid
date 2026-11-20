@@ -148,6 +148,17 @@ interface TrackAliasDao {
     @Query("DELETE FROM track_aliases WHERE trackRowId = :rowId AND kind = :kind")
     suspend fun deleteKind(rowId: Long, kind: Int)
 
+    /**
+     * Retires one exact (kind, value) claim of [rowId] without touching its other aliases of the
+     * same kind. The G4 REL_PATH rebuild uses this to drop a single legacy basename key after a
+     * rooted key has been inserted in the same transaction; [deleteKind] would wipe every REL_PATH
+     * of the row.
+     */
+    @Query(
+        "DELETE FROM track_aliases WHERE kind = :kind AND value = :value AND trackRowId = :rowId"
+    )
+    suspend fun deleteValue(rowId: Long, kind: Int, value: String)
+
     @Query("SELECT * FROM track_aliases") suspend fun all(): List<TrackAliasEntity>
 
     @Query("UPDATE track_aliases SET trackRowId = :winner WHERE trackRowId = :loser")

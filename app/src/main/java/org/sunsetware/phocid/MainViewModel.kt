@@ -27,6 +27,7 @@ import org.sunsetware.phocid.data.Preferences
 import org.sunsetware.phocid.data.scanParseFingerprint
 import org.sunsetware.phocid.data.scanTracks
 import org.sunsetware.phocid.globals.GlobalData
+import org.sunsetware.phocid.stats.resolver.toTrackMeta
 import org.sunsetware.phocid.ui.components.ArtworkCache
 import org.sunsetware.phocid.ui.views.library.LibraryScreenTabInfo
 import org.sunsetware.phocid.utils.ScanCoalescer
@@ -189,6 +190,16 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
                                 }
                             }
                             Log.d("Phocid", "Library scan completed")
+                            // Upgrade legacy basename REL_PATH aliases off the scan critical
+                            // section: a detached IO job so hashing never holds the ScanCoalescer
+                            // mutex or blocks the scan/RESUMED intent.
+                            val scanned = newTrackIndex.tracks.values.map { it.toTrackMeta() }
+                            viewModelScope.launch(Dispatchers.IO) {
+                                runCatching { statsManager.rebuildRelPathAliases(scanned) }
+                                    .onFailure {
+                                        Log.e("Phocid", "REL_PATH alias rebuild failed", it)
+                                    }
+                            }
                         } else {
                             Log.d(
                                 "Phocid",

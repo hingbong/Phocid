@@ -13,6 +13,8 @@ import org.sunsetware.phocid.stats.db.StatsDatabase
 import org.sunsetware.phocid.stats.domain.StatsRepository
 import org.sunsetware.phocid.stats.fingerprint.AudioFingerprint
 import org.sunsetware.phocid.stats.recorder.PlaybackStatsRecorder
+import org.sunsetware.phocid.stats.resolver.RelPathAliasRebuild
+import org.sunsetware.phocid.stats.resolver.TrackMeta
 import org.sunsetware.phocid.stats.resolver.TrackResolver
 import org.sunsetware.phocid.stats.resolver.defaultMediaRoots
 
@@ -20,15 +22,12 @@ import org.sunsetware.phocid.stats.resolver.defaultMediaRoots
 class StatsManager(context: Context) {
     private val appContext = context.applicationContext
     val database: StatsDatabase = StatsDatabase.get(appContext)
-    val resolver: TrackResolver =
-        TrackResolver(
-            database,
-            fingerprint = { meta ->
-                AudioFingerprint.compute(appContext.contentResolver, Uri.parse(meta.uri))
-                    ?: meta.file?.let { AudioFingerprint.compute(it) }
-            },
-            mediaRoots = { defaultMediaRoots(appContext) },
-        )
+    private val fingerprint: (TrackMeta) -> String? = { meta ->
+        AudioFingerprint.compute(appContext.contentResolver, Uri.parse(meta.uri))
+            ?: meta.file?.let { AudioFingerprint.compute(it) }
+    }
+    private val mediaRoots: () -> List<String> = { defaultMediaRoots(appContext) }
+    val resolver: TrackResolver = TrackResolver(database, fingerprint, mediaRoots)
     val repository: StatsRepository = StatsRepository(database)
     val backupManager: StatsBackupManager = StatsBackupManager(database)
     private val recorders = CopyOnWriteArrayList<PlaybackStatsRecorder>()
@@ -88,4 +87,15 @@ class StatsManager(context: Context) {
     fun invalidateResolver() {
         resolver.invalidate()
     }
+
+    /**
+     * Scan-time maintenance: upgrades legacy basename-only REL_PATH aliases to rooted keys for rows
+     * that a scanned file positively proves (matching AUDIO_HASH) are that audio. Safe by
+     * construction (see [RelPathAliasRebuild]); it never strands identity and never changes
+     * resolve() behavior. Runs off the main thread and off the scan hot path.
+     */
+    suspend fun rebuildRelPathAliases(scanned: List<TrackMeta>) =
+        withContext(Dispatchers.IO) {
+            RelPathAliasRebuild(database, fingerprint, mediaRoots).rebuild(scanned)
+        }
 }
