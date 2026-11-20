@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
     alias(libs.plugins.compose.compiler)
-    id("com.ncorti.ktfmt.gradle") version "0.27.0"
+    id("com.ncorti.ktfmt.gradle") version "0.28.0"
 }
 
 val buildCommit =
