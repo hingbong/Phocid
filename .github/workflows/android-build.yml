@@ -126,7 +126,11 @@ jobs:
         run: |
           chmod +x gradlew
           set +e
-          ./gradlew --no-daemon --stacktrace --console=plain :app:customSetup :app:testDebugUnitTest :agent-bridge:testDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/unit-test.log"
+          # setup-gradle restores caches across commits; a restored cache can carry a stale
+          # "module absent" marker (e.g. a BOM a new AGP pulls in that was not yet published when
+          # the cache was written), failing configuration even though the artifact now exists.
+          # Refresh dependency metadata so absence is re-checked against the repositories.
+          ./gradlew --no-daemon --stacktrace --console=plain --refresh-dependencies :app:customSetup :app:testDebugUnitTest :agent-bridge:testDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           status=${PIPESTATUS[0]}
           exit $status
 
