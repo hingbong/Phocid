@@ -37,7 +37,7 @@ object PlayerScreenLayoutNoQueue : PlayerScreenLayout() {
                         PlayerScreenLayoutNoQueuePortraitTablet
                     else PlayerScreenLayoutNoQueueSquarePhone
                 AspectRatio.PORTRAIT -> PlayerScreenLayoutNoQueuePortraitPhone
-            }
+            },
         ) {
             place(
                 topBarStandalone,
@@ -106,7 +106,7 @@ class PlayerScreenLayoutNoQueuePortrait(val tablet: Boolean) : PlayerScreenLayou
         val contentHeight = lerp(artworkHeight, lyricsHeight, lyricsTransitionSecondHalf)
         val controlsHeight =
             (height - topBarStandaloneHeight - contentHeight - queueCollapsedHeight).coerceAtLeast(
-                0
+                0,
             )
         val queueOffset =
             (queueDragState.position *
@@ -190,7 +190,7 @@ object PlayerScreenLayoutNoQueueLandscape : PlayerScreenLayout() {
                 Constraints(
                     maxWidth = width - artworkWidth,
                     maxHeight = (height - queueCollapsedHeight).coerceAtLeast(0),
-                )
+                ),
             )
 
         val queueOffset = (queueDragState.position * controlsPlaceable.height).roundToIntOrZero()
@@ -212,7 +212,7 @@ object PlayerScreenLayoutNoQueueLandscape : PlayerScreenLayout() {
                     Constraints(
                         maxWidth = artworkWidth,
                         maxHeight = (height - topBarOverlayPlaceable.height).coerceAtLeast(0),
-                    )
+                    ),
                 )
                 .placeRelativeWithLayer(0, topBarOverlayPlaceable.height) {
                     alpha = lyricsTransitionSecondHalf
@@ -229,7 +229,7 @@ object PlayerScreenLayoutNoQueueLandscape : PlayerScreenLayout() {
                 Constraints(
                     maxWidth = width - artworkWidth,
                     maxHeight = queueCollapsedHeight + queueOffset,
-                )
+                ),
             )
             .placeRelative(artworkWidth, controlsPlaceable.height - queueOffset)
 
@@ -267,7 +267,7 @@ object PlayerScreenLayoutNoQueueSquarePhone : PlayerScreenLayout() {
                 Constraints(
                     maxWidth = width,
                     maxHeight = (height - topBarPlaceable.height).coerceAtLeast(0),
-                )
+                ),
             )
         controlsPlaceable.placeRelative(0, topBarPlaceable.height)
 
@@ -278,7 +278,7 @@ object PlayerScreenLayoutNoQueueSquarePhone : PlayerScreenLayout() {
                 Constraints(
                     maxWidth = width,
                     maxHeight = (height - topBarPlaceable.height).coerceAtLeast(0),
-                )
+                ),
             )
             .placeRelativeWithLayer(0, topBarPlaceable.height) { alpha = queueDragState.position }
 
@@ -289,7 +289,7 @@ object PlayerScreenLayoutNoQueueSquarePhone : PlayerScreenLayout() {
                     maxHeight =
                         (height - topBarPlaceable.height - controlsPlaceable.height + queueOffset)
                             .coerceAtLeast(0),
-                )
+                ),
             )
             .placeRelative(0, topBarPlaceable.height - queueOffset + controlsPlaceable.height)
 
@@ -299,7 +299,7 @@ object PlayerScreenLayoutNoQueueSquarePhone : PlayerScreenLayout() {
                     Constraints(
                         maxWidth = width,
                         maxHeight = (height - topBarPlaceable.height).coerceAtLeast(0),
-                    )
+                    ),
                 )
                 .placeRelativeWithLayer(0, topBarPlaceable.height) {
                     alpha = lyricsTransitionFirstHalf
@@ -311,7 +311,7 @@ object PlayerScreenLayoutNoQueueSquarePhone : PlayerScreenLayout() {
                     Constraints(
                         maxWidth = width,
                         maxHeight = (height - topBarPlaceable.height).coerceAtLeast(0),
-                    )
+                    ),
                 )
                 .placeRelativeWithLayer(0, topBarPlaceable.height) {
                     alpha = lyricsTransitionSecondHalf

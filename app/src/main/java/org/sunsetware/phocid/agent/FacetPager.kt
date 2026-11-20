@@ -29,7 +29,7 @@ internal fun <T> pageFacets(
                 val byCollator = compare(leftName, rightName)
                 if (byCollator != 0) byCollator
                 else leftName.compareTo(rightName, ignoreCase = true)
-            }
+            },
         )
     return FacetPage(
         total = sorted.size,

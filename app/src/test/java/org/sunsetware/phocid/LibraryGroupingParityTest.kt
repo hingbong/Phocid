@@ -92,7 +92,7 @@ class LibraryGroupingParityTest {
                 .containsExactlyInAnyOrderElementsOf(expected)
             // Album slices are a subset of the artist's tracks (null albums form no slice).
             assertThat(
-                    index.artists[name]!!.albumSlices.flatMap { it.tracks }.map { it.id }.toSet()
+                    index.artists[name]!!.albumSlices.flatMap { it.tracks }.map { it.id }.toSet(),
                 )
                 .isSubsetOf(expected)
         }
@@ -143,7 +143,7 @@ class LibraryGroupingParityTest {
                     .map { it.id }
                     .toSet()
             assertThat(
-                    index.albumArtists[name]!!.albums.flatMap { it.tracks }.map { it.id }.toSet()
+                    index.albumArtists[name]!!.albums.flatMap { it.tracks }.map { it.id }.toSet(),
                 )
                 .containsExactlyInAnyOrderElementsOf(expected)
         }

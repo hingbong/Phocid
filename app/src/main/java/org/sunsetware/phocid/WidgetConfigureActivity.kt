@@ -113,7 +113,7 @@ class WidgetConfigureActivity : ComponentActivity() {
                                     onClick = {
                                         setResult(RESULT_CANCELED)
                                         finish()
-                                    }
+                                    },
                                 ) {
                                     Icon(
                                         Icons.Filled.Close,
@@ -122,7 +122,7 @@ class WidgetConfigureActivity : ComponentActivity() {
                                 }
                             },
                         )
-                    }
+                    },
                 ) { scaffoldPadding ->
                     Surface(
                         modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
@@ -130,7 +130,8 @@ class WidgetConfigureActivity : ComponentActivity() {
                     ) {
                         Column {
                             Column(
-                                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
+                                modifier =
+                                    Modifier.weight(1f).verticalScroll(rememberScrollState()),
                             ) {
                                 UtilityListHeader(Strings[R.string.preferences_widget_color])
                                 UtilitySwitchListItem(
@@ -161,13 +162,13 @@ class WidgetConfigureActivity : ComponentActivity() {
                                                 },
                                             activeIndex =
                                                 DarkThemePreference.entries.indexOf(
-                                                    preferences.widgetDarkTheme
+                                                    preferences.widgetDarkTheme,
                                                 ),
                                             onSetActiveIndex = { index ->
                                                 preferencesFlow.update {
                                                     it.copy(
                                                         widgetDarkTheme =
-                                                            DarkThemePreference.entries[index]
+                                                            DarkThemePreference.entries[index],
                                                     )
                                                 }
                                             },
@@ -177,7 +178,7 @@ class WidgetConfigureActivity : ComponentActivity() {
                                 )
 
                                 UtilityListHeader(
-                                    Strings[R.string.preferences_widget_artwork_resolution_limit]
+                                    Strings[R.string.preferences_widget_artwork_resolution_limit],
                                 )
                                 Text(
                                     NumberFormatter.withLocale(Locale.getDefault())
@@ -201,7 +202,7 @@ class WidgetConfigureActivity : ComponentActivity() {
                                         preferencesFlow.update {
                                             it.copy(
                                                 widgetArtworkResolutionLimit =
-                                                    artworkResolutionLimit
+                                                    artworkResolutionLimit,
                                             )
                                         }
                                     },
@@ -240,8 +241,8 @@ class WidgetConfigureActivity : ComponentActivity() {
                                                             preferencesFlow.update {
                                                                 it.copy(widgetLayout = layout)
                                                             }
-                                                        }
-                                                    )
+                                                        },
+                                                    ),
                                         ) {
                                             Image(
                                                 painterResource(layout.previewId),
@@ -252,7 +253,7 @@ class WidgetConfigureActivity : ComponentActivity() {
                                                             MaterialTheme.colorScheme.primary
                                                         else
                                                             MaterialTheme.colorScheme
-                                                                .onSurfaceVariant
+                                                                .onSurfaceVariant,
                                                     ),
                                                 modifier =
                                                     Modifier.align(Alignment.Center)

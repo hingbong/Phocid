@@ -104,7 +104,7 @@ class PreferencesOrderAndVisibilityDialog<T : Any>(
                                                 )
                                             } else preferences
                                         }
-                                    }
+                                    },
                                 ) {
                                     Icon(
                                         Icons.Filled.ArrowUpward,
@@ -121,7 +121,7 @@ class PreferencesOrderAndVisibilityDialog<T : Any>(
                                                 )
                                             } else preferences
                                         }
-                                    }
+                                    },
                                 ) {
                                     Icon(
                                         Icons.Filled.ArrowDownward,

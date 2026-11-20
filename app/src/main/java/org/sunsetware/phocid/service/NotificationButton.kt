@@ -26,14 +26,14 @@ enum class NotificationButton(
                         Player.REPEAT_MODE_ALL -> CommandButton.ICON_REPEAT_ALL
                         Player.REPEAT_MODE_ONE -> CommandButton.ICON_REPEAT_ONE
                         else -> CommandButton.ICON_REPEAT_OFF
-                    }
+                    },
                 )
                 .setDisplayName(
                     when (player.repeatMode) {
                         Player.REPEAT_MODE_ALL -> Strings[R.string.player_repeat_mode_all]
                         Player.REPEAT_MODE_ONE -> Strings[R.string.player_repeat_mode_one]
                         else -> Strings[R.string.player_repeat_mode_off]
-                    }
+                    },
                 )
                 .setSessionCommand(SessionCommand(EXTERNAL_REPEAT_COMMAND, bundleOf()))
                 .setSlots(CommandButton.SLOT_OVERFLOW)
@@ -45,11 +45,11 @@ enum class NotificationButton(
         { player, _ ->
             CommandButton.Builder(
                     if (player.shuffleModeEnabled) CommandButton.ICON_SHUFFLE_ON
-                    else CommandButton.ICON_SHUFFLE_OFF
+                    else CommandButton.ICON_SHUFFLE_OFF,
                 )
                 .setDisplayName(
                     if (player.shuffleModeEnabled) Strings[R.string.player_shuffle_on]
-                    else Strings[R.string.player_shuffle_off]
+                    else Strings[R.string.player_shuffle_off],
                 )
                 .setSessionCommand(SessionCommand(EXTERNAL_SHUFFLE_COMMAND, bundleOf()))
                 .setSlots(CommandButton.SLOT_OVERFLOW)
@@ -61,12 +61,12 @@ enum class NotificationButton(
         { _, currentTrackIsFavorite ->
             CommandButton.Builder(
                     if (currentTrackIsFavorite) CommandButton.ICON_HEART_FILLED
-                    else CommandButton.ICON_HEART_UNFILLED
+                    else CommandButton.ICON_HEART_UNFILLED,
                 )
                 .setDisplayName(
                     if (currentTrackIsFavorite)
                         Strings[R.string.player_now_playing_remove_favorites]
-                    else Strings[R.string.player_now_playing_add_favorites]
+                    else Strings[R.string.player_now_playing_add_favorites],
                 )
                 .setSessionCommand(SessionCommand(EXTERNAL_FAVORITE_COMMAND, bundleOf()))
                 .setSlots(CommandButton.SLOT_OVERFLOW)

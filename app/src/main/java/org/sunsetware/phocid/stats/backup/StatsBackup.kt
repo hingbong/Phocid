@@ -301,7 +301,7 @@ class StatsBackupManager(
             day.utcOffsetMinutes?.let { offset ->
                 require(
                     offset in
-                        -StatsBackup.MAX_UTC_OFFSET_MINUTES..StatsBackup.MAX_UTC_OFFSET_MINUTES
+                        -StatsBackup.MAX_UTC_OFFSET_MINUTES..StatsBackup.MAX_UTC_OFFSET_MINUTES,
                 ) {
                     "Backup daily row has an implausible utcOffsetMinutes $offset"
                 }
@@ -396,7 +396,7 @@ class StatsBackupManager(
                 candidates.forEach { (uuid, rows) ->
                     if (rows.size > 1) {
                         throw IllegalArgumentException(
-                            "Backup track $uuid is ambiguous: it matches local rows ${rows.sorted().joinToString()}"
+                            "Backup track $uuid is ambiguous: it matches local rows ${rows.sorted().joinToString()}",
                         )
                     }
                 }
@@ -408,7 +408,7 @@ class StatsBackupManager(
                     val groupRows = groupUuids.mapNotNull { mappedRows.getValue(it) }.distinct()
                     if (groupRows.size > 1) {
                         throw IllegalArgumentException(
-                            "Backup tracks ${groupUuids.sorted().joinToString()} share a portable alias but match different local rows ${groupRows.sorted().joinToString()}"
+                            "Backup tracks ${groupUuids.sorted().joinToString()} share a portable alias but match different local rows ${groupRows.sorted().joinToString()}",
                         )
                     }
                     val rowId =
@@ -426,7 +426,7 @@ class StatsBackupManager(
                                             album = first.album,
                                             durationMillis = first.durationMillis,
                                             createdAt = first.createdAt,
-                                        )
+                                        ),
                                     )
                             }
                     groupUuids.forEach { uuidToRowId[it] = rowId }
@@ -438,7 +438,7 @@ class StatsBackupManager(
                     val current = db.aliasDao().resolve(alias.kind, alias.value)
                     if (current != null && current != target) {
                         throw IllegalArgumentException(
-                            "Backup alias ${alias.kind}:${alias.value} for track ${alias.uuid} belongs to local row $current; refusing to move it to row $target"
+                            "Backup alias ${alias.kind}:${alias.value} for track ${alias.uuid} belongs to local row $current; refusing to move it to row $target",
                         )
                     }
                     // IGNORE only fills a free alias. A conflicting clue is never stolen.
@@ -593,7 +593,7 @@ class StatsBackupManager(
                             SimpleSQLiteQuery(
                                 "SELECT * FROM track_daily WHERE (trackRowId, epochDay) IN (VALUES $tuples)",
                                 args,
-                            )
+                            ),
                         )
                         .forEach { existing[it.trackRowId to it.epochDay] = it }
                 }

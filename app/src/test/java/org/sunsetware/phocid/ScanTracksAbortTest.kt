@@ -171,7 +171,7 @@ class ScanTracksAbortTest {
                         Media.DURATION,
                         Media.SIZE,
                         Media.BITRATE,
-                    )
+                    ),
                 )
                 .apply {
                     addRow(
@@ -193,7 +193,7 @@ class ScanTracksAbortTest {
                             180_000L,
                             1024L,
                             null,
-                        )
+                        ),
                     )
                 }
 

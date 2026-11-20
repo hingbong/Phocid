@@ -71,14 +71,14 @@ class PreferencesThemeColorDialog() : Dialog() {
                                 Modifier.padding(24.dp)
                                     .fillMaxWidth()
                                     .height(24.dp)
-                                    .background(previewColor)
+                                    .background(previewColor),
                         )
 
                         UtilityListHeader(Strings[R.string.preferences_theme_color_chroma])
                         SteppedSliderWithNumber(
                             number =
                                 Strings[R.string.preferences_theme_color_chroma_number].icuFormat(
-                                    chromaPercentage
+                                    chromaPercentage,
                                 ),
                             value = chromaPercentage.toFloat(),
                             onValueChange = { chromaPercentage = it.roundToIntOrZero() },
@@ -86,7 +86,7 @@ class PreferencesThemeColorDialog() : Dialog() {
                                 viewModel.updatePreferences {
                                     it.copy(
                                         customThemeColor =
-                                            CustomThemeColor(chromaPercentage, hueDegrees)
+                                            CustomThemeColor(chromaPercentage, hueDegrees),
                                     )
                                 }
                             },
@@ -98,7 +98,7 @@ class PreferencesThemeColorDialog() : Dialog() {
                         SteppedSliderWithNumber(
                             number =
                                 Strings[R.string.preferences_theme_color_hue_number].icuFormat(
-                                    hueDegrees
+                                    hueDegrees,
                                 ),
                             value = hueDegrees.toFloat(),
                             onValueChange = { hueDegrees = it.roundToIntOrZero() },
@@ -106,7 +106,7 @@ class PreferencesThemeColorDialog() : Dialog() {
                                 viewModel.updatePreferences {
                                     it.copy(
                                         customThemeColor =
-                                            CustomThemeColor(chromaPercentage, hueDegrees)
+                                            CustomThemeColor(chromaPercentage, hueDegrees),
                                     )
                                 }
                             },

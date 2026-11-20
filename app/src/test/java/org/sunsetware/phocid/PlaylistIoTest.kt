@@ -173,7 +173,7 @@ class PlaylistIoTest {
                         0,
                     )
                     .toM3u(PlaylistIoSettings())
-                    .lines()
+                    .lines(),
             )
             .containsExactlyInAnyOrder("/a/b", "/c/d")
     }
@@ -188,7 +188,7 @@ class PlaylistIoTest {
                         0,
                     )
                     .toM3u(PlaylistIoSettings(exportRelative = true, relativeBase = "/a"))
-                    .lines()
+                    .lines(),
             )
             .containsExactlyInAnyOrder("b", "../c/d")
     }
@@ -203,7 +203,7 @@ class PlaylistIoTest {
                         0,
                     )
                     .toM3u(PlaylistIoSettings(exportRelative = true, relativeBase = "|"))
-                    .lines()
+                    .lines(),
             )
             .containsExactlyInAnyOrder("/a/b", "/c/d")
     }

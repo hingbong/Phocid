@@ -59,15 +59,17 @@ class SafeRegexTest {
 
         assertThat(regex.matchesBounded("/storage/emulated/0/Music/sync/Artist/Song.flac")).isTrue()
         assertThat(
-                regex.matchesBounded("/storage/emulated/0/Music/sync/Artist/Song (Off Vocal).flac")
+                regex.matchesBounded("/storage/emulated/0/Music/sync/Artist/Song (Off Vocal).flac"),
             )
             .isFalse()
         assertThat(
-                regex.matchesBounded("/storage/emulated/0/Music/sync/Artist/Song instrumental.flac")
+                regex.matchesBounded(
+                    "/storage/emulated/0/Music/sync/Artist/Song instrumental.flac",
+                ),
             )
             .isFalse()
         assertThat(
-                regex.matchesBounded("/storage/emulated/0/Music/sync/Artist/song OFF VOCAL.flac")
+                regex.matchesBounded("/storage/emulated/0/Music/sync/Artist/song OFF VOCAL.flac"),
             )
             .isFalse()
         // Outside /Music/sync the positive lookahead fails, so the track is not rescued.

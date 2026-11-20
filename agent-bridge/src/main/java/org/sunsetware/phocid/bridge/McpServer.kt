@@ -384,7 +384,7 @@ class McpServer(
                         "Connection: keep-alive\r\n" +
                         "Mcp-Session-Id: $sessionId\r\n" +
                         "\r\n")
-                    .toByteArray(StandardCharsets.US_ASCII)
+                    .toByteArray(StandardCharsets.US_ASCII),
             )
             out.write(": connected\n\n".toByteArray(StandardCharsets.UTF_8))
             out.flush()
@@ -500,7 +500,7 @@ class McpServer(
                 "ping",
                 "Health check for the Phocid agent bridge. Returns pong.",
                 emptySchema(),
-            )
+            ),
         )
         tools.put(
             tool(
@@ -508,7 +508,7 @@ class McpServer(
                 "Read the Phocid agent API version, library revision, time zone, supported ranges, " +
                     "play-count rule, and field units.",
                 emptySchema(),
-            )
+            ),
         )
         tools.put(
             tool(
@@ -525,7 +525,7 @@ class McpServer(
                     "Search the Phocid library by tag fields. Returns a page of track metadata."
                 },
                 searchSchema(api5, api6),
-            )
+            ),
         )
         tools.put(
             tool(
@@ -544,14 +544,14 @@ class McpServer(
                     "Read every exposed tag field for one library track, including its stats UUID when resolvable."
                 },
                 libraryIdSchema(),
-            )
+            ),
         )
         tools.put(
             tool(
                 "library_list_facets",
                 "List artists, albums, album artists, or genres with optional filtering and pagination.",
                 facetSchema(),
-            )
+            ),
         )
         tools.put(
             tool(
@@ -559,7 +559,7 @@ class McpServer(
                 "Read the current player state, including live position and positionAgeMs when " +
                     "the playback service is running. currentTrack carries trackRef.",
                 emptySchema(),
-            )
+            ),
         )
         tools.put(
             tool(
@@ -573,7 +573,7 @@ class McpServer(
                     "Read playback totals for a range: plays, millis, unique tracks, and active days."
                 },
                 rangeSchema(),
-            )
+            ),
         )
         tools.put(
             tool(
@@ -589,7 +589,7 @@ class McpServer(
                     "Read the top played tracks for a range."
                 },
                 topTracksSchema(api6, api5),
-            )
+            ),
         )
         if (api6) {
             tools.put(
@@ -598,7 +598,7 @@ class McpServer(
                     "Read per-track statistics for a range or one local day, with plays, " +
                         "playedMillis, started/completed/skipped counts, and pagination totals.",
                     topTracksSchema(true, true),
-                )
+                ),
             )
         }
         tools.put(
@@ -612,14 +612,14 @@ class McpServer(
                     "Read the daily playback trend for a range."
                 },
                 rangeSchema(),
-            )
+            ),
         )
         tools.put(
             tool(
                 "resolve_stats_uuid",
                 "Resolve a numeric library track id to a trackRef with its portable statistics UUID.",
                 libraryIdSchema(),
-            )
+            ),
         )
         if (sortKeysAvailable) {
             tools.put(
@@ -627,7 +627,7 @@ class McpServer(
                     "library_validate_sort_keys",
                     "Dry-run sort-key updates and report what would be rejected. Does not write anything.",
                     sortKeysSchema(),
-                )
+                ),
             )
         }
         if (allowWrites && sortKeysAvailable) {
@@ -636,7 +636,7 @@ class McpServer(
                     "library_update_sort_keys",
                     "Set or clear sort keys for library titles. Does not modify audio files or tags.",
                     sortKeysSchema(),
-                )
+                ),
             )
         }
         return JSONObject().put("tools", tools)
@@ -822,7 +822,7 @@ class McpServer(
                     "day",
                     stringProp(
                         "ISO local date (YYYY-MM-DD); mutually exclusive with range. Uses the " +
-                            "device time zone."
+                            "device time zone.",
                     ),
                 )
                 .put(
@@ -903,7 +903,7 @@ class McpServer(
                     .put(
                         "query",
                         stringProp(
-                            "Full-text match across title, artist, album, genre, and file name"
+                            "Full-text match across title, artist, album, genre, and file name",
                         ),
                     )
                     .put("title", stringProp("Title contains"))
@@ -922,7 +922,7 @@ class McpServer(
                     .put(
                         "sort",
                         stringProp(
-                                "title, rawTitle, sortKey, artist, album, year, dateAdded, or duration"
+                                "title, rawTitle, sortKey, artist, album, year, dateAdded, or duration",
                             )
                             .put(
                                 "enum",
@@ -950,7 +950,7 @@ class McpServer(
                                     "the 512 KiB response budget is reached"
                             } else {
                                 "1..200, default 50"
-                            }
+                            },
                         ),
                     )
                     .put(
@@ -960,7 +960,7 @@ class McpServer(
                                 "Pagination offset; continue from the response nextOffset"
                             } else {
                                 "Pagination offset"
-                            }
+                            },
                         ),
                     ),
             )

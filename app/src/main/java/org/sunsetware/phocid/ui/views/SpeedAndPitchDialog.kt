@@ -38,13 +38,13 @@ class SpeedAndPitchDialog() : Dialog() {
         }
         var resample by remember {
             mutableStateOf(
-                viewModel.playerManager.state.value.let { it.speed == it.pitch && it.speed != 1f }
+                viewModel.playerManager.state.value.let { it.speed == it.pitch && it.speed != 1f },
             )
         }
         var newPitchSemitones by remember {
             mutableIntStateOf(
                 if (resample) 0
-                else (log(viewModel.playerManager.state.value.pitch, 2f) * 12).roundToIntOrZero()
+                else (log(viewModel.playerManager.state.value.pitch, 2f) * 12).roundToIntOrZero(),
             )
         }
         DialogBase(
@@ -63,7 +63,7 @@ class SpeedAndPitchDialog() : Dialog() {
                 SteppedSliderWithNumber(
                     number =
                         Strings[R.string.player_speed_and_pitch_speed_number].icuFormat(
-                            newSpeedTimes100 / 100f
+                            newSpeedTimes100 / 100f,
                         ),
                     onReset = { newSpeedTimes100 = 100 },
                     value = newSpeedTimes100.toFloat(),
@@ -77,11 +77,11 @@ class SpeedAndPitchDialog() : Dialog() {
                     number =
                         if (resample)
                             Strings[R.string.player_speed_and_pitch_speed_number].icuFormat(
-                                newSpeedTimes100 / 100f
+                                newSpeedTimes100 / 100f,
                             )
                         else
                             Strings[R.string.player_speed_and_pitch_pitch_number].icuFormat(
-                                newPitchSemitones
+                                newPitchSemitones,
                             ),
                     onReset = { newPitchSemitones = 0 },
                     value =

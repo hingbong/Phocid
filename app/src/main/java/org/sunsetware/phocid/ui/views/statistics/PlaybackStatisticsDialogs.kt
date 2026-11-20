@@ -45,14 +45,14 @@ class PlaybackStatisticsImportDialog(private val backup: StatsBackup) : Dialog()
                     result
                         .onSuccess {
                             viewModel.uiManager.toast(
-                                Strings[R.string.playback_statistics_import_success]
+                                Strings[R.string.playback_statistics_import_success],
                             )
                         }
                         .onFailure { ex ->
                             viewModel.uiManager.toast(
                                 Strings[R.string.playback_statistics_import_failed].icuFormat(
-                                    ex.toString()
-                                )
+                                    ex.toString(),
+                                ),
                             )
                         }
                 }
@@ -65,7 +65,7 @@ class PlaybackStatisticsImportDialog(private val backup: StatsBackup) : Dialog()
                     Strings[R.string.playback_statistics_import_body].icuFormat(
                         trackCount,
                         playCount,
-                    )
+                    ),
                 )
                 ImportModeOption(
                     selected = !replace,
@@ -98,14 +98,14 @@ class PlaybackStatisticsClearDialog : Dialog() {
                     result
                         .onSuccess {
                             viewModel.uiManager.toast(
-                                Strings[R.string.playback_statistics_clear_success]
+                                Strings[R.string.playback_statistics_clear_success],
                             )
                         }
                         .onFailure { ex ->
                             viewModel.uiManager.toast(
                                 Strings[R.string.playback_statistics_clear_failed].icuFormat(
-                                    ex.toString()
-                                )
+                                    ex.toString(),
+                                ),
                             )
                         }
                 }

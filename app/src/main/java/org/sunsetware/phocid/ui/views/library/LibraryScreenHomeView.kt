@@ -475,7 +475,7 @@ class LibraryScreenHomeViewState(
         val (folders, tracks) =
             if (searchQuery.isNotEmpty()) {
                 libraryIndex.folders[libraryIndex.defaultRootFolder]!!.childItemsRecursive(
-                    libraryIndex.folders
+                    libraryIndex.folders,
                 )
             } else {
                 (rootFolder.childFolders.map { libraryIndex.folders[it]!! } to
@@ -691,7 +691,7 @@ private fun ViewTabRow(preferences: Preferences, state: LibraryScreenHomeViewSta
                             CompositionLocalProvider(
                                 LocalContentColor provides
                                     if (i == currentTabIndex) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (preferences.tabStyle == TabStylePreference.TEXT_AND_ICON) {

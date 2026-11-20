@@ -130,7 +130,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
         val summary by
             remember(statsManager, range) { statsManager.repository.summary(range) }
                 .collectAsStateWithLifecycle(
-                    RangeSummary(plays = 0, millis = 0, touchedTracks = 0, activeDays = 0)
+                    RangeSummary(plays = 0, millis = 0, touchedTracks = 0, activeDays = 0),
                 )
         val tracksByPath =
             remember(libraryIndex) { libraryIndex.tracks.values.associateBy { it.path } }
@@ -151,7 +151,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                                 track.title ?: track.fileName.substringBeforeLast('.'),
                                 track.duration.inWholeMilliseconds,
                             )
-                    }
+                    },
                 )
             }
         val dateFormatter = remember { DateFormat.getInstance() }
@@ -159,7 +159,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
         fun exportStatistics() {
             val date = LocalDate.now().toString()
             uiManager.intentLauncher.get()?.createBinaryDocument(
-                "phocid-playback-statistics-$date.mstats"
+                "phocid-playback-statistics-$date.mstats",
             ) { uri ->
                 if (uri == null) return@createBinaryDocument
                 viewModel.viewModelScope.launch {
@@ -179,8 +179,8 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                             Log.e("Phocid", "Error exporting playback statistics", ex)
                             uiManager.toast(
                                 Strings[R.string.playback_statistics_export_failed].icuFormat(
-                                    ex.toString()
-                                )
+                                    ex.toString(),
+                                ),
                             )
                         }
                 }
@@ -207,8 +207,8 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                             Log.e("Phocid", "Error reading playback statistics", ex)
                             uiManager.toast(
                                 Strings[R.string.playback_statistics_import_failed].icuFormat(
-                                    ex.toString()
-                                )
+                                    ex.toString(),
+                                ),
                             )
                         }
                 }
@@ -242,7 +242,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                                         Icons.Filled.UploadFile,
                                     ) {
                                         importStatistics()
-                                    }
+                                    },
                                 )
                                 if (summary.plays > 0) {
                                     add(MenuItem.Divider)
@@ -253,14 +253,14 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                                             dangerous = true,
                                         ) {
                                             uiManager.openDialog(PlaybackStatisticsClearDialog())
-                                        }
+                                        },
                                     )
                                 }
-                            }
+                            },
                         )
                     },
                 )
-            }
+            },
         ) { scaffoldPadding ->
             Surface(
                 modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
@@ -291,7 +291,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
                     }
                     item {
                         SingleChoiceSegmentedButtonRow(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
                         ) {
                             StatsSort.entries.forEachIndexed { index, item ->
                                 SegmentedButton(
@@ -415,7 +415,7 @@ object PlaybackStatisticsScreen : TopLevelScreen() {
         val lastPlayed =
             if (entry.lastPlayedAt > 0)
                 Strings[R.string.playback_statistics_last_played].icuFormat(
-                    dateFormatter.format(Date(entry.lastPlayedAt))
+                    dateFormatter.format(Date(entry.lastPlayedAt)),
                 )
             else null
         val unavailable =

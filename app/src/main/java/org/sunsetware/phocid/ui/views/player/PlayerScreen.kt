@@ -134,7 +134,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                 if (playerState.actualPlayQueue.isEmpty()) InvalidTrack
                 else
                     libraryIndex.tracks[playerState.actualPlayQueue[playerState.currentIndex]]
-                        ?: InvalidTrack
+                        ?: InvalidTrack,
         )
     val currentTrackIndex = playerState.currentIndex
     val playlists by viewModel.playlistManager.playlists.collectAsStateWithLifecycle()
@@ -194,7 +194,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
         Animatable(
             if (preferences.coloredPlayer)
                 currentTrack.getArtworkColor(preferences.artworkColorPreference)
-            else defaultColor
+            else defaultColor,
         )
     }
 
@@ -367,7 +367,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                     modifier =
                         Modifier.fillMaxWidth()
                             .windowInsetsTopHeight(WindowInsets.statusBars)
-                            .background(containerColor)
+                            .background(containerColor),
                 )
             },
             bottomBar = {
@@ -375,7 +375,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                     modifier =
                         Modifier.fillMaxWidth()
                             .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow),
                 )
             },
             contentWindowInsets = WindowInsets(0.dp),
@@ -385,7 +385,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                     Modifier.fillMaxSize()
                         .padding(scaffoldPadding)
                         .consumeWindowInsets(scaffoldPadding)
-                        .background(containerColor)
+                        .background(containerColor),
             ) {
                 Layout(
                     content = {
@@ -510,7 +510,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 onToggleShuffle = { playerManager.toggleShuffle() },
                                 onTogglePlayQueue = {
                                     playQueueDragState.animateTo(
-                                        if (playQueueDragState.position <= 0) 1f else 0f
+                                        if (playQueueDragState.position <= 0) 1f else 0f,
                                     )
                                 },
                                 onToggleCurrentTrackIsFavorite = {
@@ -550,7 +550,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                                 alwaysShowHintOnScroll = preferences.alwaysShowHintOnScroll,
                                 onTogglePlayQueue = {
                                     playQueueDragState.animateTo(
-                                        if (playQueueDragState.position <= 0) 1f else 0f
+                                        if (playQueueDragState.position <= 0) 1f else 0f,
                                     )
                                 },
                                 onMoveTrack = { from, to -> playerManager.moveTrack(from, to) },
@@ -563,7 +563,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                             Box(
                                 modifier =
                                     Modifier.fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.scrim)
+                                        .background(MaterialTheme.colorScheme.scrim),
                             )
                         }
                         Box {
@@ -571,7 +571,7 @@ fun PlayerScreen(dragLock: DragLock, viewModel: MainViewModel = viewModel()) {
                             Box(
                                 modifier =
                                     Modifier.fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                        .background(MaterialTheme.colorScheme.surfaceContainerLow),
                             )
                         }
                     },
@@ -642,7 +642,7 @@ private fun queueMenuItems(
     return listOf(
         MenuItem.Button(Strings[R.string.track_remove_from_queue], Icons.Filled.Remove) {
             playerManager.removeTrack(index)
-        }
+        },
     ) + trackMenuItems(track, playerManager, uiManager)
 }
 

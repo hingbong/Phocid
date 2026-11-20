@@ -86,7 +86,7 @@ class StatsResolverTest {
                     album = "Album",
                     durationMillis = 180_000,
                     createdAt = 0,
-                )
+                ),
             )
 
     private suspend fun putAlias(kind: Int, value: String, rowId: Long) {
@@ -109,7 +109,7 @@ class StatsResolverTest {
                         .resolve(
                             AliasKind.LOCAL_URI,
                             LocalUriKey.of("content://media/external/audio/media/1", 1024),
-                        )
+                        ),
                 )
                 .isNull()
             assertThat(
@@ -117,7 +117,7 @@ class StatsResolverTest {
                         .resolve(
                             AliasKind.LOCAL_URI,
                             LocalUriKey.of("content://media/external/audio/media/2", 1024),
-                        )
+                        ),
                 )
                 .isEqualTo(first)
         }
@@ -150,7 +150,7 @@ class StatsResolverTest {
                         .resolve(
                             AliasKind.LOCAL_URI,
                             LocalUriKey.of(localMeta.uri, localMeta.size),
-                        )
+                        ),
                 )
                 .isEqualTo(first)
         }
@@ -166,11 +166,11 @@ class StatsResolverTest {
                 resolver(mediaRoots = { listOf(temporaryFolder.root.absolutePath) }) { null }
             val first =
                 resolver.resolve(
-                    noIdentityMeta("content://media/external/audio/media/1").copy(file = file)
+                    noIdentityMeta("content://media/external/audio/media/1").copy(file = file),
                 )
             val second =
                 resolver.resolve(
-                    noIdentityMeta("content://media/external/audio/media/2").copy(file = file)
+                    noIdentityMeta("content://media/external/audio/media/2").copy(file = file),
                 )
 
             assertThat(second).isEqualTo(first)
@@ -188,7 +188,7 @@ class StatsResolverTest {
                         title = "Old Song",
                         artist = "Old Artist",
                         album = "Old Album",
-                    )
+                    ),
                 )
             val second =
                 resolver.resolve(
@@ -198,7 +198,7 @@ class StatsResolverTest {
                         title = "New Song",
                         artist = "New Artist",
                         album = "New Album",
-                    )
+                    ),
                 )
 
             assertThat(second).isNotEqualTo(first)
@@ -212,7 +212,7 @@ class StatsResolverTest {
                         .resolve(
                             AliasKind.LOCAL_URI,
                             LocalUriKey.of("content://media/external/audio/media/7", 1024),
-                        )
+                        ),
                 )
                 .isEqualTo(first)
         }
@@ -234,7 +234,7 @@ class StatsResolverTest {
                         title = "Old Song",
                         artist = "Old Artist",
                         album = "Old Album",
-                    )
+                    ),
                 )
             val second =
                 resolver.resolve(
@@ -244,7 +244,7 @@ class StatsResolverTest {
                         title = "New Song",
                         artist = "New Artist",
                         album = "New Album",
-                    )
+                    ),
                 )
 
             // The URI metadata is identical, but a MediaStore URI can be reused. The fingerprint
@@ -342,7 +342,7 @@ class StatsResolverTest {
                         .resolve(
                             AliasKind.LOCAL_URI,
                             LocalUriKey.of("content://media/external/audio/media/1", 1024),
-                        )
+                        ),
                 )
                 .isEqualTo(hashRow)
         }
@@ -406,12 +406,12 @@ class StatsResolverTest {
             val first =
                 resolver.resolve(
                     noIdentityMeta("content://media/external/audio/media/31")
-                        .copy(file = File(temporaryFolder.root, "a/Song.flac"))
+                        .copy(file = File(temporaryFolder.root, "a/Song.flac")),
                 )
             val second =
                 resolver.resolve(
                     noIdentityMeta("content://media/external/audio/media/32")
-                        .copy(file = File(temporaryFolder.root, "b/Song.flac"))
+                        .copy(file = File(temporaryFolder.root, "b/Song.flac")),
                 )
 
             assertThat(second).isNotEqualTo(first)
@@ -506,7 +506,7 @@ class StatsResolverTest {
                         .resolve(
                             AliasKind.LOCAL_URI,
                             LocalUriKey.of(localMeta.uri, localMeta.size),
-                        )
+                        ),
                 )
                 .isEqualTo(oldRow)
         }

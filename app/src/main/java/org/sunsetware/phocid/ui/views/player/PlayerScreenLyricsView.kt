@@ -145,7 +145,7 @@ object PlayerScreenLyricsViewDefault : PlayerScreenLyricsView() {
         val density = LocalDensity.current
         CompositionLocalProvider(
             LocalDensity provides
-                Density(density.density, density.fontScale * preferences.lyricsSizeMultiplier)
+                Density(density.density, density.fontScale * preferences.lyricsSizeMultiplier),
         ) {
             Box(
                 modifier =
@@ -185,7 +185,7 @@ object PlayerScreenLyricsViewDefault : PlayerScreenLyricsView() {
                             }
                         }
                         .verticalScroll(scrollState)
-                        .padding(horizontal = padding, vertical = padding * 2)
+                        .padding(horizontal = padding, vertical = padding * 2),
             ) {
                 Layout(
                     content = {
@@ -194,7 +194,7 @@ object PlayerScreenLyricsViewDefault : PlayerScreenLyricsView() {
                                 lyrics.value.lines.forEachIndexed { index, (_, text) ->
                                     val alpha by
                                         animateFloatAsState(
-                                            if (index == currentLineIndex) 1f else INACTIVE_ALPHA
+                                            if (index == currentLineIndex) 1f else INACTIVE_ALPHA,
                                         )
                                     Text(text, style = textStyle, modifier = Modifier.alpha(alpha))
                                 }
@@ -208,7 +208,7 @@ object PlayerScreenLyricsViewDefault : PlayerScreenLyricsView() {
                                 Text(Strings[R.string.player_no_lyrics], style = textStyle)
                             }
                         }
-                    }
+                    },
                 ) { measurables, constraints ->
                     val paddingPx = (padding * 2).roundToPx()
                     val spacing = TextUnit(8f, TextUnitType.Sp).roundToPx()

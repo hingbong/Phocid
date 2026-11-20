@@ -139,7 +139,7 @@ class ScanCoalescerTest {
                                 throw IllegalStateException("scan failed")
                             }
                         }
-                            .exceptionOrNull()!!
+                            .exceptionOrNull()!!,
                     )
                 }
             scanStarted.await()
@@ -185,7 +185,7 @@ class ScanCoalescerTest {
                                 throw IllegalStateException("scan failed")
                             }
                         }
-                            .exceptionOrNull()!!
+                            .exceptionOrNull()!!,
                     )
                 }
             scanStarted.await()
@@ -201,7 +201,7 @@ class ScanCoalescerTest {
                                 throw IllegalStateException("retry failed")
                             }
                         }
-                            .exceptionOrNull()!!
+                            .exceptionOrNull()!!,
                     )
                 }
             val secondWaiter =
@@ -247,7 +247,7 @@ class ScanCoalescerTest {
                                 throw CancellationException("scan cancelled")
                             }
                         }
-                            .exceptionOrNull()!!
+                            .exceptionOrNull()!!,
                     )
                 }
             scanStarted.await()

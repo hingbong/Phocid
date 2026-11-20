@@ -179,7 +179,7 @@ object PreferencesScreen : TopLevelScreen() {
                         },
                     )
                 }
-            }
+            },
         ) { scaffoldPadding ->
             Surface(
                 modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
@@ -195,13 +195,13 @@ object PreferencesScreen : TopLevelScreen() {
                                     ExamplesSubtitle(
                                         page.items
                                             .filter { it !is Item.ConditionalClickable }
-                                            .map { it.title() }
+                                            .map { it.title() },
                                     )
                                 },
                                 modifier =
                                     Modifier.clickable {
                                         viewModel.uiManager.openTopLevelScreen(
-                                            PreferencesSubscreen(page)
+                                            PreferencesSubscreen(page),
                                         )
                                     },
                             )
@@ -263,7 +263,7 @@ private class PreferencesSubscreen(private val page: Page) : TopLevelScreen() {
                         },
                     )
                 }
-            }
+            },
         ) { scaffoldPadding ->
             Surface(
                 modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
@@ -287,7 +287,7 @@ private class PreferencesSubscreen(private val page: Page) : TopLevelScreen() {
                                         subtitle =
                                             with(item) {
                                                 preferencesScreenContext.subtitle(
-                                                    value(preferences)
+                                                    value(preferences),
                                                 )
                                             },
                                         lead = { LeadIcon(item.icon) },
@@ -334,7 +334,7 @@ private class PreferencesSubscreen(private val page: Page) : TopLevelScreen() {
                                         subtitle =
                                             with(item) {
                                                 preferencesScreenContext.subtitle(
-                                                    value(preferences)
+                                                    value(preferences),
                                                 )
                                             },
                                         lead = { LeadIcon(item.icon) },
@@ -392,7 +392,7 @@ private fun ExamplesSubtitle(examples: List<String>) {
                     )
                 }
             }
-        }
+        },
     ) { measurables, constraints ->
         val lineHeight = Typography.bodySmall.lineHeight.roundToPx()
         val measureConstraints = Constraints(minHeight = lineHeight, maxHeight = lineHeight)
@@ -402,7 +402,7 @@ private fun ExamplesSubtitle(examples: List<String>) {
                     maxWidth = constraints.maxWidth,
                     minHeight = lineHeight,
                     maxHeight = lineHeight,
-                )
+                ),
             )
         val ellipsis = measurables[1].measure(measureConstraints)
         val items =
@@ -603,7 +603,7 @@ private val HomeScreen =
                                     updatePreferences { it.copy(folderTabRoot = path) }
                                 }
                             },
-                        )
+                        ),
                     )
                 },
                 action =
@@ -829,7 +829,7 @@ private val Indexing =
                 title = { Strings[R.string.preferences_indexing_artist_separators] },
                 subtitle = {
                     Strings[R.string.preferences_indexing_artist_separators_subtitle].icuFormat(
-                        it.size
+                        it.size,
                     )
                 },
                 icon = Icons.Filled.SafetyDivider,
@@ -850,7 +850,7 @@ private val Indexing =
                 title = { Strings[R.string.preferences_indexing_genre_separators] },
                 subtitle = {
                     Strings[R.string.preferences_indexing_genre_separators_subtitle].icuFormat(
-                        it.size
+                        it.size,
                     )
                 },
                 icon = Icons.Filled.ShapeLine,
@@ -927,7 +927,7 @@ private val Miscellaneous =
                         context.startActivity(
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 setData(Uri.fromParts("package", context.packageName, null))
-                            }
+                            },
                         )
                     } else {
                         imagesPermissionState.launchPermissionRequest()
@@ -966,8 +966,8 @@ private val Miscellaneous =
                             Log.e("Phocid", "Error importing preferences", ex)
                             uiManager.toast(
                                 Strings[R.string.toast_preferences_import_failed].icuFormat(
-                                    ex.toString()
-                                )
+                                    ex.toString(),
+                                ),
                             )
                         }
                     }
@@ -982,7 +982,7 @@ private val Miscellaneous =
                         DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
                             .format(LocalDateTime.now())
                     uiManager.intentLauncher.get()?.createJsonDocument(
-                        "phocid-preferences-$date.json"
+                        "phocid-preferences-$date.json",
                     ) { uri ->
                         if (uri == null) return@createJsonDocument
                         try {
@@ -996,8 +996,8 @@ private val Miscellaneous =
                             Log.e("Phocid", "Error exporting preferences", ex)
                             uiManager.toast(
                                 Strings[R.string.toast_preferences_export_failed].icuFormat(
-                                    ex.toString()
-                                )
+                                    ex.toString(),
+                                ),
                             )
                         }
                     }
@@ -1039,7 +1039,7 @@ private val About =
                 icon = Icons.Filled.Link,
                 onClick = {
                     context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Strings[R.string.app_url].toUri())
+                        Intent(Intent.ACTION_VIEW, Strings[R.string.app_url].toUri()),
                     )
                 },
             ),
@@ -1066,7 +1066,7 @@ private fun PreferencesScreenContext.dumpLogcat() {
                     writer.write(BuildConfig.VERSION_NAME)
                     writer.write("\n\n")
                     writer.write(
-                        "Build ${BuildConfig.BUILD_TIME} (${BuildConfig.BUILD_COMMIT.take(12)})"
+                        "Build ${BuildConfig.BUILD_TIME} (${BuildConfig.BUILD_COMMIT.take(12)})",
                     )
                     writer.write("\n\n")
                     writer.write("API level ${Build.VERSION.SDK_INT}")
@@ -1171,7 +1171,7 @@ private sealed class Item {
                             options = options.map { it to itemName(it) },
                             activeOption = value,
                             updatePreferences = onSetValue,
-                        )
+                        ),
                     )
                 },
             )
@@ -1198,7 +1198,7 @@ private sealed class Item {
                             itemName = itemName,
                             value = value,
                             onSetValue = onSetValue,
-                        )
+                        ),
                     )
                 },
             )
@@ -1232,7 +1232,7 @@ private sealed class Item {
                             max = max,
                             steps = steps,
                             onSetValue = onSetValue,
-                        )
+                        ),
                     )
                 },
             )
@@ -1261,7 +1261,7 @@ private sealed class Item {
                             allowEmpty,
                             value(preferences),
                             updatePreferences,
-                        )
+                        ),
                     )
                 },
             )

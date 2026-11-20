@@ -110,7 +110,7 @@ fun PhocidTheme(
     val density = LocalDensity.current
     CompositionLocalProvider(
         LocalDensity provides
-            Density(density.density * densityMultiplier, density.fontScale * densityMultiplier)
+            Density(density.density * densityMultiplier, density.fontScale * densityMultiplier),
     ) {
         CompositionLocalProvider(LocalDarkTheme provides darkTheme) {
             CompositionLocalProvider(LocalThemeAccent provides accent) {
@@ -119,7 +119,7 @@ fun PhocidTheme(
                     Box(
                         modifier =
                             Modifier.background(colorScheme.surfaceContainer)
-                                .padding(WindowInsets.navigationBars.asPaddingValues())
+                                .padding(WindowInsets.navigationBars.asPaddingValues()),
                     ) {
                         Box(modifier = Modifier.consumeWindowInsets(WindowInsets.navigationBars)) {
                             MaterialTheme(

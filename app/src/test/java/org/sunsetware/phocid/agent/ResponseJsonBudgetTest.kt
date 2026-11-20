@@ -68,7 +68,7 @@ class ResponseJsonBudgetTest {
         assertTrue(
             (result as ResponseJsonBudget.SearchPageResult.TooLarge)
                 .message
-                .contains("response budget")
+                .contains("response budget"),
         )
     }
 
@@ -127,7 +127,7 @@ class ResponseJsonBudgetTest {
         assertTrue(
             (result as ResponseJsonBudget.TrackDetailResult.TooLarge)
                 .message
-                .contains("response budget")
+                .contains("response budget"),
         )
     }
 

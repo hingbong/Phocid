@@ -37,7 +37,7 @@ object PlayerScreenLayoutDefault : PlayerScreenLayout() {
                         PlayerScreenLayoutDefaultPortraitTablet
                     else PlayerScreenLayoutDefaultSquarePhone
                 AspectRatio.PORTRAIT -> PlayerScreenLayoutDefaultPortraitPhone
-            }
+            },
         ) {
             place(
                 topBarStandalone,
@@ -126,7 +126,7 @@ class PlayerScreenLayoutDefaultPortrait(val tablet: Boolean) : PlayerScreenLayou
             )
         val contentHeight =
             (height - topBarStandaloneHeight - controlsHeight - queueCollapsedHeight).coerceAtLeast(
-                0
+                0,
             )
         val queueOffset =
             (queueDragState.position *
@@ -223,7 +223,7 @@ object PlayerScreenLayoutDefaultLandscape : PlayerScreenLayout() {
                     Constraints(
                         maxWidth = artworkWidth,
                         maxHeight = (height - topBarOverlayPlaceable.height).coerceAtLeast(0),
-                    )
+                    ),
                 )
                 .placeRelativeWithLayer(0, topBarOverlayPlaceable.height) {
                     alpha = lyricsTransitionSecondHalf
@@ -240,7 +240,7 @@ object PlayerScreenLayoutDefaultLandscape : PlayerScreenLayout() {
                 Constraints(
                     maxWidth = width - artworkWidth,
                     maxHeight = (height - controlsPlaceable.height + queueOffset).coerceAtLeast(0),
-                )
+                ),
             )
             .placeRelative(artworkWidth, controlsPlaceable.height - queueOffset)
 
@@ -277,7 +277,7 @@ object PlayerScreenLayoutDefaultSquarePhone : PlayerScreenLayout() {
                 Constraints(
                     maxWidth = width,
                     maxHeight = (height - topBarPlaceable.height).coerceAtLeast(0),
-                )
+                ),
             )
         controlsPlaceable.placeRelative(0, topBarPlaceable.height)
 
@@ -288,7 +288,7 @@ object PlayerScreenLayoutDefaultSquarePhone : PlayerScreenLayout() {
                 Constraints(
                     maxWidth = width,
                     maxHeight = (height - topBarPlaceable.height).coerceAtLeast(0),
-                )
+                ),
             )
             .placeRelativeWithLayer(0, topBarPlaceable.height) { alpha = queueDragState.position }
 
@@ -299,7 +299,7 @@ object PlayerScreenLayoutDefaultSquarePhone : PlayerScreenLayout() {
                     maxHeight =
                         (height - topBarPlaceable.height - controlsPlaceable.height + queueOffset)
                             .coerceAtLeast(0),
-                )
+                ),
             )
             .placeRelative(0, topBarPlaceable.height - queueOffset + controlsPlaceable.height)
 
@@ -309,7 +309,7 @@ object PlayerScreenLayoutDefaultSquarePhone : PlayerScreenLayout() {
                     Constraints(
                         maxWidth = width,
                         maxHeight = (height - topBarPlaceable.height).coerceAtLeast(0),
-                    )
+                    ),
                 )
                 .placeRelativeWithLayer(0, topBarPlaceable.height) {
                     alpha = lyricsTransitionFirstHalf
@@ -321,7 +321,7 @@ object PlayerScreenLayoutDefaultSquarePhone : PlayerScreenLayout() {
                     Constraints(
                         maxWidth = width,
                         maxHeight = (height - topBarPlaceable.height).coerceAtLeast(0),
-                    )
+                    ),
                 )
                 .placeRelativeWithLayer(0, topBarPlaceable.height) {
                     alpha = lyricsTransitionSecondHalf

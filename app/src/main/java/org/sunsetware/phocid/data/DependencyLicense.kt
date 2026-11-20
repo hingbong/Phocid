@@ -34,7 +34,7 @@ data class LicenseMappings(
 
 @Stable
 inline fun listDependencies(
-    crossinline readFile: (String) -> String
+    crossinline readFile: (String) -> String,
 ): List<Pair<DependencyInfo, List<String>>> {
     @Suppress("JSON_FORMAT_REDUNDANT")
     val dependencyInfos = Json {

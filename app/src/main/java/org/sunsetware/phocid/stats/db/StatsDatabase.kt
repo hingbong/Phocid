@@ -50,10 +50,10 @@ abstract class StatsDatabase : RoomDatabase() {
             object : Migration(1, 2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL(
-                        "CREATE TABLE IF NOT EXISTS active_days (epochDay INTEGER NOT NULL PRIMARY KEY)"
+                        "CREATE TABLE IF NOT EXISTS active_days (epochDay INTEGER NOT NULL PRIMARY KEY)",
                     )
                     db.execSQL(
-                        "INSERT OR IGNORE INTO active_days (epochDay) SELECT DISTINCT epochDay FROM track_daily"
+                        "INSERT OR IGNORE INTO active_days (epochDay) SELECT DISTINCT epochDay FROM track_daily",
                     )
                 }
             }
@@ -69,7 +69,7 @@ abstract class StatsDatabase : RoomDatabase() {
                         "CREATE TABLE IF NOT EXISTS playback_outbox (" +
                             "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                             "payload BLOB NOT NULL, " +
-                            "createdAt INTEGER NOT NULL)"
+                            "createdAt INTEGER NOT NULL)",
                     )
                 }
             }
@@ -84,16 +84,16 @@ abstract class StatsDatabase : RoomDatabase() {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     for (table in listOf("track_daily", "track_totals")) {
                         db.execSQL(
-                            "ALTER TABLE $table ADD COLUMN startedCount INTEGER NOT NULL DEFAULT 0"
+                            "ALTER TABLE $table ADD COLUMN startedCount INTEGER NOT NULL DEFAULT 0",
                         )
                         db.execSQL(
-                            "ALTER TABLE $table ADD COLUMN completedCount INTEGER NOT NULL DEFAULT 0"
+                            "ALTER TABLE $table ADD COLUMN completedCount INTEGER NOT NULL DEFAULT 0",
                         )
                         db.execSQL(
-                            "ALTER TABLE $table ADD COLUMN skipCount INTEGER NOT NULL DEFAULT 0"
+                            "ALTER TABLE $table ADD COLUMN skipCount INTEGER NOT NULL DEFAULT 0",
                         )
                         db.execSQL(
-                            "ALTER TABLE $table ADD COLUMN completedMillis INTEGER NOT NULL DEFAULT 0"
+                            "ALTER TABLE $table ADD COLUMN completedMillis INTEGER NOT NULL DEFAULT 0",
                         )
                     }
                     db.execSQL("ALTER TABLE track_daily ADD COLUMN dayStartMs INTEGER")
@@ -127,25 +127,25 @@ abstract class StatsDatabase : RoomDatabase() {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL(
                         "UPDATE track_daily SET firstPlayedAt = lastPlayedAt " +
-                            "WHERE firstPlayedAt IS NULL AND lastPlayedAt > 0"
+                            "WHERE firstPlayedAt IS NULL AND lastPlayedAt > 0",
                     )
                     db.execSQL(
                         "UPDATE track_daily SET lastPlayedAt = firstPlayedAt " +
-                            "WHERE firstPlayedAt IS NOT NULL AND firstPlayedAt > lastPlayedAt"
+                            "WHERE firstPlayedAt IS NOT NULL AND firstPlayedAt > lastPlayedAt",
                     )
                     db.execSQL(
                         "UPDATE track_totals SET lastPlayedAt = firstPlayedAt " +
-                            "WHERE firstPlayedAt > lastPlayedAt"
+                            "WHERE firstPlayedAt > lastPlayedAt",
                     )
                     db.execSQL(
                         "UPDATE track_daily SET startedCount = playCount " +
                             "WHERE playCount > 0 AND startedCount = 0 AND completedCount = 0 " +
-                            "AND skipCount = 0 AND completedMillis = 0"
+                            "AND skipCount = 0 AND completedMillis = 0",
                     )
                     db.execSQL(
                         "UPDATE track_totals SET startedCount = totalCount " +
                             "WHERE totalCount > 0 AND startedCount = 0 AND completedCount = 0 " +
-                            "AND skipCount = 0 AND completedMillis = 0"
+                            "AND skipCount = 0 AND completedMillis = 0",
                     )
                 }
             }
@@ -163,12 +163,12 @@ abstract class StatsDatabase : RoomDatabase() {
                     db.execSQL(
                         "UPDATE track_daily SET startedCount = MAX(" +
                             "startedCount, playCount, completedCount + skipCount, " +
-                            "CASE WHEN lastPlayedAt > 0 THEN 1 ELSE 0 END)"
+                            "CASE WHEN lastPlayedAt > 0 THEN 1 ELSE 0 END)",
                     )
                     db.execSQL(
                         "UPDATE track_totals SET startedCount = MAX(" +
                             "startedCount, totalCount, completedCount + skipCount, " +
-                            "CASE WHEN lastPlayedAt > 0 THEN 1 ELSE 0 END)"
+                            "CASE WHEN lastPlayedAt > 0 THEN 1 ELSE 0 END)",
                     )
                 }
             }
@@ -210,7 +210,7 @@ abstract class StatsDatabase : RoomDatabase() {
                         override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                             db.execSQL("PRAGMA foreign_keys = ON")
                         }
-                    }
+                    },
                 )
                 .build()
 

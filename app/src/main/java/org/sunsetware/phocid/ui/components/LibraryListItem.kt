@@ -73,7 +73,7 @@ inline fun LibraryListItemHorizontal(
             modifier
                 .height(72.dp)
                 .background(
-                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = backgroundAlpha)
+                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = backgroundAlpha),
                 )
                 .let { if (bordered) it.border(4.dp, MaterialTheme.colorScheme.secondary) else it }
                 .padding(start = 16.dp, end = 4.dp),
@@ -182,7 +182,7 @@ inline fun LibraryListItemCard(
                     Box(
                         modifier =
                             Modifier.fillMaxSize()
-                                .background(Color.Black.copy(alpha = 1 - INACTIVE_ALPHA))
+                                .background(Color.Black.copy(alpha = 1 - INACTIVE_ALPHA)),
                     )
                 }
 

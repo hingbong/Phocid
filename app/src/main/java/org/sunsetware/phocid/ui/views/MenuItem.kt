@@ -96,7 +96,7 @@ fun trackMenuItems(
                 ) {
                     uiManager.openAlbumCollectionView(albumKey)
                 }
-            }
+            },
         )
     val details =
         MenuItem.Button(Strings[R.string.track_details], Icons.Filled.Info) {
@@ -163,7 +163,7 @@ inline fun collectionMenuItems(
         MenuItem.Button(Strings[R.string.track_play], Icons.Filled.PlayArrow) {
             playerManager.setTracks(tracks(), null)
             continuation()
-        }
+        },
     ) + collectionMenuItemsWithoutPlay(tracks, playerManager, uiManager, continuation)
 }
 
@@ -197,7 +197,7 @@ fun playlistCollectionMenuItems(
     return listOf(
         MenuItem.Button(Strings[R.string.playlist_edit], Icons.Filled.Edit) {
             uiManager.openTopLevelScreen(PlaylistEditScreen(key))
-        }
+        },
     ) +
         playlistCollectionMenuItemsWithoutEdit(key, uiManager) +
         listOf(
@@ -244,7 +244,7 @@ inline fun playlistTrackMenuItems(
         MenuItem.Button(Strings[R.string.playlist_remove_from], Icons.Filled.PlaylistRemove) {
             uiManager.openDialog(RemoveFromPlaylistDialog(playlistKey, trackKeys()))
             continuation()
-        }
+        },
     )
 }
 

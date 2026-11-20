@@ -154,7 +154,7 @@ internal class ResponseJsonBudget(private val maxUtf16Bytes: Int = DEFAULT_MAX_U
             return TrackDetailResult.Ok(compact, truncated = true)
         }
         return TrackDetailResult.TooLarge(
-            "The track detail response exceeds the ${maxUtf16Bytes / 1024} KiB response budget"
+            "The track detail response exceeds the ${maxUtf16Bytes / 1024} KiB response budget",
         )
     }
 

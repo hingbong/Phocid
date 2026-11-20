@@ -49,9 +49,9 @@ class PlaylistShortcutsRecoveryTest {
                         tabSettings =
                             mapOf(
                                 LibraryScreenTabType.TRACKS to
-                                    LibraryScreenTabInfo(type = LibraryScreenTabType.TRACKS)
-                            )
-                    )
+                                    LibraryScreenTabInfo(type = LibraryScreenTabType.TRACKS),
+                            ),
+                    ),
                 )
             val libraryIndex =
                 MutableStateFlow(
@@ -60,7 +60,7 @@ class PlaylistShortcutsRecoveryTest {
                         collator,
                         emptyList(),
                         emptyList(),
-                    )
+                    ),
                 )
 
             manager = PlaylistManager(context, scope, preferences, libraryIndex)

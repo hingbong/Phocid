@@ -46,6 +46,6 @@ fun TabIndicatorScope.TabIndicator(pagerState: PagerState) {
                 .background(
                     color = MaterialTheme.colorScheme.primary,
                     shape = RoundedCornerShape(3.dp, 3.dp, 0.dp, 0.dp),
-                )
+                ),
     )
 }

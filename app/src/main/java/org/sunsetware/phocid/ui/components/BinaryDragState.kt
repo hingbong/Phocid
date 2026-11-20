@@ -63,7 +63,7 @@ class BinaryDragState(
                 _position.snapTo(
                     (dragInitialPosition + dragTotal / length).coerceIn(0f, 1f).takeIf {
                         it.isFinite()
-                    } ?: dragInitialPosition
+                    } ?: dragInitialPosition,
                 )
             }
         }

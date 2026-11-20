@@ -148,7 +148,7 @@ class SortKeyRequestTest {
 
         val parsed =
             SortKeyRequest.parse(
-                """{"items":[{"libraryId":2147483648,"sortKey":"a"},{"libraryId":9223372036854775807,"sortKey":"b"}]}"""
+                """{"items":[{"libraryId":2147483648,"sortKey":"a"},{"libraryId":9223372036854775807,"sortKey":"b"}]}""",
             )
         val longBatch = (parsed as SortKeyRequestResult.Ok).batch
         assertThat(longBatch.errors).isEmpty()

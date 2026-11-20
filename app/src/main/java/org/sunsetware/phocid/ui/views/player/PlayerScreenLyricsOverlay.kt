@@ -147,7 +147,7 @@ object PlayerScreenLyricsOverlayDefault : PlayerScreenLyricsOverlay() {
         val density = LocalDensity.current
         CompositionLocalProvider(
             LocalDensity provides
-                Density(density.density, density.fontScale * preferences.lyricsSizeMultiplier)
+                Density(density.density, density.fontScale * preferences.lyricsSizeMultiplier),
         ) {
             Box(
                 modifier = Modifier.fillMaxSize().alpha(overlayVisibility),
@@ -158,7 +158,7 @@ object PlayerScreenLyricsOverlayDefault : PlayerScreenLyricsOverlay() {
                         Modifier.alpha(alpha.value)
                             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
                             .background(containerColor, RoundedCornerShape(4.dp))
-                            .padding(8.dp)
+                            .padding(8.dp),
                 ) {
                     when (preferences.lyricsDisplay) {
                         LyricsDisplayPreference.DISABLED -> {}

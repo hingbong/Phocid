@@ -55,7 +55,7 @@ class PreferencesThirdPartyLicensesDialog : Dialog() {
                                     Modifier.fillMaxWidth()
                                         .horizontalScroll(rememberScrollState())
                                         .background(MaterialTheme.colorScheme.surfaceContainer)
-                                        .padding(24.dp)
+                                        .padding(24.dp),
                             ) {
                                 Text("© " + developers.joinToString(", "))
                                 if (url != null) Text(url)

@@ -79,7 +79,7 @@ enum class SpecialPlaylist(
         0,
         Icons.Outlined.FavoriteBorder,
         Color(0xffd2849c),
-    )
+    ),
 }
 
 val SpecialPlaylistLookup = SpecialPlaylist.entries.associateBy { it.key }
@@ -107,7 +107,7 @@ class PlaylistManager(
             MutableStateFlow(
                 loadCbor<Map<String, Playlist>>(context, PLAYLISTS_FILE_NAME, false)?.mapKeys {
                     UUID.fromString(it.key)
-                } ?: mapOf(SpecialPlaylist.FAVORITES.key to Playlist(""))
+                } ?: mapOf(SpecialPlaylist.FAVORITES.key to Playlist("")),
             )
         playlists =
             _playlists.combine(
@@ -139,7 +139,7 @@ class PlaylistManager(
         shortcutJob = coroutineScope.launch {
             playlists
                 .combine(
-                    preferences.map { it.sortCollator to it.tabSettings }.distinctUntilChanged()
+                    preferences.map { it.sortCollator to it.tabSettings }.distinctUntilChanged(),
                 ) { playlists, (sortCollator, tabSettings) ->
                     // A failure during shortcut bookkeeping must not complete this collector
                     // and freeze every future playlist or index update: log this round and keep
@@ -187,7 +187,7 @@ class PlaylistManager(
                                 } catch (_: Exception) {
                                     null
                                 }
-                            }
+                            },
                         )
                 }
                 .map { it.id }
@@ -316,7 +316,7 @@ class PlaylistManager(
                 if (playlist == null) {
                     error = true
                     syncLog.appendLine(
-                        Strings[R.string.playlist_io_sync_log_missing_playlist].icuFormat(fileName)
+                        Strings[R.string.playlist_io_sync_log_missing_playlist].icuFormat(fileName),
                     )
                 } else if (file == null) {
                     error = true
@@ -324,7 +324,7 @@ class PlaylistManager(
                         Strings[R.string.playlist_io_sync_log_missing_file].icuFormat(
                             playlist.displayName,
                             fileName,
-                        )
+                        ),
                     )
                 } else if (file.lastModified == null) {
                     error = true
@@ -332,7 +332,7 @@ class PlaylistManager(
                         Strings[R.string.playlist_io_sync_log_no_file_timestamp].icuFormat(
                             playlist.displayName,
                             fileName,
-                        )
+                        ),
                     )
                 } else if (playlist.lastModified < file.lastModified) {
                     try {
@@ -355,7 +355,7 @@ class PlaylistManager(
                             Strings[R.string.playlist_io_sync_log_import_ok].icuFormat(
                                 playlist.displayName,
                                 fileName,
-                            )
+                            ),
                         )
                     } catch (ex: Exception) {
                         error = true
@@ -364,7 +364,7 @@ class PlaylistManager(
                                 playlist.displayName,
                                 fileName,
                                 ex.stackTraceToString(),
-                            )
+                            ),
                         )
                     }
                 } else if (playlist.lastModified > file.lastModified) {
@@ -374,7 +374,7 @@ class PlaylistManager(
                                 outputStream.write(
                                     playlist
                                         .toM3u(preferences.playlistIoSyncSettings)
-                                        .toByteArray(Charsets.UTF_8)
+                                        .toByteArray(Charsets.UTF_8),
                                 )
                             }
                         // SAF doesn't support setting file's last modified date, so we'll have to
@@ -387,7 +387,7 @@ class PlaylistManager(
                                             it.name.endsWith(".m3u8", true)
                                     }
                                     ?.get(file.relativePath)
-                                    ?.lastModified
+                                    ?.lastModified,
                             ),
                             false,
                         ) {
@@ -397,7 +397,7 @@ class PlaylistManager(
                             Strings[R.string.playlist_io_sync_log_export_ok].icuFormat(
                                 playlist.displayName,
                                 fileName,
-                            )
+                            ),
                         )
                     } catch (ex: Exception) {
                         error = true
@@ -406,7 +406,7 @@ class PlaylistManager(
                                 playlist.displayName,
                                 fileName,
                                 ex.stackTraceToString(),
-                            )
+                            ),
                         )
                     }
                 } else {
@@ -414,7 +414,7 @@ class PlaylistManager(
                         Strings[R.string.playlist_io_sync_log_up_to_date].icuFormat(
                             playlist.displayName,
                             fileName,
-                        )
+                        ),
                     )
                 }
             }
@@ -477,7 +477,7 @@ data class Playlist(
             newKeys.add(key)
         }
         return copy(
-            entries = entries + newKeys.zip(paths) { key, path -> PlaylistEntry(key, path) }
+            entries = entries + newKeys.zip(paths) { key, path -> PlaylistEntry(key, path) },
         )
     }
 
@@ -654,7 +654,7 @@ fun playlistShortcut(
         .setIntent(
             Intent(SHORTCUT_PLAYLIST, null, context, MainActivity::class.java).apply {
                 putExtras(bundleOf(SHORTCUT_PLAYLIST_EXTRA_KEY to key.toString()))
-            }
+            },
         )
         .build()
 }

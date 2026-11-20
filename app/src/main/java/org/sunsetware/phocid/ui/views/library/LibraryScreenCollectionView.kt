@@ -720,7 +720,7 @@ data class FolderCollectionViewInfo(val folder: Folder, val folderIndex: Map<Str
             listOfNotNull(
                 folder.childFolders.size
                     .takeIf { it != 0 }
-                    ?.let { Strings[R.string.count_folder].icuFormat(it) }
+                    ?.let { Strings[R.string.count_folder].icuFormat(it) },
             )
 
     override val items
@@ -734,7 +734,7 @@ data class FolderCollectionViewInfo(val folder: Folder, val folderIndex: Map<Str
                     subtitle = childFolder.displayStatistics,
                     lead =
                         LibraryScreenCollectionViewItemLead.Artwork(
-                            Artwork.Icon(Icons.Outlined.Folder, childFolder.path.hashColor())
+                            Artwork.Icon(Icons.Outlined.Folder, childFolder.path.hashColor()),
                         ),
                 )
             } +
@@ -918,7 +918,7 @@ fun LibraryScreenCollectionView(
                                     Modifier.fillMaxWidth()
                                         .height(
                                             if (aspectRatio <= 2f / 3) size!!.first
-                                            else size!!.first / 2
+                                            else size!!.first / 2,
                                         )
                                         .padding(
                                             0.dp,
@@ -1000,11 +1000,11 @@ fun LibraryScreenCollectionView(
                                 info.additionalStatistics +
                                     listOf(
                                         Strings[R.string.count_track].icuFormat(
-                                            items.sumOf { it.value.info.playTracks.size }
+                                            items.sumOf { it.value.info.playTracks.size },
                                         ),
                                         totalDuration,
-                                    )
-                            )
+                                    ),
+                            ),
                         )
                     }
                     itemsIndexed(items, { _, (item, _) -> item.info.composeKey }) {

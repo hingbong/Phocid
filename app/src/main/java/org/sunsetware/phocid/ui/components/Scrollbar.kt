@@ -262,7 +262,7 @@ inline fun ScrollbarThumb(
                                                 totalItemsCount)
                                             .roundToIntOrZero()
                                             .coerceAtMost(totalItemsCount - 1)
-                                            .coerceAtLeast(0)
+                                            .coerceAtLeast(0),
                                     )
                                 }
                             }
@@ -270,7 +270,7 @@ inline fun ScrollbarThumb(
                         isThumbDragging = false
                         onSetIsThumbDragging(false)
                     }
-                }
+                },
     ) {
         content()
         Box(
@@ -290,7 +290,7 @@ inline fun ScrollbarThumb(
                             )
                         }
                     }
-                    .fillMaxSize()
+                    .fillMaxSize(),
         )
     }
 }

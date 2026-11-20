@@ -136,7 +136,7 @@ sealed class PlaylistIoSettingsDialogBase(
                     onValueChange = { relativeBaseBuffer = it },
                     label = {
                         Text(
-                            Strings[R.string.preferences_playlist_io_settings_export_relative_base]
+                            Strings[R.string.preferences_playlist_io_settings_export_relative_base],
                         )
                     },
                     supportingText = {
@@ -144,7 +144,7 @@ sealed class PlaylistIoSettingsDialogBase(
                             Strings[
                                     R.string
                                         .preferences_playlist_io_settings_export_relative_base_hint]
-                                .icuFormat(defaultMusicDirectory ?: Environment.DIRECTORY_MUSIC)
+                                .icuFormat(defaultMusicDirectory ?: Environment.DIRECTORY_MUSIC),
                         )
                     },
                     singleLine = true,

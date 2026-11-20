@@ -21,11 +21,11 @@ class ScrollbarVisibilityTest {
     fun contentFittingViewport_neverShows() {
         val (start, end) = adjustThumbOffsets(0f, 1f, height, density)
         assertThat(
-                scrollbarShouldShow(start, end, isScrollInProgress = true, isThumbDragging = false)
+                scrollbarShouldShow(start, end, isScrollInProgress = true, isThumbDragging = false),
             )
             .isFalse()
         assertThat(
-                scrollbarShouldShow(start, end, isScrollInProgress = false, isThumbDragging = true)
+                scrollbarShouldShow(start, end, isScrollInProgress = false, isThumbDragging = true),
             )
             .isFalse()
     }
@@ -41,7 +41,7 @@ class ScrollbarVisibilityTest {
                         end,
                         isScrollInProgress = false,
                         isThumbDragging = false,
-                    )
+                    ),
                 )
                 .describedAs("thumb [$rawStart, $rawEnd] while idle")
                 .isFalse()
@@ -58,7 +58,7 @@ class ScrollbarVisibilityTest {
                         end,
                         isScrollInProgress = true,
                         isThumbDragging = false,
-                    )
+                    ),
                 )
                 .describedAs("thumb [$rawStart, $rawEnd] while scrolling")
                 .isTrue()
@@ -71,7 +71,7 @@ class ScrollbarVisibilityTest {
         // so the drag flag alone must keep the scrollbar visible.
         val (start, end) = adjustThumbOffsets(0f, 0.2f, height, density)
         assertThat(
-                scrollbarShouldShow(start, end, isScrollInProgress = false, isThumbDragging = true)
+                scrollbarShouldShow(start, end, isScrollInProgress = false, isThumbDragging = true),
             )
             .isTrue()
     }
@@ -89,7 +89,7 @@ class ScrollbarVisibilityTest {
                     topEnd,
                     isScrollInProgress = true,
                     isThumbDragging = false,
-                )
+                ),
             )
             .isTrue()
 
@@ -102,7 +102,7 @@ class ScrollbarVisibilityTest {
                     bottomEnd,
                     isScrollInProgress = true,
                     isThumbDragging = false,
-                )
+                ),
             )
             .isTrue()
     }

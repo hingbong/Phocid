@@ -52,7 +52,7 @@ class BridgeService : Service() {
             _state.update { it.copy(error = null, starting = true) }
             try {
                 context.startForegroundService(
-                    Intent(context, BridgeService::class.java).setAction(ACTION_RESTART)
+                    Intent(context, BridgeService::class.java).setAction(ACTION_RESTART),
                 )
             } catch (t: Throwable) {
                 _state.update {
@@ -242,7 +242,7 @@ class BridgeService : Service() {
                         "Stop",
                         stopPending,
                     )
-                    .build()
+                    .build(),
             )
             .build()
     }

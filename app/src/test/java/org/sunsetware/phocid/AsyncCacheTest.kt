@@ -121,7 +121,7 @@ class AsyncCacheTest {
                     cache.getOrPut(0) {
                         attempts++
                         42
-                    }
+                    },
                 )
                 .isEqualTo(42)
             assertThat(attempts).isEqualTo(2)

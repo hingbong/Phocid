@@ -75,10 +75,10 @@ class TimerDialog : Dialog() {
                     uiManager.toast(Strings[R.string.toast_timer_canceled])
                 } else {
                     playerManager.setTimer(
-                        PlayerTimerSettings(durationMinutes.minutes, finishLastTrack)
+                        PlayerTimerSettings(durationMinutes.minutes, finishLastTrack),
                     )
                     uiManager.playerTimerSettings.set(
-                        PlayerTimerSettings(durationMinutes.minutes, finishLastTrack)
+                        PlayerTimerSettings(durationMinutes.minutes, finishLastTrack),
                     )
                     uiManager.toast(Strings[R.string.toast_timer_set].icuFormat(durationMinutes))
                 }

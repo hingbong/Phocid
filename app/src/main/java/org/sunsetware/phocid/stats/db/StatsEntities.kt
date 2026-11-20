@@ -44,7 +44,7 @@ data class TrackEntity(
                 parentColumns = ["id"],
                 childColumns = ["trackRowId"],
                 onDelete = ForeignKey.CASCADE,
-            )
+            ),
         ],
 )
 data class TrackAliasEntity(
@@ -96,7 +96,7 @@ object AliasKind {
                 parentColumns = ["id"],
                 childColumns = ["trackRowId"],
                 onDelete = ForeignKey.CASCADE,
-            )
+            ),
         ],
 )
 data class PlayEventEntity(
@@ -124,7 +124,7 @@ data class PlayEventEntity(
                 parentColumns = ["id"],
                 childColumns = ["trackRowId"],
                 onDelete = ForeignKey.CASCADE,
-            )
+            ),
         ],
 )
 data class TrackDailyEntity(
@@ -168,7 +168,7 @@ data class TrackDailyEntity(
                 parentColumns = ["id"],
                 childColumns = ["trackRowId"],
                 onDelete = ForeignKey.CASCADE,
-            )
+            ),
         ],
 )
 data class TrackTotalsEntity(

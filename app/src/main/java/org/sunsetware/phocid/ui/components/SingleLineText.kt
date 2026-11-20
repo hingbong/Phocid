@@ -36,7 +36,7 @@ fun SingleLineText(
             modifier.requiredHeight(
                 with(LocalDensity.current) {
                     (if (!lineHeight.isUnspecified) lineHeight else style.lineHeight).toDp()
-                }
+                },
             ),
         color = color,
         letterSpacing = letterSpacing,

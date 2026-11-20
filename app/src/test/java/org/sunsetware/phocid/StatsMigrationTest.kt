@@ -30,7 +30,7 @@ class StatsMigrationTest {
                             oldVersion: Int,
                             newVersion: Int,
                         ) {}
-                    }
+                    },
                 )
                 .build()
         helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
@@ -96,7 +96,7 @@ class StatsMigrationTest {
         StatsDatabase.MIGRATION_4_5.migrate(db)
         db.execSQL(
             "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, lastPlayedAt) " +
-                "VALUES (1, 20000, 1, 1000, 10)"
+                "VALUES (1, 20000, 1, 1000, 10)",
         )
 
         db.query("SELECT firstPlayedAt FROM track_daily").use { cursor ->
@@ -113,17 +113,17 @@ class StatsMigrationTest {
         db.execSQL(
             "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, lastPlayedAt, " +
                 "firstPlayedAt, startedCount, completedCount, skipCount, completedMillis) " +
-                "VALUES (1, 20000, 3, 3000, 100, NULL, 0, 0, 0, 0)"
+                "VALUES (1, 20000, 3, 3000, 100, NULL, 0, 0, 0, 0)",
         )
         db.execSQL(
             "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, lastPlayedAt, " +
                 "firstPlayedAt, startedCount, completedCount, skipCount, completedMillis) " +
-                "VALUES (2, 20000, 1, 1000, 100, 200, 0, 0, 0, 0)"
+                "VALUES (2, 20000, 1, 1000, 100, 200, 0, 0, 0, 0)",
         )
         db.execSQL(
             "INSERT INTO track_daily (trackRowId, epochDay, playCount, playedMillis, lastPlayedAt, " +
                 "firstPlayedAt, startedCount, completedCount, skipCount, completedMillis) " +
-                "VALUES (3, 20000, 0, 0, 0, NULL, 1, 0, 0, 0)"
+                "VALUES (3, 20000, 0, 0, 0, NULL, 1, 0, 0, 0)",
         )
         db.execSQL("INSERT INTO track_totals VALUES (1, 3, 3000, 1, 100, 0, 0, 0, 0)")
         db.execSQL("INSERT INTO track_totals VALUES (2, 1, 1000, 200, 100, 0, 0, 0, 0)")
@@ -132,7 +132,7 @@ class StatsMigrationTest {
 
         db.query(
                 "SELECT trackRowId, firstPlayedAt, lastPlayedAt, startedCount FROM track_daily " +
-                    "ORDER BY trackRowId"
+                    "ORDER BY trackRowId",
             )
             .use { cursor ->
                 assertThat(cursor.moveToNext()).isTrue()
@@ -177,7 +177,7 @@ class StatsMigrationTest {
                 "(2, 20000, 3, 3000, 100, NULL, 0, 1, 0, 0), " +
                 "(3, 20000, 0, 1000, 100, NULL, 0, 0, 2, 0), " +
                 "(4, 20000, 0, 0, 0, NULL, 0, 0, 0, 0), " +
-                "(5, 20000, 2, 2000, 100, NULL, 5, 0, 0, 0)"
+                "(5, 20000, 2, 2000, 100, NULL, 5, 0, 0, 0)",
         )
         db.execSQL(
             "INSERT INTO track_totals VALUES " +
@@ -185,7 +185,7 @@ class StatsMigrationTest {
                 "(2, 3, 3000, 0, 100, 0, 1, 0, 0), " +
                 "(3, 0, 1000, 0, 100, 0, 0, 2, 0), " +
                 "(4, 0, 0, 0, 0, 0, 0, 0, 0), " +
-                "(5, 2, 2000, 0, 100, 5, 0, 0, 0)"
+                "(5, 2, 2000, 0, 100, 5, 0, 0, 0)",
         )
 
         StatsDatabase.MIGRATION_6_7.migrate(db)
@@ -280,7 +280,7 @@ class StatsMigrationTest {
         }
         db.query(
                 "SELECT startedCount, completedCount, skipCount, completedMillis, " +
-                    "dayStartMs, dayEndMs, utcOffsetMinutes FROM track_daily"
+                    "dayStartMs, dayEndMs, utcOffsetMinutes FROM track_daily",
             )
             .use { cursor ->
                 assertThat(cursor.moveToFirst()).isTrue()
@@ -293,7 +293,7 @@ class StatsMigrationTest {
                 assertThat(cursor.isNull(6)).isTrue()
             }
         db.query(
-                "SELECT startedCount, completedCount, skipCount, completedMillis FROM track_totals"
+                "SELECT startedCount, completedCount, skipCount, completedMillis FROM track_totals",
             )
             .use { cursor ->
                 assertThat(cursor.moveToFirst()).isTrue()
@@ -315,7 +315,7 @@ class StatsMigrationTest {
         // The table was registered with the schema but never used anywhere, so the migration only
         // reclaims its space; it must be gone entirely.
         db.query(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'fingerprint_cache'"
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'fingerprint_cache'",
             )
             .use { cursor ->
                 assertThat(cursor.moveToFirst()).isTrue()

@@ -61,7 +61,7 @@ class LibraryIndexTest {
         assertThat(
                 index.albums.keys.map {
                     it.name.toString() to it.albumArtists.map { artist -> artist.toString() }
-                }
+                },
             )
             .containsExactlyInAnyOrder("ALBUM1" to listOf("artist1"))
     }

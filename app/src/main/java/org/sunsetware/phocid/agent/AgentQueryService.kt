@@ -779,7 +779,7 @@ class AgentQueryService : Service() {
                         put(
                             JSONObject()
                                 .put("libraryId", skipped.libraryId)
-                                .put("reason", skipped.reason)
+                                .put("reason", skipped.reason),
                         )
                     }
                 },
@@ -792,7 +792,7 @@ class AgentQueryService : Service() {
                             JSONObject()
                                 .put("libraryId", error.libraryId ?: JSONObject.NULL)
                                 .put("code", error.code)
-                                .put("message", error.message)
+                                .put("message", error.message),
                         )
                     }
                 },
@@ -1077,7 +1077,7 @@ class AgentQueryService : Service() {
             // paths, SQL fragments, or other internals. Keep the detail in logcat only.
             Log.e("PhocidAgent", "Query failed", t)
             responseBudget.boundedResponse(
-                errorJson("internal_error", "An internal error occurred")
+                errorJson("internal_error", "An internal error occurred"),
             )
         }
     }

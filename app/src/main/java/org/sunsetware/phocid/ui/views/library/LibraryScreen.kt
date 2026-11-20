@@ -241,7 +241,7 @@ fun LibraryScreen(
                         ) {
                             collectionSearchQueryBuffer = collectionSearchQueryBuffer ?: ""
                             currentCollection.searchQuery.update { it ?: "" }
-                        }
+                        },
                     ) +
                         collectionMenuItemsWithoutPlay(
                             {
@@ -282,10 +282,10 @@ fun LibraryScreen(
                                     Icons.Filled.FolderOpen,
                                 ) {
                                     uiManager.openFolderCollectionView(
-                                        libraryIndex.defaultRootFolder
+                                        libraryIndex.defaultRootFolder,
                                     )
                                 }
-                            }
+                            },
                     )
                 else -> emptyList()
             } +
@@ -395,7 +395,7 @@ fun LibraryScreen(
                         uiManager.libraryScreenSize.update {
                             with(density) { size.width.toDp() to size.height.toDp() }
                         }
-                    }
+                    },
         ) {
             AnimatedForwardBackwardTransition(collectionViewStack) { animatedCollectionViewState ->
                 if (animatedCollectionViewState == null) {
@@ -423,7 +423,7 @@ fun LibraryScreen(
                         Strings[R.string.snackbar_scanning_library].icuFormat(
                             libraryScanProgress?.first ?: 0,
                             libraryScanProgress?.second ?: "?",
-                        )
+                        ),
                     )
                 }
 
@@ -474,7 +474,7 @@ fun LibraryScreen(
                                     Pair(
                                         sortingOptionId,
                                         it.collectionViewSorting[currentCollectionType]!!.second,
-                                    ))
+                                    )),
                     )
                 }
             } else {
@@ -496,7 +496,7 @@ fun LibraryScreen(
                                     Pair(
                                         it.collectionViewSorting[currentCollectionType]!!.first,
                                         sortAscending,
-                                    ))
+                                    )),
                     )
                 }
             } else {
@@ -528,7 +528,7 @@ private fun TopBar(
             listOfNotNull(
                 if (selectedCount > 0)
                     Strings[R.string.list_multi_select_title].icuFormat(selectedCount)
-                else null
+                else null,
             )
     TopAppBar(
         title = {
@@ -546,7 +546,7 @@ private fun TopBar(
                             onClick = onBack,
                             colors =
                                 IconButtonDefaults.iconButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 ),
                         ) {
                             Icon(
@@ -647,10 +647,12 @@ private fun HomeSearchBar(value: String, onValueChange: (String) -> Unit) {
                     }
                 }
                 if (value.isNotEmpty()) {
-                    IconButton({
-                        onValueChange("")
-                        focusManager.clearFocus()
-                    }) {
+                    IconButton(
+                        {
+                            onValueChange("")
+                            focusManager.clearFocus()
+                        },
+                    ) {
                         Icon(Icons.Filled.Clear, Strings[R.string.commons_clear])
                     }
                 }
@@ -727,7 +729,7 @@ private fun CollectionSearchBar(
                     onClick = {
                         focusManager.clearFocus()
                         onValueChange(null)
-                    }
+                    },
                 ) {
                     Icon(Icons.Filled.Clear, Strings[R.string.commons_close])
                 }

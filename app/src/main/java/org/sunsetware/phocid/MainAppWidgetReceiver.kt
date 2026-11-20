@@ -113,7 +113,7 @@ class MainAppWidget : GlanceAppWidget() {
                             it.path,
                             preferences.highResArtworkPreference.player,
                             preferences.widgetArtworkResolutionLimit.coerceAtMost(
-                                widgetArtworkSizeLimit
+                                widgetArtworkSizeLimit,
                             ),
                             preferences.widgetLayout.standaloneArtwork,
                         )
@@ -129,7 +129,7 @@ class MainAppWidget : GlanceAppWidget() {
             val isDarkTheme =
                 preferences.widgetDarkTheme.boolean
                     ?: (context.resources.configuration.uiMode.and(
-                        Configuration.UI_MODE_NIGHT_MASK
+                        Configuration.UI_MODE_NIGHT_MASK,
                     ) == Configuration.UI_MODE_NIGHT_YES)
             val colorPreference = isDarkTheme to preferences.widgetAccentBackground
 
@@ -170,7 +170,7 @@ class MainAppWidget : GlanceAppWidget() {
             val backgroundRadius =
                 Dp(
                     resources.getDimension(android.R.dimen.system_app_widget_background_radius) /
-                        resources.displayMetrics.density
+                        resources.displayMetrics.density,
                 )
 
             GlanceTheme {
@@ -189,19 +189,19 @@ class MainAppWidget : GlanceAppWidget() {
                                         colorFilter =
                                             ColorFilter.tint(
                                                 @SuppressLint("RestrictedApi")
-                                                ColorProvider(backgroundColor.copy(alpha = 0.6f))
+                                                ColorProvider(backgroundColor.copy(alpha = 0.6f)),
                                             ),
                                     )
                                 } else {
                                     it.background(
                                         @SuppressLint("RestrictedApi")
-                                        ColorProvider(backgroundColor)
+                                        ColorProvider(backgroundColor),
                                     )
                                 }
                             }
                             .clickable(
-                                actionStartActivity(Intent(context, MainActivity::class.java))
-                            )
+                                actionStartActivity(Intent(context, MainActivity::class.java)),
+                            ),
                 ) {
                     when (preferences.widgetLayout) {
                         WidgetLayout.SMALL -> {
@@ -376,7 +376,7 @@ class MainAppWidget : GlanceAppWidget() {
                         .toGlanceStyle()
                         .copy(
                             color =
-                                @SuppressLint("RestrictedApi") ColorProvider(contentColorVariant)
+                                @SuppressLint("RestrictedApi") ColorProvider(contentColorVariant),
                         ),
                 maxLines = 1,
             )
@@ -455,7 +455,7 @@ class MainAppWidget : GlanceAppWidget() {
                     .size(48.dp)
                     .cornerRadius(24.dp)
                     .padding(12.dp)
-                    .then(onClick)
+                    .then(onClick),
         ) {
             // For whatever reason, `Image` refuses to work
             Box(
@@ -464,10 +464,10 @@ class MainAppWidget : GlanceAppWidget() {
                             ImageProvider(resId),
                             colorFilter =
                                 ColorFilter.tint(
-                                    @SuppressLint("RestrictedApi") ColorProvider(tint)
+                                    @SuppressLint("RestrictedApi") ColorProvider(tint),
                                 ),
                         )
-                        .size(24.dp)
+                        .size(24.dp),
             ) {}
         }
     }
@@ -497,8 +497,8 @@ class MainAppWidget : GlanceAppWidget() {
                             @SuppressLint("RestrictedApi")
                             ColorProvider(
                                 if (darkTheme) lerp(color, Color.Black, 0.4f)
-                                else lerp(color, Color.White, 0.9f)
-                            )
+                                else lerp(color, Color.White, 0.9f),
+                            ),
                         ),
                     modifier = modifier,
                 )

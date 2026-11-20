@@ -75,7 +75,7 @@ inline fun <T> SwipeToDismiss(
                         (1 - (offset.value / size.width).absoluteValue)
                             .takeIf { it.isFinite() }
                             ?.coerceIn(0f, 1f) ?: 1f
-                }
+                },
     ) {
         content()
     }

@@ -180,7 +180,7 @@ class TrackResolver(
                     durationMillis = meta.durationMillis,
                     path = meta.file?.absolutePath.orEmpty(),
                     createdAt = System.currentTimeMillis(),
-                )
+                ),
             )
 
     private suspend fun mergeTracks(loser: Long, winner: Long) {

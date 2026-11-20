@@ -365,7 +365,7 @@ class PlaybackStatsRecorderTest {
 
             recorder.onResumed()
             recorder.onTrackStarted(
-                meta("content://seek-end-most/1", file, durationMillis = 60_000L)
+                meta("content://seek-end-most/1", file, durationMillis = 60_000L),
             )
             // 59.5 s of a 60 s track: the accumulated time covers the duration minus the
             // tolerance, so even a non-authoritative end counts as completed.
@@ -409,7 +409,7 @@ class PlaybackStatsRecorderTest {
 
             recorder.onResumed()
             recorder.onTrackStarted(
-                meta("content://unknown/skipped", skippedFile, durationMillis = 0L)
+                meta("content://unknown/skipped", skippedFile, durationMillis = 0L),
             )
             clock.advance(5_000L)
             recorder.onTrackFinished()
@@ -501,7 +501,7 @@ class PlaybackStatsRecorderTest {
             assertThat(db.eventDao().count()).isEqualTo(1L)
             assertThat(eventPlayedAtMillis())
                 .isEqualTo(
-                    ZonedDateTime.of(2026, 1, 2, 0, 0, 15, 0, zone).toInstant().toEpochMilli()
+                    ZonedDateTime.of(2026, 1, 2, 0, 0, 15, 0, zone).toInstant().toEpochMilli(),
                 )
             assertInvariant(recorder)
         }
@@ -543,7 +543,7 @@ class PlaybackStatsRecorderTest {
 
             db.openHelper.writableDatabase.execSQL(
                 "CREATE TRIGGER fail_track_daily BEFORE INSERT ON track_daily " +
-                    "BEGIN SELECT RAISE(ABORT, 'boom'); END"
+                    "BEGIN SELECT RAISE(ABORT, 'boom'); END",
             )
             clock.advance(35_000L)
             recorder.onPaused()
@@ -735,7 +735,7 @@ class PlaybackStatsRecorderTest {
             val uri = "content://failed-resolution/1"
             db.openHelper.writableDatabase.execSQL(
                 "CREATE TRIGGER fail_tracks BEFORE INSERT ON tracks " +
-                    "BEGIN SELECT RAISE(ABORT, 'boom'); END"
+                    "BEGIN SELECT RAISE(ABORT, 'boom'); END",
             )
             recorder.onResumed()
             recorder.onTrackStarted(meta(uri))
@@ -769,7 +769,7 @@ class PlaybackStatsRecorderTest {
 
             db.openHelper.writableDatabase.execSQL(
                 "CREATE TRIGGER fail_track_daily BEFORE INSERT ON track_daily " +
-                    "BEGIN SELECT RAISE(ABORT, 'boom'); END"
+                    "BEGIN SELECT RAISE(ABORT, 'boom'); END",
             )
             clock.advance(5_000L)
             recorder.onShutdown()
@@ -806,7 +806,7 @@ class PlaybackStatsRecorderTest {
             db.trackDao().delete(oldRowId)
             db.openHelper.writableDatabase.execSQL(
                 "CREATE TRIGGER fail_tracks BEFORE INSERT ON tracks " +
-                    "BEGIN SELECT RAISE(ABORT, 'boom'); END"
+                    "BEGIN SELECT RAISE(ABORT, 'boom'); END",
             )
             clock.advance(5_000L)
             recorder.onShutdown()
@@ -844,7 +844,7 @@ class PlaybackStatsRecorderTest {
                                 millis = 35_000L,
                                 plays = 1,
                                 lastPlayedAt = clock.wall + 35_000L,
-                            )
+                            ),
                         ),
                 )
             val outboxId =
@@ -853,7 +853,7 @@ class PlaybackStatsRecorderTest {
                         PlaybackOutboxEntity(
                             payload = cbor.encodeToByteArray(payload),
                             createdAt = clock.wall,
-                        )
+                        ),
                     )
             assertThat(outboxId).isPositive()
 

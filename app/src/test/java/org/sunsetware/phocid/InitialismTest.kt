@@ -33,7 +33,7 @@ class InitialismTest {
 
         val kana =
             "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわゐゑをん".codePoints().toList().joinToString(
-                ""
+                "",
             ) {
                 UCharacter.toString(it).initialLetter(Locale.ROOT)
             }

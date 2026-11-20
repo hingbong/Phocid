@@ -46,7 +46,7 @@ class StatsMaintenanceWorker(
         val deletedOrphans =
             db.trackDao()
                 .deleteOrphans(
-                    System.currentTimeMillis() - StatsRetention.ORPHAN_TRACK_GRACE_MILLIS
+                    System.currentTimeMillis() - StatsRetention.ORPHAN_TRACK_GRACE_MILLIS,
                 )
 
         // Cap the outbox so a device that never drains it stays bounded. Recorder inserts trim as
@@ -79,7 +79,7 @@ class StatsMaintenanceWorker(
                             // while charging, and maintenance is a handful of bounded DELETEs:
                             // it must actually run. Battery-not-low stays as politeness.
                             .setRequiresBatteryNotLow(true)
-                            .build()
+                            .build(),
                     )
                     .build()
             // UPDATE re-applies period and constraints to work that is already enqueued, so

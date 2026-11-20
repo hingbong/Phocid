@@ -181,7 +181,7 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
                     actions = {
                         if (currentTabType == PlaylistIoScreenTabType.Sync) {
                             IconButton(
-                                onClick = { uiManager.openDialog(PlaylistIoSyncHelpDialog()) }
+                                onClick = { uiManager.openDialog(PlaylistIoSyncHelpDialog()) },
                             ) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.Help,
@@ -189,7 +189,7 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
                                 )
                             }
                             IconButton(
-                                onClick = { uiManager.openDialog(PlaylistIoSyncLogDialog()) }
+                                onClick = { uiManager.openDialog(PlaylistIoSyncLogDialog()) },
                             ) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.EventNote,
@@ -197,7 +197,7 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
                                 )
                             }
                             IconButton(
-                                onClick = { uiManager.openDialog(PlaylistIoSyncSettingsDialog()) }
+                                onClick = { uiManager.openDialog(PlaylistIoSyncSettingsDialog()) },
                             ) {
                                 Icon(
                                     Icons.Filled.SettingsSuggest,
@@ -353,7 +353,7 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
                             Charsets.UTF_8.name()
                         else viewModel.preferences.value.charsetName,
                         file.lastModified ?: System.currentTimeMillis(),
-                    )
+                    ),
                 )
             }
         }
@@ -379,7 +379,7 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
                     outputStream.write(
                         playlist
                             .toM3u(viewModel.preferences.value.playlistIoSettings)
-                            .toByteArray(Charsets.UTF_8)
+                            .toByteArray(Charsets.UTF_8),
                     )
                 }
                 // SAF doesn't support setting file's last modified date, so we'll have to
@@ -391,14 +391,14 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
         }
         if (failureCount == 0) {
             viewModel.uiManager.toast(
-                Strings[R.string.toast_playlist_exported].icuFormat(playlists.size)
+                Strings[R.string.toast_playlist_exported].icuFormat(playlists.size),
             )
         } else {
             viewModel.uiManager.toast(
                 Strings[R.string.toast_playlist_exported_with_failure].icuFormat(
                     playlists.size - failureCount,
                     failureCount,
-                )
+                ),
             )
         }
         exportSelection = emptySet()
@@ -605,8 +605,8 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
                                         playlistIoSyncMappings =
                                             preferences.playlistIoSyncMappings.mapValues {
                                                 if (it.key == key) targetBuffer else it.value
-                                            }
-                                    )
+                                            },
+                                    ),
                                 )
                             }
 
@@ -625,8 +625,8 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
                                                             Pair(key, targetBuffer)
                                                     } else {
                                                         preferences.playlistIoSyncMappings - key
-                                                    }
-                                            )
+                                                    },
+                                            ),
                                         )
                                     },
                                 )
@@ -645,13 +645,13 @@ private constructor(tabType: PlaylistIoScreenTabType, initialExportSelection: Se
                                                     Text(
                                                         Strings[
                                                             R.string
-                                                                .playlist_io_sync_target_file_conflict]
+                                                                .playlist_io_sync_target_file_conflict],
                                                     )
                                                 if (targetNonexistent)
                                                     Text(
                                                         Strings[
                                                             R.string
-                                                                .playlist_io_sync_target_file_nonexistent]
+                                                                .playlist_io_sync_target_file_nonexistent],
                                                     )
                                             }
                                         },

@@ -28,9 +28,9 @@ class LyricsTest {
                                 "[00:00.00][22:33.444]line3",
                                 "[33:44.555]     ",
                             )
-                            .joinToString("\r\n")
+                            .joinToString("\r\n"),
                     )
-                    .lines
+                    .lines,
             )
             .containsExactly(
                 timestamp(0, 0, 0) to "line3",
@@ -51,7 +51,7 @@ class LyricsTest {
                     timestamp(2, 0, 1) to "line2",
                     timestamp(2, 0, 1) to "line3",
                     timestamp(4, 0, 1) to "line4",
-                )
+                ),
             )
         assertThat(lyrics.getLineIndex(timestamp(0, 0, 0))).isEqualTo(null)
         assertThat(lyrics.getLineIndex(timestamp(0, 0, 1))).isEqualTo(0)

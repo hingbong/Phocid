@@ -151,7 +151,7 @@ fun CustomizedPlayer(context: Context): CustomizedPlayer {
                     .setAudioOffloadPreferences(
                         AudioOffloadPreferences.Builder()
                             .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
-                            .build()
+                            .build(),
                     )
                     .build()
         }

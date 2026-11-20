@@ -129,7 +129,7 @@ class DeletePlaylistDialog(private val keys: Set<UUID>) : Dialog() {
             Text(
                 if (keys.size == 1)
                     Strings[R.string.playlist_delete_single_dialog_body].icuFormat(
-                        singlePlaylistName
+                        singlePlaylistName,
                     )
                 else Strings[R.string.playlist_delete_multiple_dialog_body].icuFormat(keys.size),
                 modifier = Modifier.padding(horizontal = 24.dp),

@@ -60,7 +60,7 @@ class StatsSummaryTest {
                         durationMillis = 180_000,
                         path = "",
                         createdAt = 1,
-                    )
+                    ),
                 )
         db.dailyDao()
             .insertAll(
@@ -72,7 +72,7 @@ class StatsSummaryTest {
                         playedMillis = millis,
                         lastPlayedAt = day.toLong(),
                     )
-                }
+                },
             )
         return row
     }
@@ -91,7 +91,7 @@ class StatsSummaryTest {
                             durationMillis = 180_000,
                             path = "",
                             createdAt = 1,
-                        )
+                        ),
                     )
             db.totalsDao()
                 .insertAll(
@@ -102,8 +102,8 @@ class StatsSummaryTest {
                             totalMillis = 540_000,
                             firstPlayedAt = 1_000,
                             lastPlayedAt = 3_000,
-                        )
-                    )
+                        ),
+                    ),
                 )
             db.dailyDao()
                 .insertAll(
@@ -122,7 +122,7 @@ class StatsSummaryTest {
                             playedMillis = 180_000,
                             lastPlayedAt = 3_000,
                         ),
-                    )
+                    ),
                 )
             // 19_999 predates every daily row still on disk. Only the global table knows about it.
             db.activeDayDao()
@@ -131,7 +131,7 @@ class StatsSummaryTest {
                         ActiveDayEntity(19_999),
                         ActiveDayEntity(20_000),
                         ActiveDayEntity(20_001),
-                    )
+                    ),
                 )
 
             val summary = StatsRepository(db).summary(StatsRange.ALL).first()

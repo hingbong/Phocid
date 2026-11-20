@@ -43,7 +43,7 @@ fun listSafFiles(
                                 currentUri,
                                 DocumentsContract.getDocumentId(currentUri),
                             )
-                        } else treeUri
+                        } else treeUri,
                     ),
                 )
             requireNotNull(
@@ -58,7 +58,7 @@ fun listSafFiles(
                         null,
                         null,
                         null,
-                    )
+                    ),
                 )
                 .use { cursor ->
                     while (cursor.moveToNext()) {

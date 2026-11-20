@@ -51,7 +51,7 @@ class StatsMaintenanceTest {
                     durationMillis = 180_000,
                     path = "",
                     createdAt = createdAt,
-                )
+                ),
             )
 
     @Test
@@ -90,7 +90,7 @@ class StatsMaintenanceTest {
             val eventOnly = insertTrack("event-only", stale)
             db.eventDao()
                 .insert(
-                    PlayEventEntity(trackRowId = eventOnly, playedAt = 500L, playedMillis = 1_000L)
+                    PlayEventEntity(trackRowId = eventOnly, playedAt = 500L, playedMillis = 1_000L),
                 )
 
             val dailyOnly = insertTrack("daily-only", stale)
@@ -102,8 +102,8 @@ class StatsMaintenanceTest {
                             epochDay = 20_000,
                             playCount = 1,
                             playedMillis = 1_000,
-                        )
-                    )
+                        ),
+                    ),
                 )
 
             val deleted = db.trackDao().deleteOrphans(cutoff)
@@ -122,7 +122,7 @@ class StatsMaintenanceTest {
                         PlaybackOutboxEntity(
                             payload = byteArrayOf(i.toByte()),
                             createdAt = i.toLong(),
-                        )
+                        ),
                     )
             }
 
@@ -144,7 +144,7 @@ class StatsMaintenanceTest {
                         PlaybackOutboxEntity(
                             payload = byteArrayOf(i.toByte()),
                             createdAt = i.toLong(),
-                        )
+                        ),
                     )
             }
 
@@ -162,7 +162,7 @@ class StatsMaintenanceTest {
 
             db.eventDao()
                 .insert(
-                    PlayEventEntity(trackRowId = track, playedAt = base, playedMillis = 10_000L)
+                    PlayEventEntity(trackRowId = track, playedAt = base, playedMillis = 10_000L),
                 )
             db.eventDao()
                 .insert(
@@ -170,7 +170,7 @@ class StatsMaintenanceTest {
                         trackRowId = track,
                         playedAt = base + 600_000L,
                         playedMillis = 20_000L,
-                    )
+                    ),
                 )
             db.eventDao()
                 .insert(
@@ -178,7 +178,7 @@ class StatsMaintenanceTest {
                         trackRowId = track,
                         playedAt = base + 899_999L,
                         playedMillis = 30_000L,
-                    )
+                    ),
                 )
             db.eventDao()
                 .insert(
@@ -186,7 +186,7 @@ class StatsMaintenanceTest {
                         trackRowId = track,
                         playedAt = base + 900_000L,
                         playedMillis = 40_000L,
-                    )
+                    ),
                 )
 
             // Bounded: a Room Flow that never emits (paused-looper invalidation) must fail here

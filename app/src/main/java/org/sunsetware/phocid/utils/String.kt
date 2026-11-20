@@ -115,7 +115,7 @@ class CaseInsensitiveMap<T> private constructor(private val inner: Map<String, T
         map.map { (key, value) -> Pair(casefolder.normalize(key), value) }
             .groupBy({ it.first }, { it.second })
             .map { Pair(it.key, combinator(it.value)) }
-            .toMap()
+            .toMap(),
     )
 
     override val entries
@@ -170,7 +170,7 @@ class CaseInsensitiveMapSerializer<T>(valueSerializer: KSerializer<T>) :
         return CaseInsensitiveMap(decoder.decodeSerializableValue(surrogateSerializer)) {
             if (it.size != 1) {
                 throw IllegalArgumentException(
-                    "Deserializing CaseInsensitiveMap with conflicting keys"
+                    "Deserializing CaseInsensitiveMap with conflicting keys",
                 )
             }
             it.first()

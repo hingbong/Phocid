@@ -238,7 +238,7 @@ class PlayerScreenQueueDefaultBase(
                                         modifier =
                                             Modifier.clickable { onSeekTo(index) }
                                                 .background(
-                                                    MaterialTheme.colorScheme.surfaceContainerLow
+                                                    MaterialTheme.colorScheme.surfaceContainerLow,
                                                 ),
                                         dragIndicator = dragIndicatorVisibility,
                                     )
@@ -267,7 +267,7 @@ class PlayerScreenQueueDefaultBase(
                                                             onMoveTrack(from, to)
                                                         }
                                                     },
-                                                )
+                                                ),
                                     )
                                 }
                             }

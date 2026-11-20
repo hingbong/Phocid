@@ -25,7 +25,7 @@ class AgentCallerGateTest {
                     packagesForUid = null,
                 ) {
                     PackageManager.SIGNATURE_MATCH
-                }
+                },
             )
             .isTrue()
     }
@@ -39,7 +39,7 @@ class AgentCallerGateTest {
                     packagesForUid = arrayOf("org.sunsetware.phocid.bridge"),
                 ) {
                     PackageManager.SIGNATURE_MATCH
-                }
+                },
             )
             .isTrue()
     }
@@ -53,7 +53,7 @@ class AgentCallerGateTest {
                     packagesForUid = null,
                 ) {
                     PackageManager.SIGNATURE_MATCH
-                }
+                },
             )
             .isFalse()
         assertThat(
@@ -63,7 +63,7 @@ class AgentCallerGateTest {
                     packagesForUid = emptyArray(),
                 ) {
                     PackageManager.SIGNATURE_MATCH
-                }
+                },
             )
             .isFalse()
     }
@@ -79,7 +79,7 @@ class AgentCallerGateTest {
                     packagesForUid = arrayOf("com.hostile.agent"),
                 ) {
                     SIGNATURE_NOT_MATCH
-                }
+                },
             )
             .isFalse()
     }
@@ -96,7 +96,7 @@ class AgentCallerGateTest {
                 ) { callingPackage ->
                     if (callingPackage == "com.hostile.agent") SIGNATURE_NOT_MATCH
                     else PackageManager.SIGNATURE_MATCH
-                }
+                },
             )
             .isFalse()
     }

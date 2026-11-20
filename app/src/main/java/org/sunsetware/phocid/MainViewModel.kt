@@ -226,7 +226,7 @@ class MainViewModel(private val application: Application) : AndroidViewModel(app
                 tabSettings =
                     preferences.tabSettings.mapValues {
                         if (it.key == type) transform(it.value) else it.value
-                    }
+                    },
             )
         }
     }

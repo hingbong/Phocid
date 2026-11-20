@@ -32,7 +32,7 @@ private val lrcLineRegex =
     Regex("""^(?<timestamps>(?:\[[0-9]+:[0-9]{1,2}\.[0-9]{2,3}])+)(?<text>.*)$""")
 private val lrcTimestampRegex =
     Regex(
-        """\[(?<minutes>[0-9]+):(?<seconds>[0-9]{1,2})\.((?<milliseconds>[0-9]{3})|(?<centiseconds>[0-9]{2}))]"""
+        """\[(?<minutes>[0-9]+):(?<seconds>[0-9]{1,2})\.((?<milliseconds>[0-9]{3})|(?<centiseconds>[0-9]{2}))]""",
     )
 
 @Stable
@@ -61,6 +61,6 @@ fun parseLrc(lrc: String): Lyrics {
                         .toList()
                 } ?: emptyList()
             }
-            .sortedBy { it.first }
+            .sortedBy { it.first },
     )
 }

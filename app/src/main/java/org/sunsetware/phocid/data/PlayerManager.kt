@@ -126,7 +126,7 @@ class PlayerManager(
                 override fun onEvents(player: Player, events: Player.Events) {
                     playbackClock.invalidate()
                 }
-            }
+            },
         )
         playbackClock.invalidate()
     }
@@ -251,7 +251,7 @@ class PlayerManager(
                         it.setUnshuffledIndex(
                             it.getUnshuffledIndex()!!.let {
                                 if (it > currentUnshuffledIndex) it + tracks.size else it
-                            }
+                            },
                         )
                     }
                     val new = tracks.mapIndexed { i, track ->
@@ -270,7 +270,7 @@ class PlayerManager(
                     )
                 } else {
                     mediaController.addMediaItems(
-                        tracks.mapIndexed { i, track -> track.getMediaItem(i) }
+                        tracks.mapIndexed { i, track -> track.getMediaItem(i) },
                     )
                 }
             }
@@ -352,7 +352,7 @@ class PlayerManager(
                 Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
                     putExtra(AudioEffect.EXTRA_AUDIO_SESSION, sessionId)
                     putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
-                }
+                },
             )
             true
         } catch (_: Exception) {

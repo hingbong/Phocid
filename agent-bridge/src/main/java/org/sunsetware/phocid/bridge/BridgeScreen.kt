@@ -237,7 +237,7 @@ fun BridgeScreen() {
                             Intent(
                                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                 Uri.fromParts("package", context.packageName, null),
-                            )
+                            ),
                         )
                     }
                         .onFailure {
@@ -257,7 +257,7 @@ fun BridgeScreen() {
                 onOpenSettings = {
                     runCatching {
                         context.startActivity(
-                            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
                         )
                     }
                         .onFailure {
@@ -287,7 +287,7 @@ fun BridgeScreen() {
             text = {
                 Text(
                     "OpenMinis and any other MCP client using the current token will stop " +
-                        "working until you update them."
+                        "working until you update them.",
                 )
             },
             confirmButton = {
@@ -297,13 +297,13 @@ fun BridgeScreen() {
                         showRegenerateDialog = false
                         scope.launch {
                             snackbarHostState.showSnackbar(
-                                "Token regenerated; update your MCP client"
+                                "Token regenerated; update your MCP client",
                             )
                         }
                     },
                     colors =
                         ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
+                            contentColor = MaterialTheme.colorScheme.error,
                         ),
                 ) {
                     Text("Generate")
@@ -325,7 +325,7 @@ fun BridgeScreen() {
                         "local network unless this app has the local network access " +
                         "permission. The system prompt appears next. Without it, USB " +
                         "debugging with adb forward still works, but Wi-Fi clients cannot " +
-                        "connect."
+                        "connect.",
                 )
             },
             confirmButton = {
@@ -334,10 +334,10 @@ fun BridgeScreen() {
                         showLocalNetworkRationale = false
                         if (Build.VERSION.SDK_INT >= LocalNetworkPermission.SDK_LEVEL) {
                             requestLocalNetworkAccess.launch(
-                                Manifest.permission.ACCESS_LOCAL_NETWORK
+                                Manifest.permission.ACCESS_LOCAL_NETWORK,
                             )
                         }
-                    }
+                    },
                 ) {
                     Text("Continue")
                 }
@@ -514,7 +514,7 @@ private fun ServerCard(
                     Text(
                         hostError
                             ?: "IPv4 or IPv6. 127.0.0.1 = this device only; " +
-                                "0.0.0.0 = all IPv4 interfaces."
+                                "0.0.0.0 = all IPv4 interfaces.",
                     )
                 },
                 keyboardOptions =
@@ -666,7 +666,7 @@ private fun TokenCard(
                         modifier = Modifier.padding(12.dp),
                         style =
                             MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
                             ),
                     )
                 }
@@ -825,7 +825,7 @@ private fun InfoRow(
                 text = value,
                 style =
                     MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = if (monospace) FontFamily.Monospace else FontFamily.Default
+                        fontFamily = if (monospace) FontFamily.Monospace else FontFamily.Default,
                     ),
                 textAlign = TextAlign.End,
                 modifier = Modifier.fillMaxWidth(),

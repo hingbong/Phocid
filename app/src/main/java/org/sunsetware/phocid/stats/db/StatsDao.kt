@@ -90,7 +90,7 @@ interface TrackDao {
         SET title = :title, artist = :artist, album = :album,
             durationMillis = :durationMillis, path = :path
         WHERE id = :rowId
-        """
+        """,
     )
     suspend fun updateMetadata(
         rowId: Long,
@@ -120,7 +120,7 @@ interface TrackDao {
               AND NOT EXISTS (SELECT 1 FROM track_daily td WHERE td.trackRowId = t.id)
               AND NOT EXISTS (SELECT 1 FROM track_totals tt WHERE tt.trackRowId = t.id)
         )
-        """
+        """,
     )
     suspend fun deleteOrphans(createdBeforeMillis: Long): Int
 }
@@ -155,7 +155,7 @@ interface TrackAliasDao {
      * of the row.
      */
     @Query(
-        "DELETE FROM track_aliases WHERE kind = :kind AND value = :value AND trackRowId = :rowId"
+        "DELETE FROM track_aliases WHERE kind = :kind AND value = :value AND trackRowId = :rowId",
     )
     suspend fun deleteValue(rowId: Long, kind: Int, value: String)
 
@@ -186,7 +186,7 @@ interface PlayEventDao {
         WHERE playedAt >= :sinceMillis
         GROUP BY startMillis
         ORDER BY startMillis
-        """
+        """,
     )
     fun hourlyBuckets(sinceMillis: Long): Flow<List<PlayEventSlice>>
 
@@ -202,7 +202,7 @@ interface PlayEventDao {
         JOIN tracks t ON t.id = e.trackRowId
         ORDER BY e.playedAt DESC
         LIMIT :limit OFFSET :offset
-        """
+        """,
     )
     fun history(limit: Int, offset: Int): Flow<List<PlayHistoryItem>>
 
@@ -242,7 +242,7 @@ interface TrackDailyDao {
             dayEndMs = COALESCE(dayEndMs, excluded.dayEndMs),
             utcOffsetMinutes = COALESCE(utcOffsetMinutes, excluded.utcOffsetMinutes),
             lastPlayedAt = MAX(lastPlayedAt, excluded.lastPlayedAt)
-        """
+        """,
     )
     suspend fun accumulate(
         trackRowId: Long,
@@ -307,7 +307,7 @@ interface TrackDailyDao {
             dayEndMs = COALESCE(dayEndMs, excluded.dayEndMs),
             utcOffsetMinutes = COALESCE(utcOffsetMinutes, excluded.utcOffsetMinutes),
             lastPlayedAt = MAX(lastPlayedAt, excluded.lastPlayedAt)
-        """
+        """,
     )
     suspend fun mergeInto(loser: Long, winner: Long)
 
@@ -339,7 +339,7 @@ interface TrackDailyDao {
         GROUP BY d.trackRowId
         ORDER BY plays DESC, millis DESC
         LIMIT :limit
-        """
+        """,
     )
     fun topTracksByPlays(
         sinceDay: Int,
@@ -374,7 +374,7 @@ interface TrackDailyDao {
         GROUP BY d.trackRowId
         ORDER BY millis DESC, plays DESC
         LIMIT :limit
-        """
+        """,
     )
     fun topTracksByTime(
         sinceDay: Int,
@@ -405,7 +405,7 @@ interface TrackDailyDao {
         WHERE epochDay >= :sinceDay AND epochDay <= :untilDay
         GROUP BY epochDay
         ORDER BY epochDay
-        """
+        """,
     )
     fun dailyTrend(sinceDay: Int, untilDay: Int): Flow<List<DayBucket>>
 
@@ -424,12 +424,12 @@ interface TrackDailyDao {
                COALESCE(SUM(completedMillis), 0) AS completedMillis
         FROM track_daily
         WHERE epochDay >= :sinceDay AND epochDay <= :untilDay
-        """
+        """,
     )
     fun summarySince(sinceDay: Int, untilDay: Int): Flow<RangeSummary>
 
     @Query(
-        "SELECT DISTINCT epochDay FROM track_daily WHERE epochDay >= :sinceDay ORDER BY epochDay"
+        "SELECT DISTINCT epochDay FROM track_daily WHERE epochDay >= :sinceDay ORDER BY epochDay",
     )
     suspend fun activeDays(sinceDay: Int): List<Int>
 
@@ -491,7 +491,7 @@ interface TrackTotalsDao {
             completedMillis = completedMillis + excluded.completedMillis,
             firstPlayedAt = MIN(firstPlayedAt, excluded.firstPlayedAt),
             lastPlayedAt = MAX(lastPlayedAt, excluded.lastPlayedAt)
-        """
+        """,
     )
     suspend fun accumulate(
         trackRowId: Long,
@@ -516,7 +516,7 @@ interface TrackTotalsDao {
         JOIN tracks t ON t.id = tt.trackRowId
         WHERE t.path = :path
         LIMIT 1
-        """
+        """,
     )
     suspend fun byPath(path: String): TrackTotalsEntity?
 
@@ -526,7 +526,7 @@ interface TrackTotalsDao {
         JOIN track_aliases ta ON ta.trackRowId = tt.trackRowId
         WHERE ta.kind = :kind AND ta.value = :value
         LIMIT 1
-        """
+        """,
     )
     suspend fun byAlias(kind: Int, value: String): TrackTotalsEntity?
 
@@ -550,7 +550,7 @@ interface TrackTotalsDao {
             completedMillis = completedMillis + excluded.completedMillis,
             firstPlayedAt = MIN(firstPlayedAt, excluded.firstPlayedAt),
             lastPlayedAt = MAX(lastPlayedAt, excluded.lastPlayedAt)
-        """
+        """,
     )
     suspend fun mergeInto(loser: Long, winner: Long)
 
@@ -581,7 +581,7 @@ interface TrackTotalsDao {
         JOIN tracks t ON t.id = tt.trackRowId
         ORDER BY tt.totalCount DESC, tt.totalMillis DESC
         LIMIT :limit
-        """
+        """,
     )
     fun topTracksByPlays(limit: Int, localUriKind: Int): Flow<List<TrackAggregate>>
 
@@ -609,7 +609,7 @@ interface TrackTotalsDao {
         JOIN tracks t ON t.id = tt.trackRowId
         ORDER BY tt.totalMillis DESC, tt.totalCount DESC
         LIMIT :limit
-        """
+        """,
     )
     fun topTracksByTime(limit: Int, localUriKind: Int): Flow<List<TrackAggregate>>
 
@@ -627,7 +627,7 @@ interface TrackTotalsDao {
                COALESCE(SUM(skipCount), 0) AS skipCount,
                COALESCE(SUM(completedMillis), 0) AS completedMillis
         FROM track_totals
-        """
+        """,
     )
     fun summaryAll(): Flow<RangeSummary>
 
@@ -655,7 +655,7 @@ interface PlaybackOutboxDao {
         DELETE FROM playback_outbox WHERE id IN (
             SELECT id FROM playback_outbox ORDER BY id DESC LIMIT -1 OFFSET :keep
         )
-        """
+        """,
     )
     suspend fun trimTo(keep: Int): Int
 

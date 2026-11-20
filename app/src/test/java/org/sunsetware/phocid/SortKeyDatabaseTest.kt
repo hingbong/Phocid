@@ -148,7 +148,7 @@ class SortKeyDatabaseTest {
                         tagKey = "tag",
                         sortKey = "one",
                         updatedAt = 0,
-                    )
+                    ),
                 )
             db.sortKeyDao()
                 .insert(
@@ -157,7 +157,7 @@ class SortKeyDatabaseTest {
                         tagKey = "tag",
                         sortKey = "two",
                         updatedAt = 0,
-                    )
+                    ),
                 )
             val result = manager.apply(listOf(target("new", "tag", "three")), 1)
             assertThat(result.errors.single().code).isEqualTo("ambiguous_identity")

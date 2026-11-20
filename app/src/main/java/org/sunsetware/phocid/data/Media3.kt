@@ -116,7 +116,7 @@ fun Player.restorePlayerState(state: PlayerState, unfilteredTrackIndex: Unfilter
             unfilteredTrackIndex.tracks[id]
                 ?.getMediaItem(unshuffledPositionOf?.getOrDefault(index, -1))
                 ?.also { survivingIndexes += index }
-        }
+        },
     )
     // Dropped tracks shift the queue; seek to where the captured item (or its nearest
     // survivor) landed instead of trusting the captured index blindly.
@@ -205,7 +205,7 @@ fun Track.getMediaItem(unshuffledIndex: Int?): MediaItem {
                     .setTrackNumber(trackNumber)
                     .setDiscNumber(discNumber)
                     .setExtras(bundleOf(URI_KEY to uri.toString(), FILE_PATH_KEY to path))
-                    .build()
+                    .build(),
             )
             .build()
 
@@ -239,7 +239,7 @@ fun getChildMediaItems(
                             .setIsBrowsable(true)
                             .setIsPlayable(false)
                             .setTitle(Strings[it.type.stringId])
-                            .build()
+                            .build(),
                     )
                     .build()
             }
@@ -277,7 +277,7 @@ fun getChildMediaItems(
                                             .setIsPlayable(true)
                                             .setTitle(it.name)
                                             .setSubtitle(it.displayAlbumArtist)
-                                            .build()
+                                            .build(),
                                     )
                                     .build()
                             }
@@ -308,7 +308,7 @@ fun getChildMediaItems(
                                             .setIsBrowsable(true)
                                             .setIsPlayable(true)
                                             .setTitle(it.name)
-                                            .build()
+                                            .build(),
                                     )
                                     .build()
                             }
@@ -339,7 +339,7 @@ fun getChildMediaItems(
                                             .setIsBrowsable(true)
                                             .setIsPlayable(true)
                                             .setTitle(it.name)
-                                            .build()
+                                            .build(),
                                     )
                                     .build()
                             }
@@ -370,7 +370,7 @@ fun getChildMediaItems(
                                             .setIsBrowsable(true)
                                             .setIsPlayable(true)
                                             .setTitle(it.name)
-                                            .build()
+                                            .build(),
                                     )
                                     .build()
                             }
@@ -404,7 +404,7 @@ fun getChildMediaItems(
                                             .setIsBrowsable(true)
                                             .setIsPlayable(true)
                                             .setTitle(value.displayName)
-                                            .build()
+                                            .build(),
                                     )
                                     .build()
                             }
@@ -461,7 +461,7 @@ fun getChildMediaItems(
                                             .setIsBrowsable(true)
                                             .setIsPlayable(true)
                                             .setTitle(it.fileName)
-                                            .build()
+                                            .build(),
                                     )
                                     .build()
                             } else if (it is Track) {
@@ -489,9 +489,9 @@ fun MediaItem.setUnshuffledIndex(unshuffledIndex: Int?): MediaItem {
                 .setExtras(
                     (mediaMetadata.extras?.clone() as Bundle? ?: bundleOf()).apply {
                         putInt(UNSHUFFLED_INDEX_KEY, unshuffledIndex ?: -1)
-                    }
+                    },
                 )
-                .build()
+                .build(),
         )
         .build()
 }

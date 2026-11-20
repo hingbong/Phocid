@@ -50,7 +50,7 @@ internal object PhocidAppFunctionDataSource {
         val effectiveLimit = if (limit == 0) DEFAULT_SEARCH_RESULTS else limit
         if (effectiveLimit !in 1..MAX_SEARCH_RESULTS) {
             throw AppFunctionInvalidArgumentException(
-                "limit must be between 1 and $MAX_SEARCH_RESULTS"
+                "limit must be between 1 and $MAX_SEARCH_RESULTS",
             )
         }
         val tokens = trimmed.split(WHITESPACE)
@@ -83,7 +83,7 @@ internal object PhocidAppFunctionDataSource {
         val parsed =
             parseRange(requested)
                 ?: throw AppFunctionInvalidArgumentException(
-                    "range must be one of ${RANGE_NAMES.joinToString(", ")}; got \"$requested\""
+                    "range must be one of ${RANGE_NAMES.joinToString(", ")}; got \"$requested\"",
                 )
         val summary = GlobalData.statsManager.repository.summary(parsed).first()
         return PlaybackStats(
@@ -107,12 +107,12 @@ internal object PhocidAppFunctionDataSource {
         val normalized = command.trim().lowercase()
         if (normalized !in PLAYBACK_COMMANDS) {
             throw AppFunctionInvalidArgumentException(
-                "command must be one of ${PLAYBACK_COMMANDS.joinToString(", ")}; got \"$command\""
+                "command must be one of ${PLAYBACK_COMMANDS.joinToString(", ")}; got \"$command\"",
             )
         }
         if (!PlaybackService.isRunning) {
             throw AppFunctionNotSupportedException(
-                "The Phocid player is not running; open Phocid and start playback first"
+                "The Phocid player is not running; open Phocid and start playback first",
             )
         }
         return withController(context) { controller ->
@@ -123,7 +123,7 @@ internal object PhocidAppFunctionDataSource {
                 "next" -> {
                     if (!controller.hasNextMediaItem()) {
                         throw AppFunctionNotSupportedException(
-                            "There is no next track in the queue"
+                            "There is no next track in the queue",
                         )
                     }
                     controller.seekToNextMediaItem()
@@ -132,7 +132,7 @@ internal object PhocidAppFunctionDataSource {
                 else -> {
                     if (!controller.hasPreviousMediaItem()) {
                         throw AppFunctionNotSupportedException(
-                            "There is no previous track in the queue"
+                            "There is no previous track in the queue",
                         )
                     }
                     controller.seekToPreviousMediaItem()
@@ -162,11 +162,11 @@ internal object PhocidAppFunctionDataSource {
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 throw AppFunctionAppUnknownException(
-                    "Interrupted while connecting to the Phocid player"
+                    "Interrupted while connecting to the Phocid player",
                 )
             } catch (e: Exception) {
                 throw AppFunctionAppUnknownException(
-                    e.message ?: "Could not connect to the Phocid player"
+                    e.message ?: "Could not connect to the Phocid player",
                 )
             }
         try {
@@ -324,7 +324,7 @@ internal object PhocidAppFunctionDataSource {
         }
         if (!GlobalData.initialized.get()) {
             throw AppFunctionAppUnknownException(
-                "Phocid is still starting up; retry in a few seconds"
+                "Phocid is still starting up; retry in a few seconds",
             )
         }
     }

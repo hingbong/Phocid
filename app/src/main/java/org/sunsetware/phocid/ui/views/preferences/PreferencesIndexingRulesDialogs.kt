@@ -69,13 +69,13 @@ class PreferencesBlacklistDialog(private val initialTextFieldValue: String = "")
                                     viewModel.uiManager.openDialog(
                                         PreferencesBlacklistDialog(
                                             path?.let { "^" + Regex.escape("/$it/") }
-                                                ?: textFieldValue
-                                        )
+                                                ?: textFieldValue,
+                                        ),
                                     )
                                 },
-                            )
+                            ),
                         )
-                    }
+                    },
                 ) {
                     Icon(
                         Icons.Filled.FolderOpen,
@@ -121,13 +121,13 @@ class PreferencesWhitelistDialog(private val initialTextFieldValue: String = "")
                                     viewModel.uiManager.openDialog(
                                         PreferencesWhitelistDialog(
                                             path?.let { "^" + Regex.escape("/$it/") }
-                                                ?: textFieldValue
-                                        )
+                                                ?: textFieldValue,
+                                        ),
                                     )
                                 },
-                            )
+                            ),
                         )
-                    }
+                    },
                 ) {
                     Icon(
                         Icons.Filled.FolderOpen,
@@ -196,7 +196,7 @@ class PreferencesArtistSeparatorExceptionDialog() : Dialog() {
                 viewModel.updatePreferences {
                     it.copy(
                         artistMetadataSeparatorExceptions =
-                            it.artistMetadataSeparatorExceptions.removeAt(index)
+                            it.artistMetadataSeparatorExceptions.removeAt(index),
                     )
                 }
             },
@@ -204,7 +204,7 @@ class PreferencesArtistSeparatorExceptionDialog() : Dialog() {
                 viewModel.updatePreferences {
                     it.copy(
                         artistMetadataSeparatorExceptions =
-                            it.artistMetadataSeparatorExceptions + rule
+                            it.artistMetadataSeparatorExceptions + rule,
                     )
                 }
             },
@@ -262,7 +262,7 @@ class PreferencesGenreSeparatorExceptionDialog() : Dialog() {
                 viewModel.updatePreferences {
                     it.copy(
                         genreMetadataSeparatorExceptions =
-                            it.genreMetadataSeparatorExceptions.removeAt(index)
+                            it.genreMetadataSeparatorExceptions.removeAt(index),
                     )
                 }
             },
@@ -270,7 +270,7 @@ class PreferencesGenreSeparatorExceptionDialog() : Dialog() {
                 viewModel.updatePreferences {
                     it.copy(
                         genreMetadataSeparatorExceptions =
-                            it.genreMetadataSeparatorExceptions + rule
+                            it.genreMetadataSeparatorExceptions + rule,
                     )
                 }
             },
@@ -393,10 +393,10 @@ private inline fun IndexRulesDialog(
                             error && errorText != null -> errorText
                             matchCount != null ->
                                 Strings[R.string.preferences_indexing_dialog_match_count].icuFormat(
-                                    matchCount
+                                    matchCount,
                                 )
                             else -> ""
-                        }
+                        },
                     )
                 },
                 isError = error,

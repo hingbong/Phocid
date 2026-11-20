@@ -92,7 +92,7 @@ inline fun <reified T> TrackCarousel(
                 index,
                 (index - 1).wrap(count, repeat),
                 (index + 1).wrap(count, repeat),
-            )
+            ),
         )
     }
     var isLastAdjacent by remember { mutableStateOf(true) }
@@ -219,13 +219,13 @@ inline fun <reified T> TrackCarousel(
                         isLastAdjacent = true
                         coroutineScope.launch { offset.snapTo(horizontalDragTotal / size.width) }
                     }
-                }
+                },
     ) {
         if (stateBatch.count > 0) {
             key(stateBatch.currentIndex) {
                 Box(
                     modifier =
-                        Modifier.graphicsLayer { translationX = (0 + offset.value) * size.width }
+                        Modifier.graphicsLayer { translationX = (0 + offset.value) * size.width },
                 ) {
                     content(stateBatch.state, stateBatch.currentIndex)
                 }
@@ -237,7 +237,7 @@ inline fun <reified T> TrackCarousel(
                             modifier =
                                 Modifier.graphicsLayer {
                                     translationX = (-1 + offset.value) * size.width
-                                }
+                                },
                         ) {
                             content(stateBatch.state, stateBatch.previousIndex!!)
                         }
@@ -249,7 +249,7 @@ inline fun <reified T> TrackCarousel(
                             modifier =
                                 Modifier.graphicsLayer {
                                     translationX = (1 + offset.value) * size.width
-                                }
+                                },
                         ) {
                             content(stateBatch.state, stateBatch.nextIndex!!)
                         }
@@ -262,7 +262,7 @@ inline fun <reified T> TrackCarousel(
                             Modifier.graphicsLayer {
                                 translationX =
                                     (lastNonadjacentDirection + offset.value) * size.width
-                            }
+                            },
                     ) {
                         content(stateBatch.state, stateBatch.lastIndex)
                     }

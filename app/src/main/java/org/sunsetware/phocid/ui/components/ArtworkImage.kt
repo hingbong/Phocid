@@ -79,7 +79,7 @@ fun ArtworkImage(
                     highResCache.get(artwork.track)?.value?.asImageBitmap()
                 } else {
                     null as ImageBitmap?
-                }
+                },
             )
         }
     val icon =
@@ -97,7 +97,12 @@ fun ArtworkImage(
                         highResCache
                             .getOrPut(artwork.track) {
                                 Boxed(
-                                    loadArtwork(context, artwork.track.id, artwork.track.path, true)
+                                    loadArtwork(
+                                        context,
+                                        artwork.track.id,
+                                        artwork.track.path,
+                                        true,
+                                    ),
                                 )
                             }
                             .value
@@ -124,7 +129,7 @@ fun ArtworkImage(
                     Modifier.fillMaxSize()
                         .background(
                             if (darkTheme) lerp(color, Color.Black, 0.4f)
-                            else lerp(color, Color.White, 0.9f)
+                            else lerp(color, Color.White, 0.9f),
                         ),
                 contentAlignment = Alignment.Center,
             ) {

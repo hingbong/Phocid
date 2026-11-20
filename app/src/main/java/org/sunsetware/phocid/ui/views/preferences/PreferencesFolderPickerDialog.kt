@@ -49,7 +49,7 @@ class PreferencesFolderPickerDialog(
             remember {
                 if (unfiltered)
                     viewModel.unfilteredTrackIndex.value.getFolders(
-                        viewModel.preferences.value.sortCollator
+                        viewModel.preferences.value.sortCollator,
                     )
                 else viewModel.libraryIndex.value.let { it.folders to it.defaultRootFolder }
             }
@@ -99,7 +99,7 @@ class PreferencesFolderPickerDialog(
                         state = lazyListState,
                         modifier =
                             Modifier.Companion.background(
-                                    MaterialTheme.colorScheme.surfaceContainer
+                                    MaterialTheme.colorScheme.surfaceContainer,
                                 )
                                 .fillMaxHeight(),
                     ) {

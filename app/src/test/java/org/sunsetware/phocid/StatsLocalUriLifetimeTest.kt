@@ -148,7 +148,7 @@ class StatsLocalUriLifetimeTest {
                             title = "Old Song",
                             artist = "Old Artist",
                             album = "Old Album",
-                        )
+                        ),
                     )
             totals(oldRow, 5)
             val oldUuid = db.trackDao().byRowId(oldRow)!!.uuid
@@ -166,7 +166,7 @@ class StatsLocalUriLifetimeTest {
             assertThat(db.totalsDao().byRowId(oldRow)!!.totalCount).isEqualTo(5)
             assertThat(localUriOwner(oldFile.length())).isEqualTo(oldRow)
             assertThat(
-                    db.aliasDao().resolve(AliasKind.AUDIO_HASH, realFingerprint(meta(oldFile))!!)
+                    db.aliasDao().resolve(AliasKind.AUDIO_HASH, realFingerprint(meta(oldFile))!!),
                 )
                 .isEqualTo(oldRow)
             // And the old track itself still resolves to its own totals through the same hint.
@@ -186,7 +186,7 @@ class StatsLocalUriLifetimeTest {
                             title = "Old Song",
                             artist = "Old Artist",
                             album = "Old Album",
-                        )
+                        ),
                     )
             totals(oldRow, 5)
 
@@ -199,7 +199,7 @@ class StatsLocalUriLifetimeTest {
                             title = "New Song",
                             artist = "New Artist",
                             album = "New Album",
-                        )
+                        ),
                     )
             totals(newRow, 2)
             assertThat(newRow).isNotEqualTo(oldRow)
@@ -277,7 +277,7 @@ class StatsLocalUriLifetimeTest {
                             title = "Old Song",
                             artist = "Old Artist",
                             album = "Old Album",
-                        )
+                        ),
                     )
             totals(row, 7)
 
@@ -296,7 +296,7 @@ class StatsLocalUriLifetimeTest {
                 null
             }
                 .resolve(
-                    meta(oldFile, title = "Old Song", artist = "Old Artist", album = "Old Album")
+                    meta(oldFile, title = "Old Song", artist = "Old Artist", album = "Old Album"),
                 )
             totals(row, 6)
             assertThat(db.aliasDao().aliasesOf(row).map { it.kind })
@@ -321,7 +321,7 @@ class StatsLocalUriLifetimeTest {
                             title = "Old Song",
                             artist = "Old Artist",
                             album = "Old Album",
-                        )
+                        ),
                     )
             totals(row, 1)
 
@@ -343,7 +343,7 @@ class StatsLocalUriLifetimeTest {
                             album = "Album",
                             durationMillis = 180_000,
                             createdAt = 0,
-                        )
+                        ),
                     )
             val key = TagKey.candidates("Artist", "Album", "Song", 180_000).first()
             db.aliasDao().put(TrackAliasEntity(AliasKind.TAG_KEY, key, row))

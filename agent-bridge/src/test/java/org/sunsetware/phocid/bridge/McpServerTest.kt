@@ -83,7 +83,7 @@ class McpServerTest {
                     "Content-Type: application/json\r\n" +
                     "Content-Length: ${payload.toByteArray(StandardCharsets.UTF_8).size}\r\n" +
                     "\r\n" +
-                    payload
+                    payload,
             )
         assertEquals(200, response.status)
         assertTrue(response.headers.containsKey("mcp-session-id"))
@@ -123,7 +123,7 @@ class McpServerTest {
                     JSONObject(
                         request("GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", healthServer)
                             .body
-                            .toString(StandardCharsets.UTF_8)
+                            .toString(StandardCharsets.UTF_8),
                     )
                 if (health.getLong("heartbeatCount") >= 1) break
                 assertTrue("heartbeat never fired", System.nanoTime() < deadline)
@@ -134,7 +134,7 @@ class McpServerTest {
                 JSONObject(
                     request("GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", healthServer)
                         .body
-                        .toString(StandardCharsets.UTF_8)
+                        .toString(StandardCharsets.UTF_8),
                 )
             assertEquals(5_000L, health.getLong("uptimeMs"))
             // A second heartbeat may legitimately have fired at the new clock value, resetting
@@ -273,7 +273,7 @@ class McpServerTest {
                     "Host: 127.0.0.1\r\n" +
                     "Authorization: Bearer $TOKEN\r\n" +
                     "Content-Length: 0\r\n" +
-                    "\r\n"
+                    "\r\n",
             )
         assertEquals(405, response.status)
         assertEquals("GET, POST, DELETE, OPTIONS", response.headers["allow"])
@@ -286,7 +286,7 @@ class McpServerTest {
                 "DELETE /mcp HTTP/1.1\r\n" +
                     "Host: 127.0.0.1\r\n" +
                     "Authorization: Bearer $TOKEN\r\n" +
-                    "\r\n"
+                    "\r\n",
             )
         assertEquals(204, response.status)
     }
@@ -486,7 +486,7 @@ class McpServerTest {
                     "Host: 127.0.0.1\r\n" +
                     "Authorization: Bearer $TOKEN\r\n" +
                     "Content-Length: 0\r\n" +
-                    "\r\n"
+                    "\r\n",
             )
         assertEquals(405, response.status)
         assertEquals("GET, OPTIONS", response.headers["allow"])
@@ -788,7 +788,7 @@ class McpServerTest {
                     "Content-Type: application/json\r\n" +
                     "Content-Length: ${payload.toByteArray(StandardCharsets.UTF_8).size}\r\n" +
                     "\r\n" +
-                    payload
+                    payload,
             )
         assertEquals(200, response.status)
         val text = response.body.toString(StandardCharsets.UTF_8)
@@ -808,7 +808,7 @@ class McpServerTest {
                     "Content-Type: application/json\r\n" +
                     "Content-Length: ${payload.toByteArray(StandardCharsets.UTF_8).size}\r\n" +
                     "\r\n" +
-                    payload
+                    payload,
             )
         assertEquals(200, response.status)
         val text = response.body.toString(StandardCharsets.UTF_8)
@@ -827,7 +827,7 @@ class McpServerTest {
                     "Transfer-Encoding: chunked\r\n" +
                     "Content-Length: 2\r\n" +
                     "\r\n" +
-                    "0\r\n\r\n"
+                    "0\r\n\r\n",
             )
         assertEquals(400, response.status)
     }

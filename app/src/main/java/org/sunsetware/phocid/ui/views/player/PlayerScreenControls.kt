@@ -320,7 +320,7 @@ class PlayerScreenControlsDefaultBase(
                                 textAlign = TextAlign.Center,
                                 modifier =
                                     Modifier.defaultMinSize(
-                                        minWidth = 36.dp * LocalDensity.current.fontScale
+                                        minWidth = 36.dp * LocalDensity.current.fontScale,
                                     ),
                             )
                             ProgressSlider(
@@ -346,7 +346,7 @@ class PlayerScreenControlsDefaultBase(
                                 textAlign = TextAlign.Center,
                                 modifier =
                                     Modifier.defaultMinSize(
-                                            minWidth = 36.dp * LocalDensity.current.fontScale
+                                            minWidth = 36.dp * LocalDensity.current.fontScale,
                                         )
                                         .clickable(
                                             interactionSource =

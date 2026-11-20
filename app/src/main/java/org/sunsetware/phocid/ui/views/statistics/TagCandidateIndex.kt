@@ -10,7 +10,7 @@ package org.sunsetware.phocid.ui.views.statistics
  * another track's artwork and title is worse than falling back to the row's stored metadata.
  */
 internal fun tagCandidateIndex(
-    entries: Iterable<Pair<Long, List<String>>>
+    entries: Iterable<Pair<Long, List<String>>>,
 ): Map<String, Set<Long>> {
     val owners = HashMap<String, MutableSet<Long>>()
     for ((trackId, candidates) in entries) {

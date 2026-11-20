@@ -63,17 +63,17 @@ class MainApplication : Application() {
                     preferences =
                         MutableStateFlow(
                             loadCbor<Preferences>(context, PREFERENCES_FILE_NAME, false)?.upgrade()
-                                ?: Preferences()
+                                ?: Preferences(),
                         )
                     unfilteredTrackIndex =
                         MutableStateFlow(
                             loadCbor<UnfilteredTrackIndex>(context, TRACK_INDEX_FILE_NAME, false)
-                                ?.upgrade() ?: UnfilteredTrackIndex(null, emptyMap())
+                                ?.upgrade() ?: UnfilteredTrackIndex(null, emptyMap()),
                         )
                     playerState =
                         MutableStateFlow(
                             loadCbor<PlayerState>(context, PLAYER_STATE_FILE_NAME, isCache = false)
-                                ?: PlayerState()
+                                ?: PlayerState(),
                         )
                     StatsDatabase.discardLegacyStats(context)
                     statsManager = StatsManager(context)

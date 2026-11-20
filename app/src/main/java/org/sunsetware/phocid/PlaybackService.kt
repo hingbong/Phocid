@@ -107,7 +107,7 @@ class PlaybackService : MediaLibraryService() {
             Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
                 putExtra(AudioEffect.EXTRA_AUDIO_SESSION, player.inner.audioSessionId)
                 putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
-            }
+            },
         )
         player.addListener(createListener(player))
 
@@ -157,7 +157,7 @@ class PlaybackService : MediaLibraryService() {
                         0,
                         packageManager.getLaunchIntentForPackage(packageName),
                         PendingIntent.FLAG_IMMUTABLE,
-                    )
+                    ),
                 )
                 .setBitmapLoader(CustomizedBitmapLoader(this))
                 .setSessionExtras(bundleOf(AUDIO_SESSION_ID_KEY to player.inner.audioSessionId))
@@ -199,7 +199,7 @@ class PlaybackService : MediaLibraryService() {
                 Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION).apply {
                     putExtra(AudioEffect.EXTRA_AUDIO_SESSION, player.inner.audioSessionId)
                     putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
-                }
+                },
             )
             player.release()
         }
@@ -385,11 +385,11 @@ class PlaybackService : MediaLibraryService() {
                                     .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
                                     .setIsBrowsable(true)
                                     .setIsPlayable(false)
-                                    .build()
+                                    .build(),
                             )
                             .build(),
                         defaultLibraryParams,
-                    )
+                    ),
                 )
             }
 
@@ -413,7 +413,7 @@ class PlaybackService : MediaLibraryService() {
                                 it.drop(pageSize * page).take(pageSize),
                                 defaultLibraryParams,
                             )
-                        } ?: LibraryResult.ofError(SessionError.ERROR_NOT_SUPPORTED)
+                        } ?: LibraryResult.ofError(SessionError.ERROR_NOT_SUPPORTED),
                 )
             }
 
@@ -451,7 +451,7 @@ class PlaybackService : MediaLibraryService() {
                     LibraryResult.ofItemList(
                         result.drop(page * pageSize).take(pageSize),
                         defaultLibraryParams,
-                    )
+                    ),
                 )
             }
 
@@ -491,7 +491,7 @@ class PlaybackService : MediaLibraryService() {
                 val (newItems, seekIndex) =
                     transformOnSetTracks(shuffle, items, startIndex.takeIf { it != C.INDEX_UNSET })
                 return Futures.immediateFuture(
-                    MediaSession.MediaItemsWithStartPosition(newItems, seekIndex, startPositionMs)
+                    MediaSession.MediaItemsWithStartPosition(newItems, seekIndex, startPositionMs),
                 )
             }
 
@@ -540,9 +540,9 @@ class PlaybackService : MediaLibraryService() {
                             .addSessionCommands(
                                 commands.map { (command, _) ->
                                     SessionCommand(command, Bundle.EMPTY)
-                                }
+                                },
                             )
-                            .build()
+                            .build(),
                     )
                     .setMediaButtonPreferences(commandButtons(player))
                     .build()
@@ -654,7 +654,7 @@ class PlaybackService : MediaLibraryService() {
         @Suppress("unused") args: Bundle,
     ) {
         GlobalData.libraryIndex.value.tracks[player.currentMediaItem?.mediaId?.toLongOrNull()]?.let(
-            GlobalData.playlistManager::toggleFavorite
+            GlobalData.playlistManager::toggleFavorite,
         )
     }
 
@@ -677,16 +677,16 @@ class PlaybackService : MediaLibraryService() {
                         AudioOffloadPreferences.Builder()
                             .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
                             .setIsSpeedChangeSupportRequired(
-                                playbackParameters.speed != 1f || playbackParameters.pitch != 1f
+                                playbackParameters.speed != 1f || playbackParameters.pitch != 1f,
                             )
                             .build()
                     } else {
                         AudioOffloadPreferences.Builder()
                             .setAudioOffloadMode(
-                                AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+                                AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
                             )
                             .build()
-                    }
+                    },
                 )
                 .build()
     }

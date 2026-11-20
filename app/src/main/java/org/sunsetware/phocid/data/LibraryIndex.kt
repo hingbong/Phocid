@@ -494,7 +494,7 @@ data class AlbumKey(
             .plus(
                 albumArtists.map {
                     it.string?.let { Base64.encode(it.toByteArray(Charsets.UTF_8)) }
-                }
+                },
             )
             .joinToString(" ")
     }
@@ -1476,16 +1476,18 @@ suspend fun scanTracks(
                         title = cursor.getStringOrNull(ci[Media.TITLE]!!)?.trimAndNormalize(),
                         artists =
                             listOfNotNull(
-                                cursor.getStringOrNull(ci[Media.ARTIST]!!)?.trimAndNormalize()
+                                cursor.getStringOrNull(ci[Media.ARTIST]!!)?.trimAndNormalize(),
                             ),
                         album = cursor.getStringOrNull(ci[Media.ALBUM]!!)?.trimAndNormalize(),
                         albumArtists =
                             listOfNotNull(
-                                cursor.getStringOrNull(ci[Media.ALBUM_ARTIST]!!)?.trimAndNormalize()
+                                cursor
+                                    .getStringOrNull(ci[Media.ALBUM_ARTIST]!!)
+                                    ?.trimAndNormalize(),
                             ),
                         genres =
                             listOfNotNull(
-                                cursor.getStringOrNull(ci[Media.GENRE]!!)?.trimAndNormalize()
+                                cursor.getStringOrNull(ci[Media.GENRE]!!)?.trimAndNormalize(),
                             ),
                         year = cursor.getIntOrNull(ci[Media.YEAR]!!),
                         originalYear = null,

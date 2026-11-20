@@ -178,7 +178,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                             PermissionRequestDialog(
                                 permissions = permissions,
                                 onPermissionGranted = { viewModel.scanLibrary(false) },
-                            )
+                            ),
                         )
                     }
                 }
@@ -199,7 +199,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                         modifier =
                             Modifier.background(MaterialTheme.colorScheme.surface).onSizeChanged {
                                 playerScreenDragState.length = it.height.toFloat()
-                            }
+                            },
                     ) {
                         AnimatedForwardBackwardTransition(topLevelScreenStack) { screen ->
                             when (screen) {
@@ -220,7 +220,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                                                         scrimColor,
                                                         alpha = playerScreenDragState.position,
                                                     )
-                                                }
+                                                },
                                         )
                                         Box(
                                             modifier =
@@ -231,7 +231,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                                                                 playerScreenDragState.length)
                                                             .roundToIntOrZero(),
                                                     )
-                                                }
+                                                },
                                         ) {
                                             PlayerScreen(playerScreenCloseDragLock)
                                         }
@@ -306,7 +306,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
     override fun openBinaryDocument(continuation: (Uri?) -> Unit) {
         openBinaryDocumentContinuation.set(continuation)
         openBinaryDocumentIntent.launch(
-            arrayOf("application/gzip", "application/x-gzip", "application/octet-stream", "*/*")
+            arrayOf("application/gzip", "application/x-gzip", "application/octet-stream", "*/*"),
         )
     }
 
@@ -332,7 +332,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                     // guessContentTypeFromName can fail if file name contains special characters
                     type =
                         URLConnection.guessContentTypeFromName(
-                            "a." + FilenameUtils.getExtension(tracks.first().path)
+                            "a." + FilenameUtils.getExtension(tracks.first().path),
                         )
                 }
             } else {
@@ -347,7 +347,7 @@ class MainActivity : ComponentActivity(), IntentLauncher {
                         tracks
                             .map {
                                 URLConnection.guessContentTypeFromName(
-                                    "a." + FilenameUtils.getExtension(it.path)
+                                    "a." + FilenameUtils.getExtension(it.path),
                                 )
                             }
                             .distinct()

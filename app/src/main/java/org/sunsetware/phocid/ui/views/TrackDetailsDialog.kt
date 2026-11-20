@@ -124,8 +124,8 @@ class TrackDetailsDialog(private val track: Track) : Dialog() {
                     it[0].measure(
                         Constraints(
                             maxWidth =
-                                ((constraints.maxWidth - horizontalSpacing) / 2).coerceAtLeast(0)
-                        )
+                                ((constraints.maxWidth - horizontalSpacing) / 2).coerceAtLeast(0),
+                        ),
                     )
                 }
                 val keyWidth = keys.maxOf { it.width }

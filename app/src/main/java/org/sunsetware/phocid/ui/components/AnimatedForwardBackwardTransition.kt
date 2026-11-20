@@ -84,7 +84,7 @@ inline fun <T> AnimatedForwardBackwardTransition(
                                     ltr,
                                 )
                         }
-                    }
+                    },
             ) {
                 content(null)
             }
@@ -110,7 +110,7 @@ inline fun <T> AnimatedForwardBackwardTransition(
                                             ltr,
                                         )
                                 }
-                            }
+                            },
                     ) {
                         content(item)
                     }

@@ -13,7 +13,7 @@ class TagCandidateIndexTest {
                 listOf(
                     1L to listOf("a", "b"),
                     2L to listOf("c"),
-                )
+                ),
             )
 
         assertThat(index)
@@ -27,7 +27,7 @@ class TagCandidateIndexTest {
                 listOf(
                     1L to listOf("shared", "a"),
                     2L to listOf("shared", "b"),
-                )
+                ),
             )
 
         assertThat(index).containsEntry("shared", setOf(1L, 2L))
@@ -42,7 +42,7 @@ class TagCandidateIndexTest {
                     1L to listOf("shared"),
                     2L to listOf("shared"),
                     3L to listOf("shared"),
-                )
+                ),
             )
 
         assertThat(index).containsEntry("shared", setOf(1L, 2L, 3L))
@@ -61,7 +61,7 @@ class TagCandidateIndexTest {
                 listOf(
                     1L to listOf("90"),
                     2L to listOf("89"),
-                )
+                ),
             )
 
         assertThat(uniqueTagCandidateOwner(listOf("90", "89"), index)).isNull()
@@ -75,7 +75,7 @@ class TagCandidateIndexTest {
                 listOf(
                     1L to listOf("shared"),
                     2L to listOf("shared"),
-                )
+                ),
             )
 
         assertThat(uniqueTagCandidateOwner(listOf("shared"), index)).isNull()
@@ -88,7 +88,7 @@ class TagCandidateIndexTest {
                 listOf(
                     1L to listOf("a", "b"),
                     2L to listOf("c"),
-                )
+                ),
             )
 
         assertThat(uniqueTagCandidateOwner(listOf("a"), index)).isEqualTo(1L)
@@ -102,7 +102,7 @@ class TagCandidateIndexTest {
                 listOf(
                     1L to listOf("a", "b"),
                     2L to listOf("c"),
-                )
+                ),
             )
 
         assertThat(uniqueTagCandidateOwner(listOf("a", "b"), index)).isEqualTo(1L)

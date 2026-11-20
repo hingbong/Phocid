@@ -153,7 +153,7 @@ class StatsTagCollisionTest {
                     meta(
                         uri = "content://media/external/audio/media/2",
                         title = "Song (Remaster)",
-                    )
+                    ),
                 )
 
             // No wrong merge: the hash guard gives the collision loser its own row.
@@ -172,8 +172,8 @@ class StatsTagCollisionTest {
                         meta(
                             uri = "content://media/external/audio/media/2",
                             title = "Song (Remaster)",
-                        )
-                    )
+                        ),
+                    ),
                 )
                 .isEqualTo(b)
             assertThat(db.trackDao().byRowId(a)).isNotNull()
@@ -186,12 +186,12 @@ class StatsTagCollisionTest {
             val resolver = resolver { m -> if (m.durationMillis < 180_000) "hash-a" else "hash-b" }
             val a =
                 resolver.resolve(
-                    meta(uri = "content://media/external/audio/media/1", durationMillis = 179_900)
+                    meta(uri = "content://media/external/audio/media/1", durationMillis = 179_900),
                 )
             db.totalsDao().accumulate(a, 3, 300, 1, 0, 0, 0, 0)
             val b =
                 resolver.resolve(
-                    meta(uri = "content://media/external/audio/media/2", durationMillis = 180_100)
+                    meta(uri = "content://media/external/audio/media/2", durationMillis = 180_100),
                 )
 
             // The neighbor-bucket overlap is caught by the same hash guard: separate rows, and
@@ -216,7 +216,7 @@ class StatsTagCollisionTest {
             db.totalsDao().accumulate(a, 2, 200, 1, 0, 0, 0, 0)
             val b =
                 resolver.resolve(
-                    meta(uri = "content://media/external/audio/media/2", title = "Song (Live)")
+                    meta(uri = "content://media/external/audio/media/2", title = "Song (Live)"),
                 )
             db.totalsDao().accumulate(b, 1, 100, 2, 0, 0, 0, 0)
 
@@ -242,7 +242,7 @@ class StatsTagCollisionTest {
                     meta(
                         uri = "content://media/external/audio/media/2",
                         title = "Song (Remaster)",
-                    )
+                    ),
                 )
 
             assertThat(b).isEqualTo(a)
@@ -265,7 +265,7 @@ class StatsTagCollisionTest {
                         uri = "content://media/external/audio/media/2",
                         title = "Song (Remastered)",
                         durationMillis = 180_020,
-                    )
+                    ),
                 )
 
             assertThat(retagged).isEqualTo(a)
@@ -285,11 +285,11 @@ class StatsTagCollisionTest {
             val resolver = resolver { m -> if (m.durationMillis < 180_000) "hash-a" else "hash-b" }
             val a =
                 resolver.resolve(
-                    meta(uri = "content://media/external/audio/media/1", durationMillis = 178_000)
+                    meta(uri = "content://media/external/audio/media/1", durationMillis = 178_000),
                 )
             val b =
                 resolver.resolve(
-                    meta(uri = "content://media/external/audio/media/2", durationMillis = 181_000)
+                    meta(uri = "content://media/external/audio/media/2", durationMillis = 181_000),
                 )
             // Re-key the aliases so each boundary key has a distinct owner, as it happens when
             // the two tracks were first resolved far from the boundary.

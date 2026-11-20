@@ -211,7 +211,7 @@ class UiManager(
                             playerScreenUseCountdown.value,
                             playerTimerSettings.get(),
                             playlistIoSyncHelpShown.get(),
-                        )
+                        ),
                     )
                     delay(1.seconds)
                 }
@@ -226,7 +226,7 @@ class UiManager(
             loadCbor<PersistentUiState>(context, UI_STATE_FILE_NAME, false) ?: PersistentUiState()
         coroutineScope.launch {
             libraryScreenHomeViewState.pagerState.scrollToPage(
-                persistentState.libraryScreenHomeViewPage
+                persistentState.libraryScreenHomeViewPage,
             )
         }
         playerScreenUseLyricsView.update { persistentState.playerScreenUseLyricsView }

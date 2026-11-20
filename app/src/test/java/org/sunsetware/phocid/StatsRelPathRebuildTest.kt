@@ -90,7 +90,7 @@ class StatsRelPathRebuildTest {
                     album = "Album",
                     durationMillis = 180_000,
                     createdAt = 1,
-                )
+                ),
             )
 
     private suspend fun putAlias(kind: Int, value: String, rowId: Long) {

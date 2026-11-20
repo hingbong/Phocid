@@ -140,7 +140,7 @@ class PlaylistEditScreen(private val playlistKey: UUID) : TopLevelScreen() {
                         IconButton(
                             onClick = {
                                 uiManager.openDialog(PlaylistEditScreenSortDialog(playlistKey))
-                            }
+                            },
                         ) {
                             Icon(Icons.Filled.SortByAlpha, Strings[R.string.playlist_sort])
                         }
@@ -158,16 +158,16 @@ class PlaylistEditScreen(private val playlistKey: UUID) : TopLevelScreen() {
                                                 .toSet()
                                         if (trackKeys.isNotEmpty()) {
                                             uiManager.openDialog(
-                                                RemoveFromPlaylistDialog(playlistKey, trackKeys)
+                                                RemoveFromPlaylistDialog(playlistKey, trackKeys),
                                             )
                                         }
                                     }
-                                }
-                            ) + playlistCollectionMenuItemsWithoutEdit(playlistKey, uiManager)
+                                },
+                            ) + playlistCollectionMenuItemsWithoutEdit(playlistKey, uiManager),
                         )
                     },
                 )
-            }
+            },
         ) { scaffoldPadding ->
             Surface(
                 modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
@@ -217,11 +217,11 @@ class PlaylistEditScreen(private val playlistKey: UUID) : TopLevelScreen() {
                                                                     it.entries.swap(
                                                                         index,
                                                                         index - 1,
-                                                                    )
+                                                                    ),
                                                             )
                                                         } else it
                                                     }
-                                                }
+                                                },
                                             ) {
                                                 Icon(
                                                     Icons.Filled.ArrowUpward,
@@ -238,11 +238,11 @@ class PlaylistEditScreen(private val playlistKey: UUID) : TopLevelScreen() {
                                                                     it.entries.swap(
                                                                         index,
                                                                         index + 1,
-                                                                    )
+                                                                    ),
                                                             )
                                                         } else it
                                                     }
-                                                }
+                                                },
                                             ) {
                                                 Icon(
                                                     Icons.Filled.ArrowDownward,
@@ -256,9 +256,9 @@ class PlaylistEditScreen(private val playlistKey: UUID) : TopLevelScreen() {
                                                         RemoveFromPlaylistDialog(
                                                             playlistKey,
                                                             setOf(entry.key),
-                                                        )
+                                                        ),
                                                     )
-                                                }
+                                                },
                                             ) {
                                                 Icon(
                                                     Icons.Filled.Remove,
@@ -270,7 +270,7 @@ class PlaylistEditScreen(private val playlistKey: UUID) : TopLevelScreen() {
                                         dragIndicator = true,
                                         modifier =
                                             Modifier.background(
-                                                MaterialTheme.colorScheme.background
+                                                MaterialTheme.colorScheme.background,
                                             ),
                                     )
                                     Box(
@@ -296,7 +296,7 @@ class PlaylistEditScreen(private val playlistKey: UUID) : TopLevelScreen() {
                                                         )
                                                         reorderInfo?.let { (from, to) ->
                                                             playlistManager.updatePlaylist(
-                                                                playlistKey
+                                                                playlistKey,
                                                             ) {
                                                                 it.copy(
                                                                     entries =
@@ -307,12 +307,12 @@ class PlaylistEditScreen(private val playlistKey: UUID) : TopLevelScreen() {
                                                                                     to,
                                                                                     removeAt(from),
                                                                                 )
-                                                                            }
+                                                                            },
                                                                 )
                                                             }
                                                         }
                                                     },
-                                                )
+                                                ),
                                     )
                                 }
                             }
@@ -344,7 +344,7 @@ class PlaylistEditScreenSortDialog(private val playlistKey: UUID) : Dialog() {
         DialogBase(
             title =
                 Strings[R.string.playlist_sort_screen_title].icuFormat(
-                    playlists[playlistKey]?.displayName
+                    playlists[playlistKey]?.displayName,
                 ),
             onConfirm = {
                 playlistManager.updatePlaylist(playlistKey) {
@@ -358,7 +358,7 @@ class PlaylistEditScreenSortDialog(private val playlistKey: UUID) : Dialog() {
                                 sortAscending,
                             ) {
                                 trackIndex[it.path] ?: InvalidTrack
-                            }
+                            },
                     )
                 }
                 viewModel.uiManager.closeDialog()

@@ -59,7 +59,7 @@ class StatsHourlyDistributionTest {
                     durationMillis = 180_000,
                     path = "",
                     createdAt = 1,
-                )
+                ),
             )
 
     private suspend fun play(trackRowId: Long, at: ZonedDateTime, playedMillis: Long) {
@@ -69,7 +69,7 @@ class StatsHourlyDistributionTest {
                     trackRowId = trackRowId,
                     playedAt = at.toInstant().toEpochMilli(),
                     playedMillis = playedMillis,
-                )
+                ),
             )
     }
 
@@ -135,7 +135,7 @@ class StatsHourlyDistributionTest {
             // ALL passes sinceMillis = 0, so a pre-epoch event must not reach any bucket.
             db.eventDao()
                 .insert(
-                    PlayEventEntity(trackRowId = track, playedAt = -1_000, playedMillis = 45_000)
+                    PlayEventEntity(trackRowId = track, playedAt = -1_000, playedMillis = 45_000),
                 )
             play(track, ZonedDateTime.of(2026, 6, 15, 9, 0, 0, 0, newYork), 15_000)
 

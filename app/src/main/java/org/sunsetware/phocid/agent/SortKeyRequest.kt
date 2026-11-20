@@ -123,7 +123,7 @@ object SortKeyRequest {
                 dryRun = root.optBoolean("dryRun", false),
                 truncated = total > accepted,
                 remaining = total - accepted,
-            )
+            ),
         )
     }
 }

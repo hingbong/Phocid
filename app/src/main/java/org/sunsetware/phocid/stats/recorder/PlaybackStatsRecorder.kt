@@ -1014,7 +1014,7 @@ class PlaybackStatsRecorder(
                                     trackRowId = plan.trackRowId,
                                     playedAt = plan.eventAt,
                                     playedMillis = plan.eventPlayedMillis,
-                                )
+                                ),
                             )
                     }
                     // Atomic with the writes above: a crash can never leave both applied.
@@ -1228,7 +1228,7 @@ class PlaybackStatsRecorder(
                     PlaybackOutboxEntity(
                         payload = outboxCbor.encodeToByteArray(payload),
                         createdAt = wallMillis(),
-                    )
+                    ),
                 )
             // Bound the outbox: sessions that repeatedly fail to drain are stale recovery state,
             // and the maintenance worker that also trims may never run on some devices.

@@ -77,7 +77,7 @@ class StatsBackupPortabilityTest {
                         album = "Album",
                         durationMillis = 180_000,
                         createdAt = 1,
-                    )
+                    ),
                 )
         db.totalsDao()
             .insertAll(
@@ -88,8 +88,8 @@ class StatsBackupPortabilityTest {
                         totalMillis = 360_000,
                         firstPlayedAt = 1,
                         lastPlayedAt = 2,
-                    )
-                )
+                    ),
+                ),
             )
         db.aliasDao()
             .putAll(
@@ -97,7 +97,7 @@ class StatsBackupPortabilityTest {
                     TrackAliasEntity(AliasKind.AUDIO_HASH, "hash", row),
                     TrackAliasEntity(AliasKind.TAG_KEY, "tag", row),
                     TrackAliasEntity(AliasKind.LOCAL_URI, "content://media/1|1024", row),
-                )
+                ),
             )
         return row
     }
@@ -112,7 +112,7 @@ class StatsBackupPortabilityTest {
                     album = "Album",
                     durationMillis = 180_000,
                     createdAt = 1,
-                )
+                ),
             )
 
     private fun track(
@@ -242,7 +242,11 @@ class StatsBackupPortabilityTest {
                 payload.copy(
                     aliases =
                         payload.aliases +
-                            BackupAlias(AliasKind.LOCAL_URI, "content://media/other|2048", "uuid-1")
+                            BackupAlias(
+                                AliasKind.LOCAL_URI,
+                                "content://media/other|2048",
+                                "uuid-1",
+                            ),
                 )
 
             StatsBackupManager(db).restore(withLocal, replace = true)
@@ -288,7 +292,7 @@ class StatsBackupPortabilityTest {
                                 totalMillis = 0,
                                 firstPlayedAt = 0,
                                 lastPlayedAt = 20,
-                            )
+                            ),
                         ),
                     daily =
                         listOf(
@@ -298,7 +302,7 @@ class StatsBackupPortabilityTest {
                                 playCount = 0,
                                 playedMillis = 0,
                                 lastPlayedAt = 20,
-                            )
+                            ),
                         ),
                     version = 2,
                 )
@@ -454,8 +458,8 @@ class StatsBackupPortabilityTest {
                             totalMillis = 360_000,
                             firstPlayedAt = 1,
                             lastPlayedAt = 2,
-                        )
-                    )
+                        ),
+                    ),
                 )
             val payload =
                 backup(
@@ -585,7 +589,7 @@ class StatsBackupPortabilityTest {
                         ActiveDayEntity(19_500),
                         ActiveDayEntity(20_000),
                         ActiveDayEntity(20_001),
-                    )
+                    ),
                 )
             val out = ByteArrayOutputStream()
             StatsBackupManager(db).export(out)
@@ -999,7 +1003,7 @@ class StatsBackupPortabilityTest {
                             playedMillis = 1_000,
                             lastPlayedAt = 1,
                         )
-                    }
+                    },
                 )
             val payload =
                 backup(
@@ -1048,7 +1052,7 @@ class StatsBackupPortabilityTest {
                                 lastPlayedAt = 1,
                             ),
                         )
-                    }
+                    },
                 )
             val payload =
                 backup(
