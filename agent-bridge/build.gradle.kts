@@ -41,6 +41,8 @@ val buildTime =
 android {
     namespace = "org.sunsetware.phocid.bridge"
     compileSdk = 37
+    // Keep both modules on the same platform so their AAR metadata checks agree.
+    compileSdkMinor = 1
 
     defaultConfig {
         applicationId = "org.sunsetware.phocid.bridge"

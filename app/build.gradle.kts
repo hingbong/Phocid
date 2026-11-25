@@ -58,6 +58,8 @@ val computedVersionName = "$baseVersionCode.$buildNumber"
 android {
     namespace = "org.sunsetware.phocid"
     compileSdk = 37
+    // Compose 1.13 (compose-bom 2026.11.01) publishes AAR metadata that requires 37.1.
+    compileSdkMinor = 1
 
     defaultConfig {
         applicationId = "org.sunsetware.phocid.next"

@@ -50,7 +50,7 @@ jobs:
       - name: Install Android SDK packages
         run: |
           yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
+          sdkmanager "platforms;android-37.1" "build-tools;36.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
