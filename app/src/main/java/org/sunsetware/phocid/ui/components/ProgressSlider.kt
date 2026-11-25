@@ -75,17 +75,17 @@ fun ProgressSlider(
             disabledInactiveTickColor = color,
         )
     Slider(
-        value = value,
+        state = rememberSyncedSliderState(value),
         onValueChange = onValueChange,
         modifier = modifier.height(16.dp).negativePadding(horizontal = 22.dp),
         onValueChangeFinished = onValueChangeFinished,
         colors = colors,
         interactionSource = interactionSource,
         thumb = { ProgressSliderThumb(interactionSource, colors) },
-        track = { sliderState ->
+        track = {
             ProgressSliderTrack(
                 colors = colors,
-                sliderState = sliderState,
+                sliderState = it,
                 animate = animate,
                 modifier = Modifier.height(2.dp),
             )
@@ -164,9 +164,9 @@ fun ProgressSliderTrack(
             heightFraction,
             with(sliderState) {
                 lerpInv(
-                        valueRange.start,
-                        valueRange.endInclusive,
-                        value.coerceInOrMin(valueRange.start, valueRange.endInclusive),
+                        trackRange.start,
+                        trackRange.endInclusive,
+                        value.coerceInOrMin(trackRange.start, trackRange.endInclusive),
                     )
                     .coerceIn(0f, 1f)
             },

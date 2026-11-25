@@ -49,10 +49,8 @@ fun SteppedSliderWithNumber(
             }
         }
         Slider(
-            value,
-            onValueChange,
-            valueRange = valueRange,
-            steps = steps,
+            state = rememberSyncedSliderState(value, steps, valueRange),
+            onValueChange = onValueChange,
             enabled = enabled,
             onValueChangeFinished = onValueChangeFinished,
             modifier = Modifier.fillMaxWidth(),

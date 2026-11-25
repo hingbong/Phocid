@@ -66,6 +66,7 @@ import org.sunsetware.phocid.ui.components.SelectBox
 import org.sunsetware.phocid.ui.components.UtilityListHeader
 import org.sunsetware.phocid.ui.components.UtilityListItem
 import org.sunsetware.phocid.ui.components.UtilitySwitchListItem
+import org.sunsetware.phocid.ui.components.rememberSyncedSliderState
 import org.sunsetware.phocid.ui.theme.PhocidTheme
 import org.sunsetware.phocid.ui.theme.Typography
 import org.sunsetware.phocid.utils.roundToIntOrZero
@@ -191,9 +192,12 @@ class WidgetConfigureActivity : ComponentActivity() {
                                         Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp),
                                 )
                                 Slider(
-                                    value = artworkResolutionLimit.toFloat(),
-                                    valueRange = 100f..5000f,
-                                    steps = (5000 - 100) / 100 - 1,
+                                    state =
+                                        rememberSyncedSliderState(
+                                            artworkResolutionLimit.toFloat(),
+                                            steps = (5000 - 100) / 100 - 1,
+                                            valueRange = 100f..5000f,
+                                        ),
                                     onValueChange = {
                                         artworkResolutionLimit =
                                             it.roundToIntOrZero().coerceIn(100, 5000)
